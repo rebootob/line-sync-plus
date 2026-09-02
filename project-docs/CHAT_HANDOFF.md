@@ -4,7 +4,7 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: Initial BUG-WP001-UATLOG-R2 commit pending
+* HEAD: fb651bc (fix(observability): enforce trusted socket loopback check and test log isolation BUG-WP001-UATLOG-R2)
 * Working Tree: Clean (BUG-WP001-UATLOG-R2 implementation completed)
 
 ## Project Purpose
