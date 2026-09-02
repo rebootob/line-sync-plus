@@ -1,35 +1,40 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard
+ACTIVE_WORK_PACKAGE: BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: ChatGPT / Control Plane
-TASK_TYPE: BUG_FIX_AND_SAFETY_GUARD
+TASK_TYPE: BUG_FIX_CORRECTIVE_SAFETY
 ```
 
 ---
 
-## 📋 Completed Work Package Summary: BUG-WP001
+## 📋 Completed Work Package Summary: BUG-WP001-R1
 
-### Implemented Changes:
-1. **Explicit 404 / LINE Error Page Detection (`checkIfErrorPage`)**:
-   - Detects error URLs (`/error`, `/404`, `/not-found`) and DOM error banners (`404`, `Page Not Found`, `ไม่พบหน้า`, `เกิดข้อผิดพลาดในการโหลด`).
-   - Instantly aborts execution and triggers safe recovery.
-2. **Exact Recipient Verification (`verifyCurrentRecipient`)**:
-   - Strictly verifies that `window.location.pathname` matches `/chat/${expectedUserId}` using regex matching and checks active DOM chat elements for `data-user-id` mismatches.
-   - Performed prior to execution, image upload, image confirmation, text typing, and immediately before clicking the Send button.
-3. **Removed Unsafe Blind-Click Behavior**:
-   - Removed unsafe iteration searching and blind-clicking `li, a, div, span` with `href.includes(userId)`.
-4. **Safe Recovery & Bounded Retries (`handleSafeRecovery`)**:
-   - Bounded retries (maximum 2 retries per job) with clean session state recovery and redirection to main chat URL (`closeUserChatAndReturnToMain`).
-   - If retries exceed limit or recipient cannot be verified, fails job safely with explicit error reason codes (`NAVIGATION_404`, `RECIPIENT_MISMATCH`, `RECIPIENT_UNVERIFIED`).
-5. **Re-entrancy / Overlap Lock**:
-   - Added `isExecutingJob` flag to prevent concurrent execution of the same job during navigation or recovery.
-6. **Userscript Version**: Updated `run/LineSyncApp.js` to v28.0.
+### Implemented Corrections:
+1. **Full Lifecycle Execution Lock (`isExecutingJob`)**:
+   - Lock remains active across the entire job lifecycle (navigation verification -> input discovery -> image/text preparation -> final recipient verification -> send/recovery -> finishJob).
+   - Lock is released ONLY inside `finishJob` upon reaching terminal state (Success or Final Failure), or during same-job navigation retry.
+2. **Same-Job Safe Recovery (`handleSafeRecovery`)**:
+   - Directly retries the **SAME** `jobData` without calling `processQueue()` or fetching a new customer from backend.
+   - Preserves `linesync_jobid`, `linesync_uid`, `linesync_msg`, etc. in `sessionStorage` during bounded retries (max 2 retries per job).
+   - Marks the SAME job as failed via `finishJob` only if retries are exceeded or non-retryable.
+3. **Page-Load 404 Recovery Guard**:
+   - On page load, if 404/error page occurs or recipient verification fails while a job is active in `sessionStorage`, `savedJobData` is reconstructed and passed into `handleSafeRecovery(savedJobData)`.
+4. **Preserved OA Account Context (`getBotId` / `getOAContextUrl`)**:
+   - Extracts and persists current LINE OA `botId` from URL path / manager path.
+   - All recovery navigations return to `https://chat.line.biz/${botId}/chat/${userId}` or `https://chat.line.biz/${botId}/`, preventing cross-account switching.
+5. **Zero-Tolerance Image Send Guard (`confirmAndCloseImageModal(expectedUserId)`)**:
+   - Recipient verification checked during modal waiting loop and immediately before clicking the confirm image button.
+   - Throws `RECIPIENT_UNVERIFIED` and cancels click if verification fails.
+6. **Zero-Tolerance Text Send Guard (`sendChatMessage(chatInput, expectedUserId)`)**:
+   - Recipient verification checked immediately before clicking Send button or dispatching Enter key fallback.
+   - Throws `RECIPIENT_UNVERIFIED` and cancels send action if verification fails.
+7. **Userscript Version**: Updated `run/LineSyncApp.js` to v28.1.
 
 ---
 
 ## ⛔ Execution Policy
 
-- **Package Completion**: BUG-WP001 completed, validated (`npm run build` PASS, `npm test` PASS).
-- **Next Step**: Await review and next task authorization from ChatGPT / Control Plane.
+- **Package Completion**: BUG-WP001-R1 completed, validated (`node --check` PASS, `npm run build` PASS, `npm test` PASS).
+- **Next Step**: Await review and authorization from ChatGPT / Control Plane.
