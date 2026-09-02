@@ -606,8 +606,23 @@
                 return;
             }
 
-            if (isBotEnabled) {
-                alert('กรุณา Pause Master Bot ก่อน Sync รายชื่อลูกค้า');
+            try {
+                const res = await fetch(`${API_BASE}/bot/status`);
+                if (!res.ok) throw new Error('Status fetch failed');
+                const statusData = await res.json();
+
+                isMasterBotEnabled = !!statusData.enabled;
+                if (typeof updateMasterBotBtnUI === 'function') {
+                    updateMasterBotBtnUI();
+                }
+
+                if (statusData.enabled) {
+                    alert('กรุณา Pause Master Bot ก่อน Sync รายชื่อลูกค้า');
+                    return;
+                }
+            } catch (err) {
+                console.error('🛑 ไม่สามารถตรวจสอบสถานะ Master Bot ได้:', err);
+                alert('ไม่สามารถตรวจสอบสถานะ Master Bot ได้ กรุณาลองใหม่');
                 return;
             }
 

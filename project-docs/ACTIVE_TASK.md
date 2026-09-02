@@ -1,7 +1,7 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: SYNC-WP001-R1 — Metric Integrity & Fail-Closed Pagination Corrective
+ACTIVE_WORK_PACKAGE: SYNC-WP001-R2 — Dashboard Master Bot Sync Gate Corrective
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner & ChatGPT Control Plane
 TASK_TYPE: BOUNDED_CORRECTIVE
@@ -9,11 +9,11 @@ TASK_TYPE: BOUNDED_CORRECTIVE
 
 ---
 
-## 📋 Work Package Summary: SYNC-WP001-R1
+## 📋 Work Package Summary: SYNC-WP001-R2
 
 ### Status Summary
-- **SYNC-WP001-R1**: `READY_FOR_CHATGPT_REVIEW`
-- **SYNC-WP001**: `READY_FOR_CHATGPT_REVIEW (NOT CLOSED)` (Live UAT pending)
+- **SYNC-WP001-R2**: `READY_FOR_CHATGPT_REVIEW`
+- **SYNC-WP001**: `NOT CLOSED / LIVE UAT BLOCKED PENDING R2 REVIEW`
 - **OA-WP001**: `CLOSED / PASS` (Accepted on Worker v28.5)
 - **REL-WP001**: `CLOSED / PASS`
 - **REL-WP002**: `READY / NOT STARTED`
@@ -26,29 +26,22 @@ TASK_TYPE: BOUNDED_CORRECTIVE
 
 ---
 
-## 🔍 Corrective Solutions Applied (SYNC-WP001-R1)
+## 🔍 Corrective Solutions Applied (SYNC-WP001-R2)
 
-1. **Full-Run Deduplication (`duplicateInSync`)**:
-   - Full-run `Set<string>` (`seenSyncUserIds`) tracks duplicate `lineUserId` occurrences across the entire LINE sync process.
-   - Prevents duplicate contacts on different pages from producing duplicate batch writes or miscounted metrics.
+1. **Dashboard Master Bot Status Re-check Gate (`index.html`)**:
+   - `startCustomerSync()` fetches `${API_BASE}/bot/status` immediately before allowing sync.
+   - Replaced invalid variable reference `isBotEnabled` with authoritative backend query `statusData.enabled`.
+   - Fail-closed error handling: if `/bot/status` fetch fails, displays Thai error `"ไม่สามารถตรวจสอบสถานะ Master Bot ได้ กรุณาลองใหม่"` and aborts without opening contact page.
+   - If `statusData.enabled === true`, displays `"กรุณา Pause Master Bot ก่อน Sync รายชื่อลูกค้า"`, syncs UI state via `updateMasterBotBtnUI()`, and aborts without opening contact page.
+   - If `statusData.enabled === false`, syncs UI state and proceeds to user confirmation dialog.
 
-2. **Fail-Closed Pagination Loop & Max Page Guard**:
-   - Repeated cursor loop detection now ABORTS sync cleanly as ERROR (`isError = true`) without displaying the PASS summary banner.
-   - Reaching `maxPages` limit without natural end-of-pagination ABORTS sync cleanly as ERROR (`isError = true`).
-   - Final PASS summary banner strictly requires `paginationCompleted === true` (natural pagination end where `response.next` is absent/empty).
-
-3. **Strict Response Structure Validation**:
-   - Requires `Array.isArray(resp.contacts)`. If missing or invalid, sync aborts immediately as ERROR.
-
-4. **Strict LINE User ID Validation (`^U[0-9a-fA-F]{32}$`)**:
-   - Enforced in both `run/LineSyncApp.js` and `src/app.controller.ts`.
-   - Invalid or malformed IDs increment `invalid` count and are never submitted, inserted, or saved.
+2. **Regression Test Addition (`src/app.controller.spec.ts`)**:
+   - Added static check verifying `index.html` `startCustomerSync()` queries `${API_BASE}/bot/status` and does not contain `if (isBotEnabled)`.
 
 ---
 
 ## 🧪 Verification Results
 
-- **Unit Tests**: 74 passed (`npm test`)
+- **Unit Tests**: 75 passed (`npm test`)
 - **Build**: Clean (`npm run build`)
-- **Script Check**: Valid (`node --check run/LineSyncApp.js`)
 - **Diff Check**: Clean (`git diff --check`)

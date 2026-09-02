@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post SYNC-WP001-R1 Metric Integrity & Fail-Closed Pagination Corrective)
+**Last Updated**: 2026-09-02 (Post SYNC-WP001-R2 Dashboard Master Bot Sync Gate Corrective)
 
 ---
 
@@ -28,20 +28,16 @@
 
 ---
 
-## 🔄 Customer Directory Synchronization (SYNC-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔄 Customer Directory Synchronization (SYNC-WP001-R2 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Worker Version**: `28.6` (`run/LineSyncApp.js` v28.6).
 - **Backend Required Version**: `28.6` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
-- **Reporting & Metric Contract**:
-  - `POST /api/customers/sync-batch` returns `{ success, received, inserted, updatedName, existingUnchanged, duplicateInBatch, invalid }`.
-  - Full-run `seenSyncUserIds` Set tracks `duplicateInSync` across all fetched pages.
-  - Strict LINE User ID regex (`^U[0-9a-fA-F]{32}$`) enforced on client and server.
-  - Strict `Array.isArray(resp.contacts)` structure requirement.
-  - Fail-closed pagination loop and max-page guards: abort as ERROR without reporting PASS summary banner.
-  - Displays live progress banner and final Thai summary banner upon natural completion (`paginationCompleted === true`).
-  - Web Lock `linesync_customer_sync_v1` guarantees single-tab execution.
-  - Opaque pagination cursors are never persisted or logged.
+- **Dashboard Sync Gate (`index.html`)**:
+  - `startCustomerSync()` fetches `${API_BASE}/bot/status` directly from backend before opening contact sync tab.
+  - Fail-closed error handling: rejects sync if `/bot/status` check fails.
+  - Paused Master Bot enforcement: blocks sync if `enabled === true` and alerts `"กรุณา Pause Master Bot ก่อน Sync รายชื่อลูกค้า"`.
+  - Fixed reference error by removing invalid `isBotEnabled` reference.
 
 ---
 
@@ -79,12 +75,10 @@
 - Strict User ID regex validation (`^U[0-9a-fA-F]{32}$`).
 - Active OA context management (`GET /api/oa/contexts`, `GET/POST /api/oa/active`).
 - Hard OA fencing in queue processor (`GET /api/campaign/next`).
-- Composite customer query (`GET /api/customers?botId=...`).
-- Scoped group management (`GET /api/groups/:id?botId=...`, `DELETE /api/groups/:id?botId=...`).
 
 ### 3. Web Dashboard (`index.html`)
 - Customer sync trigger button `🔄 Sync รายชื่อลูกค้า` (`btnSyncCustomers`).
-- Active OA selector dropdown with status indicators and switching guards.
+- Authoritative backend `/bot/status` query gate in `startCustomerSync()`.
 
 ### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.6)
 - Fail-closed sequential LINE contacts directory sync with Web Lock protection (`linesync_customer_sync_v1`).
@@ -102,7 +96,7 @@
   - `REL-WP001`, `REL-WP001-R1`, `REL-WP001-R2` (`CLOSED / PASS`)
   - `OA-WP001`, `OA-WP001-R1` (`CLOSED / PASS`)
 - **Active Work Package**:
-  - `SYNC-WP001-R1 — Metric Integrity & Fail-Closed Pagination Corrective` (`READY_FOR_CHATGPT_REVIEW`)
-  - `SYNC-WP001 — LINE OA Customer Directory Sync to DB` (`READY_FOR_CHATGPT_REVIEW` — NOT CLOSED)
+  - `SYNC-WP001-R2 — Dashboard Master Bot Sync Gate Corrective` (`READY_FOR_CHATGPT_REVIEW`)
+  - `SYNC-WP001 — LINE OA Customer Directory Sync to DB` (`NOT CLOSED / LIVE UAT BLOCKED PENDING R2 REVIEW`)
 - **Next Work Package Candidate**:
   - `REL-WP002 — Job Lease + Heartbeat` (`READY / NOT STARTED` — Project Owner authorization required)

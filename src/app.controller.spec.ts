@@ -1102,6 +1102,15 @@ describe('AppController', () => {
         lineUserId: 'U11111111222222223333333344444444'
       }));
     });
+
+    it('13. index.html startCustomerSync fetches /bot/status and does not contain isBotEnabled reference', () => {
+      const fs = require('fs');
+      const htmlContent = fs.readFileSync('index.html', 'utf8');
+
+      expect(htmlContent).toContain('function startCustomerSync()');
+      expect(htmlContent).toContain('${API_BASE}/bot/status');
+      expect(htmlContent).not.toContain('if (isBotEnabled)');
+    });
   });
 });
 

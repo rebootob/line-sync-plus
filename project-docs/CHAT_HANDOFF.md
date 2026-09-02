@@ -4,8 +4,8 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 1b5953bbf9661a9e8fd52bc922b58c2d8aa0bf6e
-* Working Tree: Clean (SYNC-WP001-R1 READY_FOR_CHATGPT_REVIEW)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 670b0c695a95e20d2c3290212dc8164193d3fae2
+* Working Tree: Clean (SYNC-WP001-R2 READY_FOR_CHATGPT_REVIEW)
 
 ## Project Purpose
 
@@ -19,10 +19,10 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
 - **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
-## Work Package Status: SYNC-WP001-R1
+## Work Package Status: SYNC-WP001-R2
 
-* **SYNC-WP001-R1**: `READY_FOR_CHATGPT_REVIEW`
-* **SYNC-WP001**: `READY_FOR_CHATGPT_REVIEW (NOT CLOSED)`
+* **SYNC-WP001-R2**: `READY_FOR_CHATGPT_REVIEW`
+* **SYNC-WP001**: `NOT CLOSED / LIVE UAT BLOCKED PENDING R2 REVIEW`
 * **OA-WP001**: `CLOSED / PASS` (Accepted on Worker v28.5)
 * **OA-WP001-R1**: `CLOSED / PASS`
 * **REL-WP001**: `CLOSED / PASS`
@@ -33,13 +33,12 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
   - Runtime Contract Version: `2`
   - Required Worker Version: `28.6`
 
-## Refined Metrics & Corrective Implementation Summary (SYNC-WP001-R1)
+## Dashboard Gate Corrective Summary (SYNC-WP001-R2)
 
-1. **Full-Run `duplicateInSync` Deduplication**: Full-run `seenSyncUserIds` Set prevents duplicate contacts across different pages from causing duplicate writes or incorrect metric totals.
-2. **Fail-Closed Pagination**: Repeated cursor loop or reaching max pages immediately aborts sync with Thai error banner (`isError = true`). Final PASS summary banner strictly requires `paginationCompleted === true`.
-3. **Response Structure Verification**: Requires `Array.isArray(resp.contacts)`. Unexpected API responses abort immediately.
-4. **Strict LINE User ID Validation**: Enforces `/^U[0-9a-fA-F]{32}$/` regex on client and server.
+1. **Direct Backend Query**: `startCustomerSync()` in `index.html` fetches `${API_BASE}/bot/status` immediately before launching sync process.
+2. **Fixed Reference**: Removed invalid variable reference `isBotEnabled` and synchronized UI state via `isMasterBotEnabled` and `updateMasterBotBtnUI()`.
+3. **Fail-Closed**: Blocks sync if `/bot/status` check fails or if Master Bot is running (`enabled === true`).
 
 ## Exact Recommended Next Step
 
-Await independent ChatGPT Control Plane code review and Project Owner instructions for SYNC-WP001-R1 review or next work package.
+Await independent ChatGPT Control Plane code review and Project Owner instructions for SYNC-WP001-R2 review or next work package.
