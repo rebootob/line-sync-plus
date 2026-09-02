@@ -311,10 +311,7 @@ describe('AppController', () => {
         os.tmpdir(),
         `test-telegram-config-${Date.now()}-${Math.random().toString(36).substring(2)}.json`,
       );
-      service = new TelegramService();
-      // Override configPath to isolated temporary file path
-      (service as any).configPath = tmpConfigPath;
-      (service as any).config = { botToken: '', chatId: '', enabled: false };
+      service = new TelegramService(tmpConfigPath);
     });
 
     afterEach(() => {

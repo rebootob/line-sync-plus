@@ -18,14 +18,15 @@ export interface SafeTelegramConfig {
 @Injectable()
 export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
-  private configPath = path.join(process.cwd(), 'telegram-config.json');
+  private configPath: string;
   private config: TelegramConfig = {
     botToken: '',
     chatId: '',
     enabled: false,
   };
 
-  constructor() {
+  constructor(customConfigPath?: string) {
+    this.configPath = customConfigPath || path.join(process.cwd(), 'telegram-config.json');
     this.loadConfig();
   }
 
