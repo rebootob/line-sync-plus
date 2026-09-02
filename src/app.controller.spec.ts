@@ -298,6 +298,77 @@ describe('AppController', () => {
       expect(retryCount).toBe(0);
     });
   });
+
+  describe('SEC-WP001 — Secret Hygiene & Telegram Token Security Tests', () => {
+    let service: TelegramService;
+
+    beforeEach(() => {
+      service = new TelegramService();
+    });
+
+    it('1. GET /api/telegram/settings MUST NOT return botToken', () => {
+      service.saveConfig({ botToken: 'SECRET_TOKEN_123', chatId: '123456', enabled: true });
+      const safeConfig = service.getSafeConfig();
+
+      expect(safeConfig).toEqual({
+        chatId: '123456',
+        enabled: true,
+        botTokenConfigured: true,
+      });
+      expect((safeConfig as any).botToken).toBeUndefined();
+    });
+
+    it('2. POST /api/telegram/settings response MUST NOT return botToken', () => {
+      const res = service.saveConfig({ botToken: 'SECRET_TOKEN_456', chatId: '987654', enabled: false });
+
+      expect(res.success).toBe(true);
+      expect(res.config).toBeDefined();
+      expect(res.config).toEqual({
+        chatId: '987654',
+        enabled: false,
+        botTokenConfigured: true,
+      });
+      expect((res.config as any).botToken).toBeUndefined();
+    });
+
+    it('3. blank/empty botToken MUST NOT overwrite existing stored token', () => {
+      service.saveConfig({ botToken: 'INITIAL_SECRET_TOKEN', chatId: '111', enabled: true });
+
+      // Save with blank token
+      const res = service.saveConfig({ botToken: '', chatId: '222', enabled: false });
+
+      expect(res.success).toBe(true);
+      expect(res.config?.chatId).toBe('222');
+      expect(res.config?.enabled).toBe(false);
+      expect(res.config?.botTokenConfigured).toBe(true);
+      expect(service.getConfig().botToken).toBe('INITIAL_SECRET_TOKEN');
+    });
+
+    it('4. new non-empty botToken replaces existing token', () => {
+      service.saveConfig({ botToken: 'TOKEN_A', chatId: '111', enabled: true });
+      service.saveConfig({ botToken: 'TOKEN_B', chatId: '111', enabled: true });
+
+      expect(service.getConfig().botToken).toBe('TOKEN_B');
+    });
+
+    it('5. botTokenConfigured reflects true when token exists and false when empty/blank', () => {
+      service.saveConfig({ botToken: '', chatId: '111', enabled: false });
+      // Clear token manually for testing false condition
+      (service as any).config.botToken = '';
+      expect(service.getSafeConfig().botTokenConfigured).toBe(false);
+
+      service.saveConfig({ botToken: 'NEW_VALID_TOKEN', chatId: '111', enabled: true });
+      expect(service.getSafeConfig().botTokenConfigured).toBe(true);
+    });
+
+    it('6. sendTestMessage fails safely if botToken or chatId is missing', async () => {
+      (service as any).config = { botToken: '', chatId: '', enabled: false };
+      const testRes = await service.sendTestMessage();
+
+      expect(testRes.success).toBe(false);
+      expect(testRes.message).toContain('กรุณาระบุ Bot Token และ Chat ID');
+    });
+  });
 });
 
 

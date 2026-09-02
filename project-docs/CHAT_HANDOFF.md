@@ -4,8 +4,8 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: 7338f976e6decaaa59a041a5582116b658f43824 (docs: close BUG safety UAT and record 1100 campaign evidence)
-* Working Tree: Clean (UAT-1100 Safety Closure completed)
+* HEAD: Initial SEC-WP001 commit pending
+* Working Tree: Clean (SEC-WP001 implementation completed)
 
 ## Project Purpose
 
@@ -19,32 +19,33 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
 - **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
-## Closed Safety Work Packages
+## Security Work Package Implementation: SEC-WP001
 
-1. **BUG-WP001**: LINE OA 404 / Wrong Recipient Safety Guard (**CLOSED**)
-2. **BUG-WP001-UATLOG**: Persistent Browser Safety Diagnostic Logging (**CLOSED**)
-3. **BUG-WP002**: OA Context Poisoning & Active Job Preservation (**CLOSED**)
-
-## UAT-1100 Campaign Safety Evidence & Results
-
-* **Safety Gate Status**: **PASS**
-* **Target Recipient Count**: 1,100
-* **Processed Jobs**: 473 (Campaign stopped by user after 473/1,100 jobs; NOT a full 1,100-job endurance completion)
-* **Successful Sends**: 69
-* **Blocked / Cannot Send**: 402
-* **NAVIGATION_404 Terminal Failures**: 2 (Both preserved same job, retried same recipient, exhausted retryCount=2, failed safely, zero misdeliveries)
-* **User-Stopped Before Processing**: 627
-* **Wrong Recipient Detected**: 0
-* **Duplicate JOB_SUCCESS**: 0
-* **Lost Claimed Job**: 0
-* **RECIPIENT_VERIFY_FAIL During v28.2 Session**: 0
+* **Status**: `READY_FOR_CHATGPT_REVIEW`
+* **Key Changes**:
+  1. Untracked secret config file `telegram-config.json` from Git (`git rm --cached`).
+  2. Preserved local runtime `telegram-config.json` on disk (gitignored by `.gitignore`).
+  3. Safe template `telegram-config.example.json` remains tracked.
+  4. Modified `TelegramService` and `AppController`: `GET /api/telegram/settings` and `POST /api/telegram/settings` return safe shape `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
+  5. Blank `botToken` supplied from Dashboard UI preserves existing stored token on backend.
+  6. Dashboard UI Telegram modal never preloads or displays saved token.
+  7. Added 6 unit tests in `src/app.controller.spec.ts` covering token non-exposure, blank token preservation, and `botTokenConfigured` flag (all 26 tests passed).
+  8. Verified 0 secret matches in current tracked files.
+  9. Confirmed `telegram-config.json` existed in public history from initial commit `999c163`.
+  10. Old Telegram token must be considered **COMPROMISED**; **TOKEN ROTATION** remains a **HUMAN REQUIRED ACTION**. Git history rewrite was NOT performed in SEC-WP001.
 
 ## Current State
 
-Safety work packages `BUG-WP001`, `BUG-WP001-UATLOG`, and `BUG-WP002` are fully closed. System is verified via syntax check (`node --check`), Jest unit tests (`npm test` 20 passed), NestJS build compilation (`npm run build`), and `git diff --check`.
+Fully functional and secured. Verified via `npm test` (26 tests passed), `npm run build` (clean NestJS build), `git diff --check` (clean exit code 0), and `git ls-files telegram-config.json` (NO OUTPUT).
 
-## Next Work Package
+## Relevant Files
 
-* **Next Work Package**: `SEC-WP001 — Secret Hygiene`
-* **Status**: `READY / NOT STARTED`
-* **Authorization Required**: Await explicit ChatGPT / Control Plane prompt before starting implementation.
+- `src/telegram.service.ts`: Secret mask, getSafeConfig, saveConfig blank token preservation.
+- `src/app.controller.ts`: GET /api/telegram/settings returns getSafeConfig().
+- `index.html`: Telegram modal input token masking & placeholder indicator.
+- `src/app.controller.spec.ts`: Unit test suite covering SEC-WP001 requirements.
+- `project-docs/ACTIVE_TASK.md`, `project-docs/CHAT_HANDOFF.md`, `project-docs/CURRENT_STATE.md`, `project-docs/PROJECT_STATUS_ROADMAP.md`.
+
+## Exact Recommended Next Step
+
+Await ChatGPT / Project Owner review of SEC-WP001 implementation on GitHub repository `rebootob/line-sync-plus`.

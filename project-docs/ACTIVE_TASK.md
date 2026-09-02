@@ -2,45 +2,37 @@
 
 ```yaml
 ACTIVE_WORK_PACKAGE: SEC-WP001 — Secret Hygiene
-STATUS: READY_NOT_STARTED
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: ChatGPT / Control Plane
-TASK_TYPE: SECURITY_MANDATE
+TASK_TYPE: SECURITY_HYGIENE
 ```
 
 ---
 
-## 📋 Completed Safety Closure Summary: UAT-1100 Campaign Evidence
+## 📋 Completed Work Package Summary: SEC-WP001
 
-### Safety Gate Status & Corrective Closure:
-- **Safety Gate**: **PASS**
-- **BUG-WP001**: **CLOSED**
-- **BUG-WP001-UATLOG**: **CLOSED**
-- **BUG-WP002**: **CLOSED**
-
-### Exact UAT-1100 Campaign Evidence (LineSyncApp v28.2):
-- **Target Recipient Count**: 1,100
-- **Processed Jobs**: 473 (Stopped by user after 473/1,100 jobs; NOT a full 1,100-job endurance completion)
-- **Successful Sends**: 69
-- **Blocked / Cannot Send**: 402
-- **NAVIGATION_404 Terminal Failures**: 2
-- **User-Stopped Before Processing**: 627
-- **Wrong Recipient Detected**: 0
-- **Duplicate JOB_SUCCESS**: 0
-- **Lost Claimed Job**: 0
-- **RECIPIENT_VERIFY_FAIL During v28.2 Session**: 0
-
-### 404 Terminal Failure Safety Evidence:
-Both real `NAVIGATION_404` jobs:
-1. Preserved the exact same active job in `sessionStorage`
-2. Retried the exact same recipient
-3. Bounded retry count exhausted (`retryCount = 2`)
-4. Failed closed and logged terminal failure safely
-5. Did **NOT** send messages to any incorrect recipient
+### Implemented Security Controls:
+1. **Removed Secret File from Git Tracking (`Scope A`)**:
+   - Executed `git rm --cached -- telegram-config.json` to untrack secret file from public GitHub repository.
+   - Local runtime config `telegram-config.json` is preserved on disk for local execution and is gitignored by `.gitignore`.
+   - Safe template `telegram-config.example.json` remains tracked.
+2. **Prevented Telegram Token Exposure to Browser (`Scope B`)**:
+   - Refactored `TelegramService` and `AppController`: `GET /api/telegram/settings` and `POST /api/telegram/settings` return `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
+   - Updated `saveConfig`: A blank/whitespace `botToken` supplied from UI preserves existing stored token on backend.
+   - Updated Dashboard UI modal: `botToken` input is never preloaded or exposed. If token exists, displays safe placeholder `"Bot Token ตั้งค่าแล้ว — กรอกใหม่เฉพาะเมื่อต้องการเปลี่ยน"`.
+   - Test button (`POST /api/telegram/test`) functions cleanly using stored token even when UI input is blank.
+   - Suppressed secret value logging in all NestJS logger statements.
+3. **Safe Secret Audit (`Scope C`)**:
+   - `git grep -E "[0-9]{8,10}:[a-zA-Z0-9_-]{35}"` confirmed 0 tracked current files contain token-like secrets.
+   - Historical check `git log --oneline -- telegram-config.json` confirmed `telegram-config.json` existed in repository history from initial commit `999c163`.
+   - Git history rewrite was **NOT** performed in SEC-WP001 (requires separate explicit authorization).
+4. **Token Security Assessment**:
+   - The old Telegram token must be considered **COMPROMISED** because it existed in public repository history.
+   - **TOKEN ROTATION** via `@BotFather` remains a **HUMAN REQUIRED ACTION**.
 
 ---
 
 ## ⛔ Execution Policy
 
-- **Safety Gate Status**: PASS (BUG-WP001, BUG-WP001-UATLOG, BUG-WP002 closed).
-- **Next Gate**: `SEC-WP001 — Secret Hygiene` (READY / NOT STARTED).
-- **Instruction**: Do NOT modify source code or start SEC-WP001 implementation until explicitly authorized.
+- **Work Package Status**: `READY_FOR_CHATGPT_REVIEW` (Do NOT mark CLOSED yet).
+- **Next Step**: Await review and authorization from ChatGPT / Control Plane.

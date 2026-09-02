@@ -972,7 +972,15 @@
             try {
                 const res = await fetch(`${API_BASE}/telegram/settings`);
                 const config = await res.json();
-                document.getElementById('telegramTokenInput').value = config.botToken || '';
+
+                const tokenInput = document.getElementById('telegramTokenInput');
+                tokenInput.value = '';
+                if (config.botTokenConfigured) {
+                    tokenInput.placeholder = 'Bot Token ตั้งค่าแล้ว — กรอกใหม่เฉพาะเมื่อต้องการเปลี่ยน';
+                } else {
+                    tokenInput.placeholder = 'เช่น 7123456789:AAFxXxxXXXXX...';
+                }
+
                 document.getElementById('telegramChatIdInput').value = config.chatId || '';
                 document.getElementById('enableTelegramCheckbox').checked = config.enabled || false;
             } catch (e) {
@@ -1008,12 +1016,11 @@
             const chatId = document.getElementById('telegramChatIdInput').value.trim();
             const enabled = document.getElementById('enableTelegramCheckbox').checked;
 
-            if (!botToken || !chatId) {
-                alert('กรุณากรอก Bot Token และ Chat ID ก่อนทดสอบส่งครับ');
+            if (!chatId) {
+                alert('กรุณากรอก Chat ID ก่อนทดสอบส่งครับ');
                 return;
             }
 
-            // บันทึกชั่วคราวก่อนทดสอบ
             await fetch(`${API_BASE}/telegram/settings`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

@@ -542,7 +542,7 @@ export class AppController {
   // API สำหรับการตั้งค่า Telegram (Telegram Settings APIs)
   @Get('telegram/settings')
   getTelegramSettings() {
-    return this.telegramService.getConfig();
+    return this.telegramService.getSafeConfig();
   }
 
   @Post('telegram/settings')

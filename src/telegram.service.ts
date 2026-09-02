@@ -9,6 +9,12 @@ export interface TelegramConfig {
   enabled: boolean;
 }
 
+export interface SafeTelegramConfig {
+  chatId: string;
+  enabled: boolean;
+  botTokenConfigured: boolean;
+}
+
 @Injectable()
 export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
@@ -27,27 +33,56 @@ export class TelegramService {
     try {
       if (fs.existsSync(this.configPath)) {
         const raw = fs.readFileSync(this.configPath, 'utf8');
-        this.config = JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        this.config = {
+          botToken: typeof parsed.botToken === 'string' ? parsed.botToken.trim() : '',
+          chatId: typeof parsed.chatId === 'string' ? parsed.chatId.trim() : '',
+          enabled: Boolean(parsed.enabled),
+        };
       }
     } catch (e) {
-      this.logger.error('Failed to load telegram config', e);
+      this.logger.error('Failed to load telegram config');
     }
   }
 
-  saveConfig(newConfig: Partial<TelegramConfig>) {
-    this.config = { ...this.config, ...newConfig };
+  saveConfig(newConfig: Partial<TelegramConfig>): { success: boolean; message?: string; config?: SafeTelegramConfig } {
+    const updatedConfig: TelegramConfig = { ...this.config };
+
+    if (typeof newConfig.chatId === 'string') {
+      updatedConfig.chatId = newConfig.chatId.trim();
+    }
+    if (typeof newConfig.enabled === 'boolean') {
+      updatedConfig.enabled = newConfig.enabled;
+    }
+    if (typeof newConfig.botToken === 'string' && newConfig.botToken.trim() !== '') {
+      updatedConfig.botToken = newConfig.botToken.trim();
+    }
+
+    this.config = updatedConfig;
+
     try {
       fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf8');
       this.logger.log('📱 บันทึกการตั้งค่า Telegram เรียบร้อยแล้ว');
-      return { success: true, config: this.config };
+      return {
+        success: true,
+        config: this.getSafeConfig(),
+      };
     } catch (e) {
-      this.logger.error('Failed to save telegram config', e);
+      this.logger.error('Failed to save telegram config');
       return { success: false, message: 'ไม่สามารถบันทึกไฟล์ตั้งค่าได้' };
     }
   }
 
   getConfig(): TelegramConfig {
     return this.config;
+  }
+
+  getSafeConfig(): SafeTelegramConfig {
+    return {
+      chatId: this.config.chatId || '',
+      enabled: Boolean(this.config.enabled),
+      botTokenConfigured: Boolean(this.config.botToken && this.config.botToken.trim() !== ''),
+    };
   }
 
   async sendMessage(messageText: string): Promise<boolean> {
@@ -69,15 +104,15 @@ export class TelegramService {
       });
 
       const resData = await response.json();
-      if (resData.ok) {
+      if (resData && resData.ok) {
         this.logger.log('✅ ส่งแจ้งเตือนรายงานเข้า Telegram สำเร็จ!');
         return true;
       } else {
-        this.logger.error(`❌ Telegram API Error: ${resData.description}`);
+        this.logger.error(`❌ Telegram API Error: ${resData?.description || 'Unknown error'}`);
         return false;
       }
     } catch (e) {
-      this.logger.error('❌ Failed to send Telegram message:', e);
+      this.logger.error('❌ Failed to send Telegram message');
       return false;
     }
   }
@@ -107,13 +142,13 @@ export class TelegramService {
       });
 
       const resData = await response.json();
-      if (resData.ok) {
+      if (resData && resData.ok) {
         return { success: true, message: 'ส่งข้อความทดสอบเข้า Telegram เรียบร้อยแล้ว!' };
       } else {
-        return { success: false, message: `Telegram Error: ${resData.description}` };
+        return { success: false, message: `Telegram Error: ${resData?.description || 'Unknown error'}` };
       }
     } catch (e) {
-      return { success: false, message: `เชื่อมต่อไม่สำเร็จ: ${e.message}` };
+      return { success: false, message: 'เชื่อมต่อไม่สำเร็จ' };
     }
   }
 

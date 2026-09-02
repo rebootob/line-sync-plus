@@ -162,12 +162,22 @@ Over the course of safety hardening, 10 corrective work packages were identified
 
 ## 9. Known Risks & Technical Debt
 
-### Secret Hygiene P0 Mandate
+### Secret Hygiene P0 Mandate (`SEC-WP001` STATUS: READY_FOR_CHATGPT_REVIEW)
 - **CRITICAL**: The repository `rebootob/line-sync-plus` is **PUBLIC**.
 - **PROHIBITED**: Under no circumstances may `.env` files, API keys, passwords, database credentials, access tokens, refresh tokens, private keys, or LINE channel secrets be committed or pushed to Git.
+- **SEC-WP001 Status**:
+  - `telegram-config.json` untracked from Git main (`git rm --cached`).
+  - Local runtime config `telegram-config.json` preserved on disk and gitignored by `.gitignore`.
+  - Safe template `telegram-config.example.json` remains tracked without real credentials.
+  - `GET /api/telegram/settings` and `POST /api/telegram/settings` return `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
+  - Blank `botToken` supplied from UI preserves existing stored token on backend.
+  - Current tracked files scan confirmed **0** Telegram-token-like matches.
+  - Historical check confirmed `telegram-config.json` existed in public history from initial commit (`999c163`).
+  - Old Telegram token must be considered **COMPROMISED**; **TOKEN ROTATION** via `@BotFather` remains a **HUMAN REQUIRED ACTION**.
+  - Git history rewrite was **NOT** performed in SEC-WP001.
 
 ### Technical Debt Items
-- Database credentials currently reside in local `.env` (gitignored). Production setup requires secure environment secret injection (`SEC-WP001`).
+- Database credentials currently reside in local `.env` (gitignored). Production setup requires secure environment secret injection.
 - Diagnostic log files (`uat-logs/`) must be rotated periodically to prevent disk bloat.
 
 ---
@@ -182,7 +192,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 - **Phase 0 — Security & Reliability Foundation**: **IN PROGRESS**
   - Safety hardening (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002`, `BUG-WP002-R1`): **COMPLETED**
-  - `SEC-WP001` (Secret Hygiene): **READY / NOT STARTED**
+  - `SEC-WP001` (Secret Hygiene): **READY_FOR_CHATGPT_REVIEW**
   - `OPS-WP001`: **NOT STARTED**
   - `REL-WP001`: **NOT STARTED**
   - `REL-WP002`: **NOT STARTED**
@@ -198,7 +208,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
-   - Secret hygiene enforcement (`SEC-WP001`).
+   - Secret hygiene enforcement (`SEC-WP001` READY_FOR_CHATGPT_REVIEW).
    - Fail-closed recipient verification & OA context validation (Completed in WP001/WP002).
 2. **P1 (Observability & Operational Hardening)**:
    - Real-time diagnostic event stream UI widget in Dashboard.
@@ -217,7 +227,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 14. Recommended Next Work Packages
 
-- **SEC-WP001**: Secret Hygiene & credential security audit (READY / NOT STARTED).
+- **SEC-WP001**: Secret Hygiene & credential security audit (**READY_FOR_CHATGPT_REVIEW**).
 - **WP-UI-LOGS**: Implement browser diagnostic log viewer tab in single-page dashboard.
 - **WP-AUTH-ALERT**: Implement session disconnect & re-authentication alert via Telegram.
 
@@ -228,7 +238,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 - **Zero Misdeliveries**: 0% message delivery to wrong recipients.
 - **Zero Poisoning Loops**: 0 infinite 404 redirect loops on invalid bot IDs.
 - **100% Spool Integrity**: 0 lost navigation diagnostic events during page transitions.
-- **100% Test Pass Rate**: All Jest unit tests (20/20) passing cleanly.
+- **100% Test Pass Rate**: All Jest unit tests (26/26) passing cleanly.
 
 ---
 
@@ -243,5 +253,5 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-The project is currently at Phase 0 (Security & Reliability Foundation) with Safety Hardening COMPLETED.
-Next Action: Await explicit ChatGPT / Control Plane authorization before starting `SEC-WP001 — Secret Hygiene`.
+The project is currently at Phase 0 (Security & Reliability Foundation) with SEC-WP001 implemented and READY_FOR_CHATGPT_REVIEW.
+Next Action: Await ChatGPT Control Plane review of SEC-WP001 implementation.
