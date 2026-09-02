@@ -1,20 +1,20 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: SYNC-WP001 — LINE OA Customer Directory Sync to DB (Refined Reporting Metrics)
+ACTIVE_WORK_PACKAGE: SYNC-WP001-R1 — Metric Integrity & Fail-Closed Pagination Corrective
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner & ChatGPT Control Plane
-TASK_TYPE: FEATURE_IMPLEMENTATION
+TASK_TYPE: BOUNDED_CORRECTIVE
 ```
 
 ---
 
-## 📋 Work Package Summary: SYNC-WP001
+## 📋 Work Package Summary: SYNC-WP001-R1
 
 ### Status Summary
-- **SYNC-WP001**: `READY_FOR_CHATGPT_REVIEW` (NOT CLOSED)
-- **OA-WP001**: `CLOSED / PASS`
-- **OA-WP001-R1**: `CLOSED / PASS`
+- **SYNC-WP001-R1**: `READY_FOR_CHATGPT_REVIEW`
+- **SYNC-WP001**: `READY_FOR_CHATGPT_REVIEW (NOT CLOSED)` (Live UAT pending)
+- **OA-WP001**: `CLOSED / PASS` (Accepted on Worker v28.5)
 - **REL-WP001**: `CLOSED / PASS`
 - **REL-WP002**: `READY / NOT STARTED`
 - **REL-WP003**: `NOT STARTED`
@@ -26,30 +26,29 @@ TASK_TYPE: FEATURE_IMPLEMENTATION
 
 ---
 
-## 🔍 Confirmed Metrics & Reporting Model
+## 🔍 Corrective Solutions Applied (SYNC-WP001-R1)
 
-1. **Independent Sync Metrics**:
-   - `contactsFetched`: Total contact records received from LINE across all pages BEFORE DB deduplication.
-   - `inserted`: Customer did not previously exist under `(botId, lineUserId)` identity and was newly inserted.
-   - `updatedName`: Customer already existed under `botId + lineUserId`, but `displayName` changed and was updated.
-   - `existingUnchanged`: Customer already existed under `botId + lineUserId` and `displayName` was unchanged. (Primary user-facing "มีอยู่แล้ว / ซ้ำกับ DB" count).
-   - `duplicateInSync`: Duplicate `lineUserId` encountered more than once during the SAME sync run. Tracked independently from `existingUnchanged`.
-   - `invalid`: Missing/invalid `profile.userId` or otherwise unusable contact.
-   - `pagesFetched`: Total LINE contacts API pages fetched.
-   - `dbTotalAfterSync`: Final number of Customer records belonging to the synced `botId` after sync completes.
-   - `elapsedSeconds`: Total elapsed sync execution time in seconds.
+1. **Full-Run Deduplication (`duplicateInSync`)**:
+   - Full-run `Set<string>` (`seenSyncUserIds`) tracks duplicate `lineUserId` occurrences across the entire LINE sync process.
+   - Prevents duplicate contacts on different pages from producing duplicate batch writes or miscounted metrics.
 
-2. **Backend API Contract (`POST /api/customers/sync-batch`)**:
-   - Returns `{ success: true, received, inserted, updatedName, existingUnchanged, duplicateInBatch, invalid }`.
+2. **Fail-Closed Pagination Loop & Max Page Guard**:
+   - Repeated cursor loop detection now ABORTS sync cleanly as ERROR (`isError = true`) without displaying the PASS summary banner.
+   - Reaching `maxPages` limit without natural end-of-pagination ABORTS sync cleanly as ERROR (`isError = true`).
+   - Final PASS summary banner strictly requires `paginationCompleted === true` (natural pagination end where `response.next` is absent/empty).
 
-3. **Privacy Invariants**:
-   - Opaque pagination cursors, tokens, cookies, and auth headers are **NEVER** persisted, written to diagnostic logs, or printed.
+3. **Strict Response Structure Validation**:
+   - Requires `Array.isArray(resp.contacts)`. If missing or invalid, sync aborts immediately as ERROR.
+
+4. **Strict LINE User ID Validation (`^U[0-9a-fA-F]{32}$`)**:
+   - Enforced in both `run/LineSyncApp.js` and `src/app.controller.ts`.
+   - Invalid or malformed IDs increment `invalid` count and are never submitted, inserted, or saved.
 
 ---
 
 ## 🧪 Verification Results
 
-- **Unit Tests**: 73 passed (`npm test`)
+- **Unit Tests**: 74 passed (`npm test`)
 - **Build**: Clean (`npm run build`)
 - **Script Check**: Valid (`node --check run/LineSyncApp.js`)
 - **Diff Check**: Clean (`git diff --check`)

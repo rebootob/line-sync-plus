@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post SYNC-WP001 Refined Reporting Metrics)
+**Last Updated**: 2026-09-02 (Post SYNC-WP001-R1 Metric Integrity & Fail-Closed Pagination Corrective)
 
 ---
 
@@ -28,15 +28,18 @@
 
 ---
 
-## 🔄 Customer Directory Synchronization (SYNC-WP001 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔄 Customer Directory Synchronization (SYNC-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Worker Version**: `28.6` (`run/LineSyncApp.js` v28.6).
 - **Backend Required Version**: `28.6` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
 - **Reporting & Metric Contract**:
   - `POST /api/customers/sync-batch` returns `{ success, received, inserted, updatedName, existingUnchanged, duplicateInBatch, invalid }`.
-  - Client Userscript tracks 9 independent metrics: `contactsFetched`, `inserted`, `updatedName`, `existingUnchanged`, `duplicateInSync`, `invalid`, `pagesFetched`, `dbTotalAfterSync`, `elapsedSeconds`.
-  - Displays live progress banner and final Thai summary modal upon completion.
+  - Full-run `seenSyncUserIds` Set tracks `duplicateInSync` across all fetched pages.
+  - Strict LINE User ID regex (`^U[0-9a-fA-F]{32}$`) enforced on client and server.
+  - Strict `Array.isArray(resp.contacts)` structure requirement.
+  - Fail-closed pagination loop and max-page guards: abort as ERROR without reporting PASS summary banner.
+  - Displays live progress banner and final Thai summary banner upon natural completion (`paginationCompleted === true`).
   - Web Lock `linesync_customer_sync_v1` guarantees single-tab execution.
   - Opaque pagination cursors are never persisted or logged.
 
@@ -44,11 +47,11 @@
 
 ## 🔒 Multi-OA Identity Fencing & Context Isolation (OA-WP001 STATUS: CLOSED / PASS)
 
-- **Live UAT Evidence (Passed 2026-09-02)**:
+- **Historical Live UAT Evidence (Accepted on Worker v28.5)**:
   - **UAT-01 (Database Migration / OA Discovery)**: PASS (OA #1: 9,737 total; OA #2: 2,153 total).
   - **UAT-02 (Dashboard OA Isolation)**: PASS (OA #1 displayed only OA #1 customers; OA #2 displayed only OA #2 customers).
   - **UAT-03 (Controlled Dashboard OA Switch)**: PASS (Master Bot must be paused before switch).
-  - **UAT-04 (Controlled Physical LINE OA Switch)**: PASS (Worker v28.6 aligned physical OA with activeBotId).
+  - **UAT-04 (Controlled Physical LINE OA Switch)**: PASS (Worker v28.5 aligned physical OA with activeBotId).
   - **UAT-05 (OA #2 Live Send Path)**: PASS (Full send path under OA #2 verified; wrong OA send = 0).
   - **UAT-06 (Cross-OA Queue Isolation)**: PASS (OA #2 worker does not claim OA #1 pending jobs).
 
@@ -73,6 +76,7 @@
 
 ### 2. NestJS REST API (`src/app.controller.ts`)
 - Customer directory sync batch endpoint (`POST /api/customers/sync-batch`).
+- Strict User ID regex validation (`^U[0-9a-fA-F]{32}$`).
 - Active OA context management (`GET /api/oa/contexts`, `GET/POST /api/oa/active`).
 - Hard OA fencing in queue processor (`GET /api/campaign/next`).
 - Composite customer query (`GET /api/customers?botId=...`).
@@ -83,8 +87,8 @@
 - Active OA selector dropdown with status indicators and switching guards.
 
 ### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.6)
-- Sequential LINE contacts directory sync with Web Lock protection (`linesync_customer_sync_v1`).
-- Granular 9-metric reporting and Thai summary popup.
+- Fail-closed sequential LINE contacts directory sync with Web Lock protection (`linesync_customer_sync_v1`).
+- Granular 9-metric full-run reporting and Thai summary banner.
 
 ---
 
@@ -98,6 +102,7 @@
   - `REL-WP001`, `REL-WP001-R1`, `REL-WP001-R2` (`CLOSED / PASS`)
   - `OA-WP001`, `OA-WP001-R1` (`CLOSED / PASS`)
 - **Active Work Package**:
-  - `SYNC-WP001 — LINE OA Customer Directory Sync to DB` (`READY_FOR_CHATGPT_REVIEW`)
+  - `SYNC-WP001-R1 — Metric Integrity & Fail-Closed Pagination Corrective` (`READY_FOR_CHATGPT_REVIEW`)
+  - `SYNC-WP001 — LINE OA Customer Directory Sync to DB` (`READY_FOR_CHATGPT_REVIEW` — NOT CLOSED)
 - **Next Work Package Candidate**:
   - `REL-WP002 — Job Lease + Heartbeat` (`READY / NOT STARTED` — Project Owner authorization required)

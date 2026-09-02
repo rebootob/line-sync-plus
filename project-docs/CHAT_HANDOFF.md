@@ -4,8 +4,8 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 696db541c2a4957e149669b1d10f43b5bc542044 (sync: add OA-isolated customer directory sync)
-* Working Tree: Clean (SYNC-WP001 READY_FOR_CHATGPT_REVIEW)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 1b5953bbf9661a9e8fd52bc922b58c2d8aa0bf6e
+* Working Tree: Clean (SYNC-WP001-R1 READY_FOR_CHATGPT_REVIEW)
 
 ## Project Purpose
 
@@ -19,10 +19,11 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
 - **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
-## Work Package Status: SYNC-WP001
+## Work Package Status: SYNC-WP001-R1
 
-* **SYNC-WP001**: `READY_FOR_CHATGPT_REVIEW` (NOT CLOSED)
-* **OA-WP001**: `CLOSED / PASS`
+* **SYNC-WP001-R1**: `READY_FOR_CHATGPT_REVIEW`
+* **SYNC-WP001**: `READY_FOR_CHATGPT_REVIEW (NOT CLOSED)`
+* **OA-WP001**: `CLOSED / PASS` (Accepted on Worker v28.5)
 * **OA-WP001-R1**: `CLOSED / PASS`
 * **REL-WP001**: `CLOSED / PASS`
 * **REL-WP002**: `READY / NOT STARTED` (AUTHORIZATION REQUIRED)
@@ -32,20 +33,13 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
   - Runtime Contract Version: `2`
   - Required Worker Version: `28.6`
 
-## Refined Metrics & Reporting Implementation Summary (SYNC-WP001)
+## Refined Metrics & Corrective Implementation Summary (SYNC-WP001-R1)
 
-1. **Independent Metric Contract**:
-   - `contactsFetched`: Total contact records received from LINE across pages.
-   - `inserted`: Newly inserted customers.
-   - `updatedName`: Existing customers with updated `displayName`.
-   - `existingUnchanged`: Existing customers with unchanged `displayName` (Primary "มีอยู่แล้ว / ซ้ำกับ DB").
-   - `duplicateInSync`: Duplicate `lineUserId` encountered in same sync run.
-   - `invalid`: Unusable/invalid contacts.
-   - `pagesFetched`: Total API pages fetched.
-   - `dbTotalAfterSync`: Final customer count in DB for synced `botId`.
-   - `elapsedSeconds`: Total sync execution time.
-2. **Backend Batch Endpoint**: `POST /api/customers/sync-batch` returns `{ success: true, received, inserted, updatedName, existingUnchanged, duplicateInBatch, invalid }`.
+1. **Full-Run `duplicateInSync` Deduplication**: Full-run `seenSyncUserIds` Set prevents duplicate contacts across different pages from causing duplicate writes or incorrect metric totals.
+2. **Fail-Closed Pagination**: Repeated cursor loop or reaching max pages immediately aborts sync with Thai error banner (`isError = true`). Final PASS summary banner strictly requires `paginationCompleted === true`.
+3. **Response Structure Verification**: Requires `Array.isArray(resp.contacts)`. Unexpected API responses abort immediately.
+4. **Strict LINE User ID Validation**: Enforces `/^U[0-9a-fA-F]{32}$/` regex on client and server.
 
 ## Exact Recommended Next Step
 
-Await independent ChatGPT Control Plane code review and Project Owner instructions for SYNC-WP001 review or next work package.
+Await independent ChatGPT Control Plane code review and Project Owner instructions for SYNC-WP001-R1 review or next work package.

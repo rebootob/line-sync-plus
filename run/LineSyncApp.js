@@ -1613,7 +1613,9 @@
 
         let nextCursor = null;
         const seenCursors = new Set();
+        const seenSyncUserIds = new Set();
         const maxPages = 10000;
+        let paginationCompleted = false;
         let batchRecords = [];
         const BATCH_SIZE = 200;
 
@@ -1648,28 +1650,37 @@
                     });
                 });
 
-                if (!resp) {
-                    console.error(`🛑 [SYNC] LINE Contacts API returned error status on page ${pagesFetched}. Aborting.`);
-                    updateUI(`❌ เกิดข้อผิดพลาดในการดึงข้อมูลจาก LINE Contacts API (หน้า ${pagesFetched})`, false, true);
+                if (!resp || !Array.isArray(resp.contacts)) {
+                    console.error(`🛑 [SYNC] LINE Contacts API returned invalid response structure on page ${pagesFetched}. Aborting.`);
+                    updateUI(`❌ รูปแบบข้อมูลตอบกลับจาก LINE Contacts API 不正確 (ไม่ถูกต้อง) หน้า ${pagesFetched}`, false, true);
                     return;
                 }
 
-                const contacts = resp.contacts || resp.items || resp.data || [];
+                const contacts = resp.contacts;
                 contactsFetched += contacts.length;
 
                 for (const item of contacts) {
                     const profile = item ? item.profile : null;
-                    const uid = profile ? profile.userId : null;
+                    const rawUid = profile ? profile.userId : null;
                     const name = profile ? profile.name : null;
 
-                    if (uid && typeof uid === 'string' && uid.trim()) {
-                        batchRecords.push({
-                            lineUserId: uid.trim(),
-                            displayName: (name && typeof name === 'string') ? name.trim() : 'ลูกค้า'
-                        });
-                    } else {
+                    if (!rawUid || typeof rawUid !== 'string' || !/^U[0-9a-fA-F]{32}$/.test(rawUid.trim())) {
                         invalid++;
+                        continue;
                     }
+
+                    const uid = rawUid.trim();
+
+                    if (seenSyncUserIds.has(uid)) {
+                        duplicateInSync++;
+                        continue;
+                    }
+
+                    seenSyncUserIds.add(uid);
+                    batchRecords.push({
+                        lineUserId: uid,
+                        displayName: (name && typeof name === 'string') ? name.trim() : 'ลูกค้า'
+                    });
                 }
 
                 updateUI(`
@@ -1679,6 +1690,7 @@
                     เพิ่มใหม่: <b>${inserted.toLocaleString()}</b><br>
                     ชื่อเปลี่ยน: <b>${updatedName.toLocaleString()}</b><br>
                     มีอยู่แล้ว: <b>${existingUnchanged.toLocaleString()}</b><br>
+                    ซ้ำในรอบนี้: <b>${duplicateInSync.toLocaleString()}</b><br>
                     ข้าม/ผิดรูปแบบ: <b>${invalid.toLocaleString()}</b>
                 `);
 
@@ -1692,23 +1704,36 @@
                     inserted += (postRes.inserted || 0);
                     updatedName += (postRes.updatedName || 0);
                     existingUnchanged += (postRes.existingUnchanged || 0);
-                    duplicateInSync += (postRes.duplicateInBatch || 0);
                     invalid += (postRes.invalid || 0);
                     batchRecords = [];
                 }
 
                 const rawNext = resp.next;
                 if (!rawNext || typeof rawNext !== 'string' || !rawNext.trim()) {
-                    console.log("✅ [SYNC] Pagination complete. No further next cursor.");
+                    console.log("✅ [SYNC] Pagination ended naturally. No further next cursor.");
+                    paginationCompleted = true;
                     break;
                 }
 
                 if (seenCursors.has(rawNext)) {
-                    console.warn("⚠️ [SYNC] Pagination loop detected: Repeated cursor observed. Stopping safely.");
-                    break;
+                    console.error("🛑 [SYNC] Pagination loop detected (repeated cursor). Aborting sync as incomplete.");
+                    updateUI(`❌ ตรวจพบ Pagination Loop (Cursor ซ้ำ) การ Sync ไม่เสร็จสมบูรณ์ (ดึงได้ ${pagesFetched} หน้า)`, false, true);
+                    return;
                 }
                 seenCursors.add(rawNext);
                 nextCursor = rawNext;
+
+                if (pagesFetched >= maxPages) {
+                    console.error(`🛑 [SYNC] Exceeded maximum page limit (${maxPages} pages). Aborting sync as incomplete.`);
+                    updateUI(`❌ จำนวนหน้าที่ดึงเกินขีดจำกัดสูงสุด (${maxPages.toLocaleString()} หน้า) การ Sync ไม่เสร็จสมบูรณ์`, false, true);
+                    return;
+                }
+            }
+
+            if (!paginationCompleted) {
+                console.error("🛑 [SYNC] Pagination did not complete naturally. Aborting PASS summary.");
+                updateUI(`❌ การดึงข้อมูลหยุดทำงานก่อนเสร็จสมบูรณ์ (หน้า ${pagesFetched})`, false, true);
+                return;
             }
 
             if (batchRecords.length > 0) {
@@ -1721,7 +1746,6 @@
                 inserted += (postRes.inserted || 0);
                 updatedName += (postRes.updatedName || 0);
                 existingUnchanged += (postRes.existingUnchanged || 0);
-                duplicateInSync += (postRes.duplicateInBatch || 0);
                 invalid += (postRes.invalid || 0);
                 batchRecords = [];
             }

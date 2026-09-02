@@ -1033,14 +1033,14 @@ describe('AppController', () => {
 
       const res: any = await appController.syncCustomerBatch({
         botId: validBotId1,
-        records: [{ lineUserId: 'USAMEUSERID12345678901234567890', displayName: 'ชื่อใหม่ใน OA1' }]
+        records: [{ lineUserId: 'U55555555555555555555555555555555', displayName: 'ชื่อใหม่ใน OA1' }]
       }, reqMock, resMock);
 
       expect(res.success).toBe(true);
       expect(res.inserted).toBe(1);
       expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({
         botId: validBotId1,
-        lineUserId: 'USAMEUSERID12345678901234567890'
+        lineUserId: 'U55555555555555555555555555555555'
       }));
     });
 
@@ -1054,8 +1054,8 @@ describe('AppController', () => {
       const res: any = await appController.syncCustomerBatch({
         botId: validBotId1,
         records: [
-          { lineUserId: 'UDUP12345678901234567890123456789', displayName: 'ชื่อครั้งแรก' },
-          { lineUserId: 'UDUP12345678901234567890123456789', displayName: 'ชื่อครั้งที่สอง' }
+          { lineUserId: 'U66666666666666666666666666666666', displayName: 'ชื่อครั้งแรก' },
+          { lineUserId: 'U66666666666666666666666666666666', displayName: 'ชื่อครั้งที่สอง' }
         ]
       }, reqMock, resMock);
 
@@ -1073,6 +1073,34 @@ describe('AppController', () => {
       expect(resMock.statusCode).toBe(400);
       expect(res.success).toBe(false);
       expect(res.message).toContain('exceeds maximum limit of 250');
+    });
+
+    it('12. malformed non-empty lineUserId is counted as invalid and never created/saved', async () => {
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValueOnce({ id: 'global', activeBotId: validBotId1 } as any);
+      jest.spyOn(mockCustomerRepo, 'find').mockResolvedValueOnce([]);
+      const createSpy = jest.spyOn(mockCustomerRepo, 'create');
+      createSpy.mockClear();
+      const saveSpy = jest.spyOn(mockCustomerRepo, 'save');
+      saveSpy.mockClear();
+
+      const res: any = await appController.syncCustomerBatch({
+        botId: validBotId1,
+        records: [
+          { lineUserId: 'U12345', displayName: 'Short ID' },
+          { lineUserId: 'NOT_STARTING_WITH_U_1234567890123', displayName: 'Bad prefix' },
+          { lineUserId: 'U11111111222222223333333344444444', displayName: 'Valid ID' }
+        ]
+      }, reqMock, resMock);
+
+      expect(res.success).toBe(true);
+      expect(res.received).toBe(3);
+      expect(res.invalid).toBe(2);
+      expect(res.inserted).toBe(1);
+      expect(createSpy).toHaveBeenCalledTimes(1);
+      expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({
+        botId: validBotId1,
+        lineUserId: 'U11111111222222223333333344444444'
+      }));
     });
   });
 });

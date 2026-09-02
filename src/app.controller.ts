@@ -210,7 +210,7 @@ export class AppController {
 
     const validMap = new Map<string, string>();
     for (const rec of body.records) {
-      if (!rec || !rec.lineUserId || typeof rec.lineUserId !== 'string' || !rec.lineUserId.trim()) {
+      if (!rec || !rec.lineUserId || typeof rec.lineUserId !== 'string' || !/^U[0-9a-fA-F]{32}$/.test(rec.lineUserId.trim())) {
         invalidCount++;
         continue;
       }
