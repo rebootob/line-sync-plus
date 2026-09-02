@@ -1,2 +1,2 @@
 export const RUNTIME_CONTRACT_VERSION = 2;
-export const REQUIRED_WORKER_VERSION = '28.9';
+export const REQUIRED_WORKER_VERSION = '28.10';

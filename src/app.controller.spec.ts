@@ -480,11 +480,11 @@ describe('AppController', () => {
       };
     });
 
-    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.9', () => {
+    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.10', () => {
       const res = appController.getRuntimeVersion();
       expect(res).toEqual({
         runtimeContractVersion: 2,
-        requiredWorkerVersion: '28.9',
+        requiredWorkerVersion: '28.10',
       });
     });
 
@@ -497,7 +497,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.9',
+        requiredWorkerVersion: '28.10',
       });
       // Prove version gate executes BEFORE job query/claim logic
       expect(findSpy).not.toHaveBeenCalled();
@@ -512,7 +512,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.9',
+        requiredWorkerVersion: '28.10',
       });
       expect(findSpy).not.toHaveBeenCalled();
     });
@@ -534,10 +534,10 @@ describe('AppController', () => {
       expect(saveCampSpy).not.toHaveBeenCalled();
     });
 
-    it('5. GET /api/campaign/next with EXACT version ("28.9") and valid OA header -> reaches normal job claim logic', async () => {
+    it('5. GET /api/campaign/next with EXACT version ("28.10") and valid OA header -> reaches normal job claim logic', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
 
-      const res = await appController.getNextJob('28.9', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const res = await appController.getNextJob('28.10', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
 
       expect(mockRes.statusCode).toBe(200);
       expect(findSpy).toHaveBeenCalled();
@@ -662,23 +662,23 @@ describe('AppController', () => {
       findSpy.mockClear();
 
       // Missing OA header
-      const resMissingOa = await appController.getNextJob('28.9', undefined, mockRes);
+      const resMissingOa = await appController.getNextJob('28.10', undefined, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMissingOa).toEqual({ status: 'missing_oa_context', message: 'X-LineSync-OA-Context header missing or invalid' });
       expect(findSpy).not.toHaveBeenCalled();
 
       // OA Mismatch (worker sends foreign OA)
-      const resMismatchOa = await appController.getNextJob('28.9', 'U11111111222222223333333344444444', mockRes);
+      const resMismatchOa = await appController.getNextJob('28.10', 'U11111111222222223333333344444444', mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMismatchOa.status).toBe('oa_context_mismatch');
       expect(findSpy).not.toHaveBeenCalled();
     });
 
-    it('6. Tampermonkey script contains version 28.9, controlled OA switch, job OA fencing, and physical send OA guard', () => {
+    it('6. Tampermonkey script contains version 28.10, controlled OA switch, job OA fencing, and physical send OA guard', () => {
       const fs = require('fs');
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
 
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.9'");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.10'");
       expect(scriptContent).toContain('headers[\'X-LineSync-OA-Context\']');
       expect(scriptContent).toContain('checkAndExecuteControlledOaSwitch');
       expect(scriptContent).toContain('verifyCurrentOAContext');
@@ -829,7 +829,7 @@ describe('AppController', () => {
         message: 'Hello'
       } as any);
 
-      const jobRes: any = await appController.getNextJob('28.9', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const jobRes: any = await appController.getNextJob('28.10', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
       expect(jobRes.botId).toBe('U09d6b978fcbfb5275e533ca9b788eb22');
     });
 
@@ -1184,30 +1184,30 @@ describe('AppController', () => {
       expect(res.success).toBe(true);
     });
 
-    it('10. Worker = 28.9', () => {
+    it('10. Worker = 28.10', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.9'");
-      expect(scriptContent).toContain("@version      28.9");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.10'");
+      expect(scriptContent).toContain("@version      28.10");
     });
 
-    it('11. Required Worker = 28.9', () => {
+    it('11. Required Worker = 28.10', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.9');
+      expect(versionRes.requiredWorkerVersion).toBe('28.10');
     });
   });
 
   describe('SAFE-WP001 — LINE OA Account Protection & Send Compliance Guard Tests', () => {
     const fs = require('fs');
 
-    it('1. Worker = 28.9', () => {
+    it('1. Worker = 28.10', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.9'");
-      expect(scriptContent).toContain("@version      28.9");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.10'");
+      expect(scriptContent).toContain("@version      28.10");
     });
 
-    it('2. Required Worker = 28.9', () => {
+    it('2. Required Worker = 28.10', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.9');
+      expect(versionRes.requiredWorkerVersion).toBe('28.10');
     });
 
     it('3. Rate guard exists immediately before text irreversible send', () => {
@@ -1392,6 +1392,131 @@ describe('AppController', () => {
       expect(scriptContent).toContain('verifyCurrentRecipient');
       expect(scriptContent).toContain('verifyCurrentOAContext');
       expect(scriptContent).toContain('confirmWorkerLeadershipForSend');
+    });
+  });
+
+  describe('SAFE-WP001-R1 — Fail-Closed Protection State & Truthful Telemetry Tests', () => {
+    const fs = require('fs');
+
+    it('1. malformed protection storage fails closed', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('throw new Error(\'ACCOUNT_PROTECTION_STATE_UNAVAILABLE\');');
+      expect(scriptContent).toContain('JSON parse failure for key');
+      expect(scriptContent).toContain('Protection state is not an array');
+    });
+
+    it('2. localStorage read failure fails closed', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('Storage read failure for key');
+      expect(scriptContent).toContain('throw new Error(\'ACCOUNT_PROTECTION_STATE_UNAVAILABLE\');');
+    });
+
+    it('3. localStorage write failure fails closed', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('Storage write failure for key');
+      expect(scriptContent).toContain('throw new Error(\'ACCOUNT_PROTECTION_STATE_UNAVAILABLE\');');
+    });
+
+    it('4. write without matching read-back fails closed', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('Read-back verification failed');
+      expect(scriptContent).toContain('throw new Error(\'ACCOUNT_PROTECTION_STATE_UNAVAILABLE\');');
+    });
+
+    it('5. no physical send occurs when reservation fails', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('Invalid or missing botId in protection gate. Failing closed.');
+      expect(scriptContent).toContain('throw new Error(\'ACCOUNT_PROTECTION_STATE_UNAVAILABLE\');');
+    });
+
+    it('6. rolling 10-minute calculation', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('const sends10Min = timestamps.filter(ts => (now - ts) <= 600000);');
+      expect(scriptContent).toContain('if (sends10Min.length >= MAX_SEND_ACTIONS_10_MIN)');
+    });
+
+    it('7. rolling 1-hour calculation', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('const sends1Hour = timestamps.filter(ts => (now - ts) <= 3600000);');
+      expect(scriptContent).toContain('if (sends1Hour.length >= MAX_SEND_ACTIONS_1_HOUR)');
+    });
+
+    it('8. minimum-gap calculation', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('if (elapsedSinceLast < MIN_SEND_GAP_MS)');
+      expect(scriptContent).toContain('waitMs = Math.max(waitMs, MIN_SEND_GAP_MS - elapsedSinceLast);');
+    });
+
+    it('9. successful reservation persists only timestamps', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('const bounded = timestamps.filter(ts => typeof ts === \'number\' && (now - ts) <= 3600000);');
+      expect(scriptContent).toContain('const jsonToSave = JSON.stringify(bounded);');
+    });
+
+    it('10. dashboard telemetry unavailable => "unknown", not fake 0', async () => {
+      const htmlContent = fs.readFileSync('index.html', 'utf8');
+      expect(htmlContent).toContain('<b id="prot10m">unknown</b>');
+      expect(htmlContent).toContain('<b id="prot1h">unknown</b>');
+      expect(htmlContent).toContain('<b id="protNextSend">unknown</b>');
+      expect(htmlContent).toContain('<b id="protCooling">unknown</b>');
+
+      const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
+      const res: any = await appController.getAccountProtectionStatus('U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      expect(res.available).toBe(false);
+    });
+
+    it('11. telemetry is scoped by botId', async () => {
+      const botId1 = 'U09d6b978fcbfb5275e533ca9b788eb22';
+      const botId2 = 'U11111111222222223333333344444444';
+
+      const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
+
+      await appController.recordAccountProtectionTelemetry({
+        botId: botId1,
+        sendActions10m: 5,
+        sendActions1h: 20,
+      }, mockRes);
+
+      const status1: any = await appController.getAccountProtectionStatus(botId1, mockRes);
+      expect(status1.available).toBe(true);
+      expect(status1.botId).toBe(botId1);
+      expect(status1.sendActions10m).toBe(5);
+
+      const status2: any = await appController.getAccountProtectionStatus(botId2, mockRes);
+      expect(status2.available).toBe(false);
+    });
+
+    it('12. final image send revalidates leadership/recipient/OA', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('async function confirmAndCloseImageModal(');
+      expect(scriptContent).toContain('Zero-tolerance image send guard: Recipient unverified immediately before clicking image Send button!');
+      expect(scriptContent).toContain('Zero-tolerance image send guard: Expected job botId missing, invalid, or unverified');
+    });
+
+    it('13. final text click revalidates leadership/recipient/OA', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('Leadership lost right before sendBtn click!');
+      expect(scriptContent).toContain('Zero-tolerance text send guard: Recipient unverified right before sendBtn click!');
+      expect(scriptContent).toContain('Zero-tolerance text send guard: OA context unverified right before sendBtn click!');
+    });
+
+    it('14. Enter fallback revalidates leadership/recipient/OA', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('Leadership lost right before Enter key fallback!');
+      expect(scriptContent).toContain('Zero-tolerance text send guard: Recipient unverified right before Enter key fallback!');
+      expect(scriptContent).toContain('Zero-tolerance text send guard: OA context unverified right before Enter key fallback!');
+    });
+
+    it('15. all previous SAFE-WP001 tests remain passing', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('MIN_SEND_GAP_MS = 10000');
+      expect(scriptContent).toContain('MAX_SEND_ACTIONS_10_MIN = 60');
+      expect(scriptContent).toContain('MAX_SEND_ACTIONS_1_HOUR = 300');
+    });
+
+    it('16. all existing project tests remain passing', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('WORKER_VERSION = \'28.10\'');
     });
   });
 });

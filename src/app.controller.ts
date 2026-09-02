@@ -17,6 +17,13 @@ import { RUNTIME_CONTRACT_VERSION, REQUIRED_WORKER_VERSION } from './runtime-ver
 export class AppController {
   private static workerBotId: string | null = null;
   private static workerSeenAt: number | null = null;
+  private static accountProtectionTelemetry: Record<string, {
+    sendActions10m: number;
+    sendActions1h: number;
+    nextSendAt: number;
+    errorCooldownUntil: number;
+    workerSeenAt: number;
+  }> = {};
 
   constructor(
     @InjectRepository(Customer)
@@ -478,6 +485,70 @@ export class AppController {
     await this.groupRepository.delete({ id, botId: cleanBotId });
 
     return { success: true };
+  }
+
+  // 🛡️ SAFE-WP001-R1 ACCOUNT PROTECTION TELEMETRY ENDPOINTS
+  @Post('account-protection/telemetry')
+  async recordAccountProtectionTelemetry(
+    @Body()
+    body: {
+      botId: string;
+      sendActions10m?: number;
+      sendActions1h?: number;
+      nextSendAt?: number;
+      errorCooldownUntil?: number;
+    },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!body || !body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId parameter' };
+    }
+
+    const cleanBotId = body.botId.trim();
+    AppController.accountProtectionTelemetry[cleanBotId] = {
+      sendActions10m: Number(body.sendActions10m || 0),
+      sendActions1h: Number(body.sendActions1h || 0),
+      nextSendAt: Number(body.nextSendAt || 0),
+      errorCooldownUntil: Number(body.errorCooldownUntil || 0),
+      workerSeenAt: Date.now(),
+    };
+
+    return { success: true };
+  }
+
+  @Get('account-protection/status')
+  async getAccountProtectionStatus(
+    @Query('botId') botId: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!botId || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, available: false, message: 'Missing or invalid botId query parameter' };
+    }
+
+    const cleanBotId = botId.trim();
+    const data = AppController.accountProtectionTelemetry[cleanBotId];
+
+    if (!data || (Date.now() - data.workerSeenAt > 30000)) {
+      return {
+        success: true,
+        available: false,
+        botId: cleanBotId,
+        message: 'Account Protection telemetry unavailable or stale',
+      };
+    }
+
+    return {
+      success: true,
+      available: true,
+      botId: cleanBotId,
+      sendActions10m: data.sendActions10m,
+      sendActions1h: data.sendActions1h,
+      nextSendAt: data.nextSendAt,
+      errorCooldownUntil: data.errorCooldownUntil,
+      workerSeenAt: data.workerSeenAt,
+    };
   }
 
   // ==========================================

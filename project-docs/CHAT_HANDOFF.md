@@ -4,12 +4,12 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 6588270c1d9bd3cc818d6b3784584fb25888c309
-* Working Tree: Clean (SAFE-WP001 READY FOR CHATGPT REVIEW)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 07b9dc4d951510b90b6716703ec7e0fb2d2fda3b
+* Working Tree: Clean (SAFE-WP001-R1 READY FOR CHATGPT REVIEW)
 
 ## Project Purpose
 
-LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.9) running inside `chat.line.biz`.
+LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.10) running inside `chat.line.biz`.
 
 ## Technology Stack
 
@@ -21,28 +21,24 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `READY_FOR_CHATGPT_REVIEW`
+* **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `NOT CLOSED / R1 READY_FOR_CHATGPT_REVIEW`
 * **SYNC-WP001 — LINE OA Customer Directory Sync to DB**: `CLOSED / PASS`
 * **OA-WP001**: `CLOSED / PASS` (Accepted on Worker v28.5)
 * **REL-WP001**: `CLOSED / PASS`
 * **REL-WP002**: `READY / NOT STARTED / AUTHORIZATION REQUIRED`
 * **REL-WP003**: `NOT STARTED`
 * **Version Contracts**:
-  - Worker Version: `28.9`
+  - Worker Version: `28.10`
   - Runtime Contract Version: `2`
-  - Required Worker Version: `28.9`
+  - Required Worker Version: `28.10`
 
-## Implementation Overview (SAFE-WP001)
+## Implementation Overview (SAFE-WP001-R1)
 
-- Centralized per-OA protection gate (`enforceAccountProtectionGate`) before image confirm send click and text send click / Enter key fallback.
-- Per-OA `localStorage` protection key `linesync_account_protection_v1_<botId>`. Internal defaults: `MIN_SEND_GAP_MS = 10000`, `MAX_SEND_ACTIONS_10_MIN = 60`, `MAX_SEND_ACTIONS_1_HOUR = 300`.
-- Campaign target hygiene in `POST /api/campaign/add`: deduplicates target IDs, excludes blocked customers (`isBlocked === true`), sets `Campaign.totalTargets` to `queuedCount`, returns hygiene statistics.
-- Adaptive system-error backoff schedule (30s / 60s / 120s / max 300s).
-- Compact protection status indicator in Dashboard (`accountProtectionBadge`).
-- 106/106 Jest unit tests passing cleanly (`npm test`). Build passing cleanly (`npm run build`). JS syntax clean (`node --check run/LineSyncApp.js`).
-
-> ⚠️ **Compliance Notice**: SAFE-WP001 is an operational risk-reduction control. It does NOT guarantee that LINE will never restrict/suspend an OA. Internal rate thresholds are safety defaults, not official LINE API limits. Zero detection evasion techniques are included.
+- **Fail-Closed Protection State**: `loadProtectionTimestamps` throws `ACCOUNT_PROTECTION_STATE_UNAVAILABLE` on reading malformed or unavailable `localStorage` state. `recordProtectionSendAction` enforces write + read-back verification before physical send.
+- **Truthful Telemetry Subsystem**: Worker publishes non-sensitive observations to `POST /api/account-protection/telemetry`. Dashboard queries `GET /api/account-protection/status?botId=...` and displays `"unknown"` when unavailable/stale instead of fake zero values.
+- **Final Send Revalidations**: Revalidates leadership, recipient, OA context, and protection reservation immediately before image confirm click, text send click, and Enter key fallback.
+- **Test Suite**: 122/122 Jest unit tests passing cleanly (`npm test`). Build passing cleanly (`npm run build`). JS syntax clean (`node --check run/LineSyncApp.js`).
 
 ## Exact Recommended Next Step
 
-Await ChatGPT Control Plane review of `SAFE-WP001`. Await explicit Project Owner authorization before starting `REL-WP002 — Job Lease + Heartbeat`. Do NOT start automatically.
+Await ChatGPT Control Plane review of `SAFE-WP001-R1`. Await explicit Project Owner authorization before starting `REL-WP002 — Job Lease + Heartbeat`. Do NOT start automatically.

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.9
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SAFE-WP001 Account Protection Active)
+// @version      28.10
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SAFE-WP001-R1 Fail-Closed Protection Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.9';
+    const WORKER_VERSION = '28.10';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -41,24 +41,95 @@
     }
 
     function loadProtectionTimestamps(botId) {
+        if (!botId || !isValidChatContextId(botId)) {
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+        const key = getProtectionStorageKey(botId);
+        let raw;
         try {
-            const raw = localStorage.getItem(getProtectionStorageKey(botId));
-            if (!raw) return [];
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-                const now = Date.now();
-                return parsed.filter(ts => typeof ts === 'number' && (now - ts) <= 3600000);
-            }
-        } catch(e) {}
-        return [];
+            raw = localStorage.getItem(key);
+        } catch (e) {
+            console.error(`🛑 [PROTECTION] Storage read failure for key (${key}):`, e);
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+
+        if (!raw) return [];
+
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (e) {
+            console.error(`🛑 [PROTECTION] JSON parse failure for key (${key}):`, e);
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+
+        if (!Array.isArray(parsed)) {
+            console.error(`🛑 [PROTECTION] Protection state is not an array for key (${key})`);
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+
+        const now = Date.now();
+        return parsed.filter(ts => typeof ts === 'number' && (now - ts) <= 3600000);
     }
 
-    function saveProtectionTimestamps(botId, timestamps) {
+    function recordProtectionSendAction(botId) {
+        const timestamps = loadProtectionTimestamps(botId);
+        const now = Date.now();
+        timestamps.push(now);
+
+        const key = getProtectionStorageKey(botId);
+        const bounded = timestamps.filter(ts => typeof ts === 'number' && (now - ts) <= 3600000);
+        const jsonToSave = JSON.stringify(bounded);
+
         try {
+            localStorage.setItem(key, jsonToSave);
+        } catch (e) {
+            console.error(`🛑 [PROTECTION] Storage write failure for key (${key}):`, e);
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+
+        let readBackRaw;
+        try {
+            readBackRaw = localStorage.getItem(key);
+        } catch (e) {
+            console.error(`🛑 [PROTECTION] Read-back storage check failed for key (${key}):`, e);
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+
+        let readBackParsed;
+        try {
+            readBackParsed = readBackRaw ? JSON.parse(readBackRaw) : null;
+        } catch (e) {
+            console.error(`🛑 [PROTECTION] Read-back JSON parse failed for key (${key}):`, e);
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+
+        if (!Array.isArray(readBackParsed) || !readBackParsed.includes(now)) {
+            console.error(`🛑 [PROTECTION] Read-back verification failed: Timestamp ${now} missing from read-back state`);
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+    }
+
+    async function publishAccountProtectionTelemetry(botId, waitMs = 0) {
+        if (!botId || !isValidChatContextId(botId)) return;
+        try {
+            const timestamps = loadProtectionTimestamps(botId);
             const now = Date.now();
-            const bounded = timestamps.filter(ts => typeof ts === 'number' && (now - ts) <= 3600000);
-            localStorage.setItem(getProtectionStorageKey(botId), JSON.stringify(bounded));
-        } catch(e) {}
+            const sendActions10m = timestamps.filter(ts => (now - ts) <= 600000).length;
+            const sendActions1h = timestamps.filter(ts => (now - ts) <= 3600000).length;
+            const errorCooldownUntil = parseInt(sessionStorage.getItem('linesync_error_cooldown_until') || '0', 10);
+            const nextSendAt = waitMs > 0 ? (now + waitMs) : 0;
+
+            await fetchAPI('/account-protection/telemetry', 'POST', {
+                botId: botId,
+                sendActions10m: sendActions10m,
+                sendActions1h: sendActions1h,
+                nextSendAt: nextSendAt,
+                errorCooldownUntil: errorCooldownUntil
+            });
+        } catch (e) {
+            // Telemetry publish fails gracefully without affecting send safety
+        }
     }
 
     function calculateProtectionWaitMs(botId) {
@@ -96,21 +167,21 @@
         return waitMs;
     }
 
-    function recordProtectionSendAction(botId) {
-        const timestamps = loadProtectionTimestamps(botId);
-        timestamps.push(Date.now());
-        saveProtectionTimestamps(botId, timestamps);
-    }
-
     async function enforceAccountProtectionGate(expectedBotId, expectedUserId) {
-        if (!expectedBotId || !isValidChatContextId(expectedBotId)) return;
+        if (!expectedBotId || !isValidChatContextId(expectedBotId)) {
+            console.error("🛑 [PROTECTION] Invalid or missing botId in protection gate. Failing closed.");
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
 
         let waitMs = calculateProtectionWaitMs(expectedBotId);
+        publishAccountProtectionTelemetry(expectedBotId, waitMs).catch(() => {});
+
         while (waitMs > 0) {
             console.warn(`🛡️ [PROTECTION] Account protection rate limit active for OA ${expectedBotId}. Waiting ${(waitMs / 1000).toFixed(1)}s before send action...`);
             updateUI(`🛡️ Account Protection Active: รอ ${(waitMs / 1000).toFixed(1)} วินาที ก่อนส่ง...`);
             await sleep(Math.min(waitMs, 1000));
             waitMs = calculateProtectionWaitMs(expectedBotId);
+            publishAccountProtectionTelemetry(expectedBotId, waitMs).catch(() => {});
         }
 
         const isLeaderConfirmed = await confirmWorkerLeadershipForSend();
@@ -130,6 +201,7 @@
         }
 
         recordProtectionSendAction(expectedBotId);
+        publishAccountProtectionTelemetry(expectedBotId, 0).catch(() => {});
     }
 
     function getSystemErrorCooldownMs(consecutiveErrors) {
@@ -1004,9 +1076,20 @@
                 sendBtn = sendBtn.shadowRoot.querySelector('button');
             }
 
+            const isTextBtnLeaderConfirmed = await confirmWorkerLeadershipForSend();
+            if (!isTextBtnLeaderConfirmed) {
+                console.error("🛑 [REL] Leadership lost right before sendBtn click!");
+                throw new Error('WORKER_LEADERSHIP_LOST');
+            }
+
             if (expectedUserId && !verifyCurrentRecipient(expectedUserId)) {
                 console.error("🛑 [SAFETY] Zero-tolerance text send guard: Recipient unverified right before sendBtn click!");
                 throw new Error('RECIPIENT_UNVERIFIED');
+            }
+
+            if (!expectedBotId || !isValidChatContextId(expectedBotId) || !verifyCurrentOAContext(expectedBotId)) {
+                console.error("🛑 [OA] Zero-tolerance text send guard: OA context unverified right before sendBtn click!");
+                throw new Error('OA_CONTEXT_MISMATCH');
             }
 
             emitDiagnostic('TEXT_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
@@ -1021,9 +1104,20 @@
             try { sendBtn.click(); } catch(e){}
             try { sendBtn.dispatchEvent(new MouseEvent('click', opts)); } catch(e){}
         } else {
+            const isEnterLeaderConfirmed = await confirmWorkerLeadershipForSend();
+            if (!isEnterLeaderConfirmed) {
+                console.error("🛑 [REL] Leadership lost right before Enter key fallback!");
+                throw new Error('WORKER_LEADERSHIP_LOST');
+            }
+
             if (expectedUserId && !verifyCurrentRecipient(expectedUserId)) {
                 console.error("🛑 [SAFETY] Zero-tolerance text send guard: Recipient unverified right before Enter key fallback!");
                 throw new Error('RECIPIENT_UNVERIFIED');
+            }
+
+            if (!expectedBotId || !isValidChatContextId(expectedBotId) || !verifyCurrentOAContext(expectedBotId)) {
+                console.error("🛑 [OA] Zero-tolerance text send guard: OA context unverified right before Enter key fallback!");
+                throw new Error('OA_CONTEXT_MISMATCH');
             }
 
             emitDiagnostic('TEXT_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });

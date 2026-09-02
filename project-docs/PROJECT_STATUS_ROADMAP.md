@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-**LineSync Plus** is an automated customer contact synchronization, group segmentation, and broadcast campaign management platform operating against the **LINE Official Account (LINE OA)** Web Interface (`chat.line.biz`). The system consists of a NestJS backend REST API, a single-page HTML web dashboard, a PostgreSQL database, and a client-side Tampermonkey automation script (`run/LineSyncApp.js` v28.9).
+**LineSync Plus** is an automated customer contact synchronization, group segmentation, and broadcast campaign management platform operating against the **LINE Official Account (LINE OA)** Web Interface (`chat.line.biz`). The system consists of a NestJS backend REST API, a single-page HTML web dashboard, a PostgreSQL database, and a client-side Tampermonkey automation script (`run/LineSyncApp.js` v28.10).
 
 This document serves as the master source-of-truth for project architecture, safety models, complete incident corrective history, live UAT evidence, technical debt, secret hygiene mandates, and the Phase 0–5 development roadmap.
 
@@ -19,7 +19,7 @@ Key Operational Goals:
 - Guarantee zero-tolerance recipient verification before every message send.
 - Guarantee single active worker execution across multiple open browser tabs.
 - Guarantee strict OA context isolation across multi-OA environments.
-- Protect LINE OA account via per-OA send rate limits, campaign target hygiene, and adaptive error backoff (SAFE-WP001).
+- Protect LINE OA account via per-OA send rate limits, fail-closed protection state, truthful telemetry, campaign target hygiene, and adaptive error backoff (SAFE-WP001 / R1).
 
 ---
 
@@ -45,15 +45,17 @@ Key Operational Goals:
                              +------------------+
 
                                          ^
-                                         | REST API / Diagnostics
+                                         | REST API / Diagnostics & Telemetry
                                          v
 
 +-----------------------------------------------------------------------------------+
 |                          Client Automation & Observability                        |
-|                      Tampermonkey Userscript (LineSyncApp.js v28.9)              |
+|                     Tampermonkey Userscript (LineSyncApp.js v28.10)              |
 |                             Running in chat.line.biz                              |
 |                                                                                   |
-|  - Per-OA Account Protection Send Rate Guard (SAFE-WP001 READY_FOR_REVIEW)        |
+|  - Fail-Closed Protection State & Read-Back Verification (SAFE-WP001-R1)          |
+|  - Truthful Telemetry Subsystem (/account-protection/telemetry) (SAFE-WP001-R1)   |
+|  - Per-OA Account Protection Send Rate Guard (SAFE-WP001 R1 READY_FOR_REVIEW)     |
 |  - Adaptive System-Error Backoff Schedule (30s / 60s / 120s / max 300s)           |
 |  - LINE OA Directory Sync (/chats Endpoint Source) (SYNC-WP001 CLOSED / PASS)     |
 |  - Multi-OA Context Isolation & Identity Fencing (OA-WP001 / R1 CLOSED / PASS)     |
@@ -62,7 +64,7 @@ Key Operational Goals:
 |  - Fail-Closed Lease Persistence (writeAndVerifyLeaderRecord)                     |
 |  - Complete Navigation Hold (navigateAsLeader: NAVIGATION_LEASE_MS = 45000)       |
 |  - Atomic Pre-Send Fencing (confirmWorkerLeadershipForSend under Web Locks)       |
-|  - Fail-Closed Runtime Version Gate (X-LineSync-Worker-Version: 28.9)             |
+|  - Fail-Closed Runtime Version Gate (X-LineSync-Worker-Version: 28.10)            |
 |  - Strict OA Context Validator (isValidChatContextId)                             |
 |  - Full-Lifecycle Execution Lock (isExecutingJob)                                 |
 |  - Same-Job Safe Recovery & Preservation (handleSafeRecovery)                     |
@@ -83,12 +85,13 @@ Key Operational Goals:
 2. **Campaign & Queue Engine**:
    - Campaign target hygiene on `POST /api/campaign/add`: deduplicates target IDs, excludes blocked customers (`isBlocked === true`), sets `totalTargets` to `queuedCount`.
    - Multi-type campaign dispatching (`text`, `image_only`, `link_only`, `text_link`, `image_link`).
-   - Hard OA queue gate via `GET /api/campaign/next` with status reporting and fail-closed runtime version gate (`X-LineSync-Worker-Version: 28.9`).
-3. **Account Protection & Compliance Guard (SAFE-WP001)**:
+   - Hard OA queue gate via `GET /api/campaign/next` with status reporting and fail-closed runtime version gate (`X-LineSync-Worker-Version: 28.10`).
+3. **Account Protection & Compliance Guard (SAFE-WP001 / R1)**:
+   - Fail-closed protection state: reading malformed/unavailable storage throws `ACCOUNT_PROTECTION_STATE_UNAVAILABLE`. Timestamp reservation requires write + read-back verification before physical send.
+   - Truthful telemetry subsystem: Worker publishes non-sensitive observations to `POST /api/account-protection/telemetry`. Dashboard queries `GET /api/account-protection/status?botId=...` and displays `"unknown"` when unavailable/stale.
    - Centralized per-OA protection gate (`enforceAccountProtectionGate`) before image confirm send click and text send click / Enter key fallback.
-   - Per-OA `localStorage` protection key `linesync_account_protection_v1_<botId>`. Internal protection defaults: `MIN_SEND_GAP_MS = 10000` (10s gap), `MAX_SEND_ACTIONS_10_MIN = 60` (rolling 10m limit), `MAX_SEND_ACTIONS_1_HOUR = 300` (rolling 1h limit).
+   - Internal protection defaults: `MIN_SEND_GAP_MS = 10000` (10s gap), `MAX_SEND_ACTIONS_10_MIN = 60` (rolling 10m limit), `MAX_SEND_ACTIONS_1_HOUR = 300` (rolling 1h limit).
    - Adaptive system-error backoff schedule (30s / 60s / 120s / max 300s).
-   - Compact protection status indicator in Dashboard (`accountProtectionBadge`).
 4. **Telegram Notification Subsystem**:
    - Formatted HTML campaign progress and completion summary reporting via Telegram Bot API.
 5. **Local Diagnostic Observability**:
@@ -100,19 +103,19 @@ Key Operational Goals:
 
 The LineSync Plus safety model operates on strict **fail-closed** principles:
 
-- **LINE OA Account Protection & Compliance Guard (SAFE-WP001 READY_FOR_REVIEW)**: Enforces per-OA rolling window send caps (10s min gap, 60/10m, 300/1h) before physical send actions. Performs campaign target hygiene (deduplication, blocked customer exclusion) during campaign creation. Applies adaptive system-error backoff (30s/60s/120s/300s).
+- **LINE OA Account Protection & Compliance Guard (SAFE-WP001-R1 R1_READY_FOR_REVIEW)**: Enforces fail-closed protection state reads, write + read-back timestamp reservations, truthful cross-origin telemetry, per-OA rolling window send caps (10s min gap, 60/10m, 300/1h), campaign target hygiene, and adaptive error backoff.
   > ⚠️ **Notice**: SAFE-WP001 is an operational risk-reduction control. It does NOT guarantee that LINE will never restrict/suspend an OA. Internal rate thresholds are safety defaults, not official LINE API limits. Zero detection evasion techniques are included.
-- **Customer Directory Sync Hard Fencing & Metric Integrity (SYNC-WP001 CLOSED / PASS)**: `POST /api/customers/sync-batch` enforces loopback origin, valid `botId` format, `botId === activeBotId`, strict User ID regex, and Master Bot PAUSED status. Worker v28.9 queries `/chats?folderType=ALL&limit=20&prioritizePinnedChat=true`. Non-destructive DB policy preserves missing DB records.
-- **Strict OA Identity Fencing (OA-WP001 / OA-WP001-R1 CLOSED / PASS)**: Terminal fallback reporting requires valid `botId` + `lineUserId` + `status: 'processing'`. Queue processor enforces `selectedJob.botId === activeBotId`.
-- **Single Worker Multi-Tab Lock & Clone Defense (REL-WP001 CLOSED / PASS)**: `ensureWorkerLeadership()` enforces that only ONE active worker tab claims jobs or executes DOM mutations.
-- **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path (`/${botId}/chat/${expectedUserId}`) and DOM attribute validation before any text insertion or image send click.
-- **Fail-Closed Runtime Version Gate (OPS-WP001 CLOSED / PASS)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.9'`.
+- **Customer Directory Sync Hard Fencing & Metric Integrity (SYNC-WP001 CLOSED / PASS)**: `POST /api/customers/sync-batch` enforces loopback origin, valid `botId` format, `botId === activeBotId`, strict User ID regex, and Master Bot PAUSED status. Worker v28.10 queries `/chats?folderType=ALL&limit=20&prioritizePinnedChat=true`.
+- **Strict OA Identity Fencing (OA-WP001 / OA-WP001-R1 CLOSED / PASS)**: Terminal fallback reporting requires valid `botId` + `lineUserId` + `status: 'processing'`.
+- **Single Worker Multi-Tab Lock & Clone Defense (REL-WP001 CLOSED / PASS)**: `ensureWorkerLeadership()` enforces single worker tab execution.
+- **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path and DOM attribute validation before any physical send action.
+- **Fail-Closed Runtime Version Gate (OPS-WP001 CLOSED / PASS)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.10'`.
 
 ---
 
 ## 6. Problems Found & Work Packages
 
-Over the course of safety hardening, 19 work packages were identified, implemented, verified, and updated:
+Over the course of safety hardening, 20 work packages were identified, implemented, verified, and updated:
 
 1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard (CLOSED)**
 2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard (CLOSED)**
@@ -132,16 +135,16 @@ Over the course of safety hardening, 19 work packages were identified, implement
 16. **SYNC-WP001-R3 — Strict Dashboard Bot Status Response Validation (CLOSED / PASS)**
 17. **SYNC-WP001-R4 — Confirmed Contacts Schema + LINE Nickname Mapping + Rate-Limit Guard (CLOSED / PASS)**
 18. **SYNC-WP001-R5 — Full Directory Source Correction to /chats (CLOSED / PASS)**
-19. **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard (READY_FOR_CHATGPT_REVIEW)**
+19. **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard (READY_FOR_REVIEW)**
+20. **SAFE-WP001-R1 — Fail-Closed Protection State + Truthful Dashboard Telemetry (R1_READY_FOR_REVIEW)**
 
 ---
 
 ## 7. Operational Findings
 
-- Per-OA rate limits stored in `localStorage` (`linesync_account_protection_v1_<botId>`) effectively prevent burst messaging and bound sustained send rates across sessions.
-- Filtering blocked customers at campaign creation time (`POST /api/campaign/add`) prevents wasted job queues and reduces unnecessary DOM processing.
-- Progressive backoff on system errors (30s/60s/120s/300s) prevents aggressive retries during temporary UI glitches or network degradation.
-- Authoritative read-only evidence demonstrated that `/chats` (9,741-9,742 unique) is the accepted complete source for customer directory sync.
+- Protection state reading and writing must fail closed; swallowing `localStorage` errors could allow sends with unverified protection bounds.
+- Cross-origin telemetry publishing allows the localhost Dashboard to display truthful live Account Protection metrics without making incorrect assumptions about worker `localStorage`.
+- Displaying `"unknown"` when worker telemetry is absent or stale prevents misleading the user with false zero values.
 
 ---
 
@@ -156,7 +159,7 @@ Over the course of safety hardening, 19 work packages were identified, implement
 - **REL-WP001 / REL-WP001-R1 / REL-WP001-R2**: **CLOSED / PASS**
 - **OA-WP001 / OA-WP001-R1**: **CLOSED / PASS** (Accepted on Worker v28.5)
 - **SYNC-WP001 / R1..R5**: **CLOSED / PASS** (Accepted on Worker v28.8)
-- **SAFE-WP001**: **READY_FOR_CHATGPT_REVIEW** (106/106 Jest unit tests PASS)
+- **SAFE-WP001-R1**: **R1_READY_FOR_CHATGPT_REVIEW** (122/122 Jest unit tests PASS)
 
 ---
 
@@ -177,7 +180,7 @@ Over the course of safety hardening, 19 work packages were identified, implement
   - `REL-WP001 / R1 / R2` (Single Worker / Multi-Tab Lock): **COMPLETED / CLOSED**
   - `OA-WP001 / R1` (OA Context Isolation & Strict Identity Fencing): **COMPLETED / CLOSED**
   - `SYNC-WP001 / R1 / R2 / R3 / R4 / R5` (LINE OA Customer Directory Sync): **COMPLETED / CLOSED / PASS**
-  - `SAFE-WP001` (LINE OA Account Protection & Send Compliance Guard): **READY_FOR_CHATGPT_REVIEW**
+  - `SAFE-WP001 / R1` (LINE OA Account Protection & Send Compliance Guard): **R1_READY_FOR_CHATGPT_REVIEW**
   - `REL-WP002` (Job Lease + Heartbeat): **READY / NOT STARTED / AUTHORIZATION REQUIRED**
   - `REL-WP003`: **NOT STARTED**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
@@ -190,15 +193,15 @@ Over the course of safety hardening, 19 work packages were identified, implement
 
 ## 11. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 -> v28.4 -> v28.5 -> v28.6 -> v28.7 -> v28.8 -> v28.9 (SAFE-WP001 READY_FOR_REVIEW).
-- **Architecture Maturity**: Advanced with centralized per-OA account protection rate limits, campaign target hygiene, adaptive error backoff, fail-closed directory sync, multi-OA identity fencing, and single-worker multi-tab locks.
+- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 -> v28.4 -> v28.5 -> v28.6 -> v28.7 -> v28.8 -> v28.9 -> v28.10 (SAFE-WP001-R1 READY_FOR_REVIEW).
+- **Architecture Maturity**: Enhanced with fail-closed protection state reads, write + read-back timestamp reservations, truthful cross-origin telemetry publishing, and complete pre-send revalidations.
 
 ---
 
 ## 12. Immediate Decision Gate
 
-Phase 0 SAFE-WP001 is READY_FOR_CHATGPT_REVIEW.
-Worker Version: 28.9 | Runtime Contract: 2 | Required Worker: 28.9
+Phase 0 SAFE-WP001-R1 is R1_READY_FOR_CHATGPT_REVIEW.
+Worker Version: 28.10 | Runtime Contract: 2 | Required Worker: 28.10
 SYNC-WP001 is CLOSED / PASS. OA-WP001 is CLOSED / PASS. REL-WP001 is CLOSED / PASS.
 Next Candidate: `REL-WP002 — Job Lease + Heartbeat` (READY / NOT STARTED — Project Owner authorization required).
 Do NOT start `REL-WP002` automatically.
