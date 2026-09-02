@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Delete, Body, Param, NotFoundException, Res } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, NotFoundException, Res, Req } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Customer } from './customer.entity';
@@ -732,22 +732,70 @@ export class AppController {
     };
   }
 
-  // 13. Endpoint สำหรับบันทึก Browser Diagnostic Safety Logs (BUG-WP001-UATLOG)
+  // 13. Endpoint สำหรับบันทึก Browser Diagnostic Safety Logs (BUG-WP001-UATLOG-R1)
   @Post('diagnostics/browser-event')
-  async logBrowserEvent(@Body() body: any) {
+  async logBrowserEvent(@Body() body: any, @Req() req?: Request) {
     try {
+      // 1. Local-only request restriction
+      if (req) {
+        const ipHeader = (req.headers && req.headers['x-forwarded-for']) as string;
+        const rawIp = ipHeader ? ipHeader.split(',')[0].trim() : (req.socket?.remoteAddress || (req as any).ip || '');
+        const cleanIp = rawIp.replace(/^::ffff:/, '');
+        const isLocal = cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp === 'localhost' || cleanIp === '';
+
+        if (!isLocal) {
+          return { success: false, message: 'Forbidden: Local requests only' };
+        }
+      }
+
+      // 2. Event allowlist enforcement
+      const ALLOWED_EVENTS = new Set([
+        'BOT_START',
+        'JOB_RECEIVED',
+        'NAVIGATE_TARGET',
+        'PAGE_LOAD_ACTIVE_JOB',
+        'RECIPIENT_VERIFY_OK',
+        'RECIPIENT_VERIFY_FAIL',
+        'NAVIGATION_404',
+        'SEND_BLOCKED',
+        'SAME_JOB_RECOVERY_START',
+        'SAME_JOB_RETRY',
+        'SAME_JOB_RETRY_EXHAUSTED',
+        'TEXT_PRE_SEND_VERIFIED',
+        'IMAGE_PRE_SEND_VERIFIED',
+        'JOB_SUCCESS',
+        'JOB_FAIL'
+      ]);
+
+      const sanitizeStr = (val: any, maxLen: number) => {
+        if (val === undefined || val === null) return '';
+        return String(val).trim().slice(0, maxLen);
+      };
+
+      const rawEvent = sanitizeStr(body?.event, 50);
+      const event = ALLOWED_EVENTS.has(rawEvent) ? rawEvent : 'UNKNOWN';
+
+      const rawPath = sanitizeStr(body?.currentPath, 200);
+      const cleanPath = rawPath.split('?')[0].split('#')[0];
+
+      const parsedRetry = typeof body?.retryCount === 'number' 
+        ? body.retryCount 
+        : (parseInt(body?.retryCount, 10) || 0);
+      const retryCount = Math.max(0, Math.min(100, isNaN(parsedRetry) ? 0 : parsedRetry));
+
+      // 3. Strict allowlist fields ONLY (No arbitrary or forbidden fields like message, imageUrl, linkUrl)
       const allowed = {
         serverTimestamp: new Date().toISOString(),
-        clientTimestamp: String(body?.clientTimestamp || new Date().toISOString()),
-        event: String(body?.event || 'UNKNOWN'),
-        scriptVersion: String(body?.scriptVersion || ''),
-        tabSessionId: String(body?.tabSessionId || ''),
-        jobId: String(body?.jobId || ''),
-        expectedUserId: String(body?.expectedUserId || ''),
-        botId: String(body?.botId || ''),
-        currentPath: String(body?.currentPath || '').split('?')[0].split('#')[0],
-        retryCount: typeof body?.retryCount === 'number' ? body.retryCount : (parseInt(body?.retryCount, 10) || 0),
-        reason: String(body?.reason || ''),
+        clientTimestamp: sanitizeStr(body?.clientTimestamp, 40) || new Date().toISOString(),
+        event: event,
+        scriptVersion: sanitizeStr(body?.scriptVersion, 20),
+        tabSessionId: sanitizeStr(body?.tabSessionId, 50),
+        jobId: sanitizeStr(body?.jobId, 100),
+        expectedUserId: sanitizeStr(body?.expectedUserId, 100),
+        botId: sanitizeStr(body?.botId, 100),
+        currentPath: cleanPath,
+        retryCount: retryCount,
+        reason: sanitizeStr(body?.reason, 200),
       };
 
       const logDir = path.join(process.cwd(), 'uat-logs');

@@ -88,17 +88,93 @@ describe('AppController', () => {
   });
 
   describe('logBrowserEvent', () => {
-    it('should successfully log browser diagnostic event to uat-logs file', async () => {
-      const result = await appController.logBrowserEvent({
-        event: 'JOB_RECEIVED',
-        jobId: 'job_test_1',
-        expectedUserId: 'U12345',
-        currentPath: '/bot1/chat/U12345?query=secret#hash',
-        retryCount: 0,
-      });
+    const fs = require('fs');
+    const path = require('path');
+    const logFilePath = path.join(process.cwd(), 'uat-logs', 'browser-BUG-WP001-UAT.log');
+
+    it('should successfully log allowed browser diagnostic event from local request', async () => {
+      const mockReq: any = {
+        headers: {},
+        socket: { remoteAddress: '127.0.0.1' },
+      };
+
+      const result = await appController.logBrowserEvent(
+        {
+          event: 'JOB_RECEIVED',
+          jobId: 'job_test_1',
+          expectedUserId: 'U12345',
+          currentPath: '/bot1/chat/U12345?query=secret#hash',
+          retryCount: 0,
+          // Forbidden / arbitrary fields
+          message: 'SECRET_MESSAGE_TEXT',
+          imageUrl: 'https://secret.url/img.png',
+          linkUrl: 'https://secret.url/link',
+          arbitraryExtraField: 'HACK',
+        },
+        mockReq,
+      );
 
       expect(result).toEqual({ success: true });
+
+      // Read last line written to log file
+      const content = fs.readFileSync(logFilePath, 'utf8');
+      const lines = content.trim().split('\n').filter(Boolean);
+      const lastLineJson = JSON.parse(lines[lines.length - 1]);
+
+      // 1. Allowed event logged
+      expect(lastLineJson.event).toBe('JOB_RECEIVED');
+      // 2. Query and hash stripped from currentPath
+      expect(lastLineJson.currentPath).toBe('/bot1/chat/U12345');
+      // 3. Forbidden fields NOT present
+      expect(lastLineJson.message).toBeUndefined();
+      expect(lastLineJson.imageUrl).toBeUndefined();
+      expect(lastLineJson.linkUrl).toBeUndefined();
+      // 4. Extra arbitrary fields NOT present
+      expect(lastLineJson.arbitraryExtraField).toBeUndefined();
+    });
+
+    it('should reject non-local remote requests', async () => {
+      const mockRemoteReq: any = {
+        headers: { 'x-forwarded-for': '203.0.113.195' },
+        socket: { remoteAddress: '203.0.113.195' },
+      };
+
+      const result = await appController.logBrowserEvent(
+        {
+          event: 'JOB_RECEIVED',
+          jobId: 'job_remote_hack',
+        },
+        mockRemoteReq,
+      );
+
+      expect(result).toEqual({
+        success: false,
+        message: 'Forbidden: Local requests only',
+      });
+    });
+
+    it('should replace unapproved event names with UNKNOWN', async () => {
+      const mockReq: any = {
+        headers: {},
+        socket: { remoteAddress: '::1' },
+      };
+
+      const result = await appController.logBrowserEvent(
+        {
+          event: 'MALICIOUS_UNAPPROVED_EVENT',
+          jobId: 'job_test_2',
+        },
+        mockReq,
+      );
+
+      expect(result).toEqual({ success: true });
+
+      const content = fs.readFileSync(logFilePath, 'utf8');
+      const lines = content.trim().split('\n').filter(Boolean);
+      const lastLineJson = JSON.parse(lines[lines.length - 1]);
+      expect(lastLineJson.event).toBe('UNKNOWN');
     });
   });
 });
+
 

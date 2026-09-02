@@ -2,7 +2,7 @@
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
 // @version      28.1
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP001-UATLOG Persistent Browser Safety Diagnostic Logging)
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP001-UATLOG-R1 Low-Noise / Local-Only Diagnostic Logging)
 // @match        https://chat.line.biz/*
 // @match        https://manager.line.biz/*
 // @grant        GM_xmlhttpRequest
@@ -19,7 +19,7 @@
     let consecutiveErrorCount = parseInt(sessionStorage.getItem('linesync_consecutive_errors') || '0', 10);
     let isExecutingJob = false;
 
-    console.log("🤖 LineSync Plus Bot v28.1: พร้อมทำงาน (BUG-WP001-UATLOG Active)...");
+    console.log("🤖 LineSync Plus Bot v28.1: พร้อมทำงาน (BUG-WP001-UATLOG-R1 Active)...");
 
     function getTabSessionId() {
         let id = sessionStorage.getItem('linesync_tab_session_id');
@@ -127,37 +127,32 @@
         return userId ? `https://chat.line.biz/` : `https://chat.line.biz/`;
     }
 
-    // 🛡️ 1. Explicit 404 & LINE Error Page Detector
+    // 🛡️ 1. Explicit 404 & LINE Error Page Detector (Low Noise - No inner diagnostic logging)
     function checkIfErrorPage() {
         const path = window.location.pathname.toLowerCase();
-        let isError = path.includes('/error') || path.includes('/404') || path.includes('/not-found');
-
-        if (!isError) {
-            const errorBanners = deepQuerySelectorAll('h1, h2, h3, p, div, alert, ui-alert, section').find(el => {
-                try {
-                    const txt = String(el.textContent || el.innerText || '').trim();
-                    if (txt.length > 200) return false;
-                    return txt.includes('404') ||
-                           txt.includes('Page Not Found') ||
-                           txt.includes('Page not found') ||
-                           txt.includes('ไม่พบหน้า') ||
-                           txt.includes('เกิดข้อผิดพลาดในการโหลด') ||
-                           txt.includes('An error occurred') ||
-                           txt.includes('This page is not available') ||
-                           txt.includes('ไม่สามารถโหลดข้อมูลได้');
-                } catch (e) { return false; }
-            });
-            isError = !!errorBanners;
+        if (path.includes('/error') || path.includes('/404') || path.includes('/not-found')) {
+            return true;
         }
 
-        if (isError) {
-            emitDiagnostic('NAVIGATION_404', { reason: 'Error page detected' });
-        }
+        const errorBanners = deepQuerySelectorAll('h1, h2, h3, p, div, alert, ui-alert, section').find(el => {
+            try {
+                const txt = String(el.textContent || el.innerText || '').trim();
+                if (txt.length > 200) return false;
+                return txt.includes('404') ||
+                       txt.includes('Page Not Found') ||
+                       txt.includes('Page not found') ||
+                       txt.includes('ไม่พบหน้า') ||
+                       txt.includes('เกิดข้อผิดพลาดในการโหลด') ||
+                       txt.includes('An error occurred') ||
+                       txt.includes('This page is not available') ||
+                       txt.includes('ไม่สามารถโหลดข้อมูลได้');
+            } catch (e) { return false; }
+        });
 
-        return isError;
+        return !!errorBanners;
     }
 
-    // 🛡️ 2. Exact Recipient Verification Guard
+    // 🛡️ 2. Exact Recipient Verification Guard (Low Noise - Failure logging only)
     function verifyCurrentRecipient(expectedUserId) {
         if (!expectedUserId) return false;
 
@@ -186,7 +181,6 @@
             }
         }
 
-        emitDiagnostic('RECIPIENT_VERIFY_OK', { expectedUserId: expectedUserId });
         return true;
     }
 
@@ -459,6 +453,7 @@
 
         if (checkIfErrorPage() || window.location.href.includes('/tagaudience') || window.location.href.includes('/error')) {
             console.log("🔀 เด้งกลับจากหน้า 404/error เข้าสู่หน้าหลัก LINE OA Chat...");
+            emitDiagnostic('NAVIGATION_404', { reason: 'Returned to main chat from 404/error page' });
             const mainUrl = getOAContextUrl(null);
             if (window.location.href !== mainUrl) {
                 window.location.href = mainUrl;
@@ -558,6 +553,9 @@
             await handleSafeRecovery(jobData, 'RECIPIENT_MISMATCH');
             return;
         }
+
+        // Emit SINGLE RECIPIENT_VERIFY_OK checkpoint once initial verification passes
+        emitDiagnostic('RECIPIENT_VERIFY_OK', { jobId: jobData.jobId, expectedUserId: jobData.userId });
 
         // 3. Check LINE OA Quota limit
         if (checkQuotaLimitExceeded()) {
@@ -800,6 +798,7 @@
 
                 if (checkIfErrorPage()) {
                     console.warn("🛑 [SAFETY] โหลดหน้าเจอ 404 / Error Page พร้อมมีคิวค้าง -> ส่งเข้า Same-Job Safe Recovery...");
+                    emitDiagnostic('NAVIGATION_404', { jobId: savedJobData.jobId, userId: savedJobData.userId, reason: 'Page load 404 error page detected' });
                     handleSafeRecovery(savedJobData, 'NAVIGATION_404');
                     return;
                 }
@@ -814,6 +813,7 @@
             } else {
                 if (checkIfErrorPage()) {
                     console.warn("🛑 [SAFETY] โหลดหน้าเจอ 404 / Error Page (ไม่มีคิวค้าง) -> สลับกลับหน้าหลัก...");
+                    emitDiagnostic('NAVIGATION_404', { reason: 'Page load 404 error page without active job' });
                     closeUserChatAndReturnToMain();
                 }
                 processQueue();
