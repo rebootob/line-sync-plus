@@ -4,8 +4,8 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: 45be7aa64c15790d72dcd0bd7a653fb264a24b2a (security: remove tracked Telegram secret and prevent token exposure)
-* Working Tree: Clean (SEC-WP001-R1 test isolation corrective completed)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 02b1942e6bb28e386f969081dabdb3726f269424 (test(security): isolate config tests without changing Nest DI)
+* Working Tree: Clean (SEC-WP001 documentation closure completed)
 
 ## Project Purpose
 
@@ -19,33 +19,39 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
 - **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
-## Security Work Package Implementation: SEC-WP001 & SEC-WP001-R1
+## Security Work Package Final Closure: SEC-WP001 (CLOSED / PASS)
 
-* **Status**: `READY_FOR_CHATGPT_REVIEW`
-* **Key Changes**:
-  1. Untracked secret config file `telegram-config.json` from Git (`git rm --cached`).
-  2. Preserved local runtime `telegram-config.json` on disk (gitignored by `.gitignore`).
-  3. Safe template `telegram-config.example.json` remains tracked.
-  4. Modified `TelegramService` and `AppController`: `GET /api/telegram/settings` and `POST /api/telegram/settings` return safe shape `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
-  5. Blank `botToken` supplied from Dashboard UI preserves existing stored token on backend.
-  6. Dashboard UI Telegram modal never preloads or displays saved token.
-  7. **SEC-WP001-R1 Test Isolation Corrective**: Isolated unit tests in `src/app.controller.spec.ts` using temporary `os.tmpdir()` config files; verified local `telegram-config.json` SHA256 is 100% unchanged after `npm test`; added mocked-fetch test for preserved token execution.
-  8. Verified 0 secret matches in current tracked files.
-  9. Confirmed `telegram-config.json` existed in public history from initial commit `999c163`.
-  10. Old Telegram token must be considered **COMPROMISED**; **TOKEN ROTATION** remains a **HUMAN REQUIRED ACTION**. Git history rewrite was NOT performed in SEC-WP001.
+* **SEC-WP001 Status**: **CLOSED / PASS**
+* **SEC-WP001-R1 Status**: **CLOSED / PASS**
+* **SEC-WP001-R2 Status**: **CLOSED / PASS**
+
+### Key Verified Results:
+1. Untracked secret config file `telegram-config.json` from Git (`git rm --cached`).
+2. Preserved local runtime `telegram-config.json` on disk (gitignored by `.gitignore`).
+3. Safe template `telegram-config.example.json` remains tracked.
+4. `GET /api/telegram/settings` and `POST /api/telegram/settings` return safe shape `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
+5. Blank `botToken` supplied from Dashboard UI preserves existing stored token on backend.
+6. Unit tests fully isolated using `process.cwd()` spy pointing to temporary `os.tmpdir()` config directories (`npm test` SHA256 verified 100% non-destructive).
+7. Reverted production `TelegramService` constructor to zero parameters, resolving NestJS DI provider resolution cleanly.
+8. Compromised historical Telegram Bot Token was revoked and rotated via `@BotFather` by Project Owner.
+9. Live Telegram Test after rotation = **PASS** (Test message delivered successfully).
+10. Truthful test count: **28 / 28** Jest unit tests passing cleanly.
+11. Git history rewrite was NOT performed; revoked historical credential is no longer valid.
 
 ## Current State
 
-Fully functional and secured. Verified via `npm test` (27 tests passed), `npm run build` (clean NestJS build), `git diff --check` (clean exit code 0), `telegram-config.json` SHA256 hash match (unchanged), and `git ls-files telegram-config.json` (NO OUTPUT).
+Fully functional, hardened, and secured. Verified via `npm test` (28/28 tests passed), `npm run build` (clean NestJS build), `git diff --check` (clean exit code 0), and `git ls-files telegram-config.json` (NO OUTPUT).
 
 ## Relevant Files
 
-- `src/telegram.service.ts`: Secret mask, getSafeConfig, saveConfig blank token preservation.
+- `src/telegram.service.ts`: Secret mask, getSafeConfig, saveConfig blank token preservation, zero-parameter DI constructor.
 - `src/app.controller.ts`: GET /api/telegram/settings returns getSafeConfig().
 - `index.html`: Telegram modal input token masking & placeholder indicator.
-- `src/app.controller.spec.ts`: Isolated unit test suite covering SEC-WP001 & SEC-WP001-R1 requirements.
+- `src/app.controller.spec.ts`: Isolated unit test suite covering SEC-WP001 requirements and Nest DI smoke test.
 - `project-docs/ACTIVE_TASK.md`, `project-docs/CHAT_HANDOFF.md`, `project-docs/CURRENT_STATE.md`, `project-docs/PROJECT_STATUS_ROADMAP.md`.
 
-## Exact Recommended Next Step
+## Next Work Package Assignment
 
-Await ChatGPT / Project Owner review of SEC-WP001 & SEC-WP001-R1 implementation on GitHub repository `rebootob/line-sync-plus`.
+* **Next Work Package**: `OPS-WP001 — Runtime Version Gate`
+* **Status**: `READY / NOT STARTED`
+* **Authorization Required**: Await explicit Project Owner authorization before starting implementation.

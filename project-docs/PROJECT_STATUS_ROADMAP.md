@@ -162,20 +162,19 @@ Over the course of safety hardening, 10 corrective work packages were identified
 
 ## 9. Known Risks & Technical Debt
 
-### Secret Hygiene P0 Mandate (`SEC-WP001` STATUS: READY_FOR_CHATGPT_REVIEW)
+### Secret Hygiene P0 Mandate (`SEC-WP001` STATUS: COMPLETED / CLOSED)
 - **CRITICAL**: The repository `rebootob/line-sync-plus` is **PUBLIC**.
 - **PROHIBITED**: Under no circumstances may `.env` files, API keys, passwords, database credentials, access tokens, refresh tokens, private keys, or LINE channel secrets be committed or pushed to Git.
-- **SEC-WP001 / SEC-WP001-R1 Status**:
+- **SEC-WP001 Final Closure**:
   - `telegram-config.json` untracked from Git main (`git rm --cached`).
   - Local runtime config `telegram-config.json` preserved on disk and gitignored by `.gitignore`.
   - Safe template `telegram-config.example.json` remains tracked without real credentials.
   - `GET /api/telegram/settings` and `POST /api/telegram/settings` return `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
   - Blank `botToken` supplied from UI preserves existing stored token on backend.
-  - **SEC-WP001-R1 Test Isolation**: Unit tests in `src/app.controller.spec.ts` use temporary `os.tmpdir()` config files; verified local `telegram-config.json` SHA256 hash is 100% unchanged before and after `npm test`.
+  - **Test Isolation & DI Corrective**: Unit tests in `src/app.controller.spec.ts` use temporary `os.tmpdir()` config files; production `TelegramService` constructor has zero parameters for NestJS DI compatibility.
   - Current tracked files scan confirmed **0** Telegram-token-like matches.
-  - Historical check confirmed `telegram-config.json` existed in public history from initial commit (`999c163`).
-  - Old Telegram token must be considered **COMPROMISED**; **TOKEN ROTATION** via `@BotFather` remains a **HUMAN REQUIRED ACTION**.
-  - Git history rewrite was **NOT** performed in SEC-WP001.
+  - Compromised historical token was **revoked and rotated** via `@BotFather` by Project Owner. Live Telegram test after rotation = **PASS**.
+  - Historical Git rewrite was **NOT** performed; historical revoked credential is no longer valid.
 
 ### Technical Debt Items
 - Database credentials currently reside in local `.env` (gitignored). Production setup requires secure environment secret injection.
@@ -193,8 +192,8 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 - **Phase 0 — Security & Reliability Foundation**: **IN PROGRESS**
   - Safety hardening (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002`, `BUG-WP002-R1`): **COMPLETED**
-  - `SEC-WP001` (Secret Hygiene & Test Isolation SEC-WP001-R1): **READY_FOR_CHATGPT_REVIEW**
-  - `OPS-WP001`: **NOT STARTED**
+  - `SEC-WP001` (Secret Hygiene): **COMPLETED / CLOSED**
+  - `OPS-WP001` (Runtime Version Gate): **READY / NOT STARTED**
   - `REL-WP001`: **NOT STARTED**
   - `REL-WP002`: **NOT STARTED**
   - `REL-WP003`: **NOT STARTED**
@@ -209,9 +208,10 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
-   - Secret hygiene & test isolation (`SEC-WP001` / `SEC-WP001-R1` READY_FOR_CHATGPT_REVIEW).
+   - Secret hygiene & test isolation (`SEC-WP001` COMPLETED / CLOSED).
    - Fail-closed recipient verification & OA context validation (Completed in WP001/WP002).
 2. **P1 (Observability & Operational Hardening)**:
+   - `OPS-WP001` Runtime Version Gate (READY / NOT STARTED).
    - Real-time diagnostic event stream UI widget in Dashboard.
 3. **P2 (Analytics & Automation)**:
    - Automated Telegram alert on session expiry / auth loss.
@@ -228,7 +228,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 14. Recommended Next Work Packages
 
-- **SEC-WP001**: Secret Hygiene & credential security audit (**READY_FOR_CHATGPT_REVIEW**).
+- **OPS-WP001**: Runtime Version Gate (**READY / NOT STARTED**).
 - **WP-UI-LOGS**: Implement browser diagnostic log viewer tab in single-page dashboard.
 - **WP-AUTH-ALERT**: Implement session disconnect & re-authentication alert via Telegram.
 
@@ -239,7 +239,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 - **Zero Misdeliveries**: 0% message delivery to wrong recipients.
 - **Zero Poisoning Loops**: 0 infinite 404 redirect loops on invalid bot IDs.
 - **100% Spool Integrity**: 0 lost navigation diagnostic events during page transitions.
-- **100% Test Pass Rate**: All Jest unit tests (27/27) passing cleanly.
+- **100% Test Pass Rate**: All Jest unit tests (28/28) passing cleanly.
 
 ---
 
@@ -254,5 +254,5 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-The project is currently at Phase 0 (Security & Reliability Foundation) with SEC-WP001 and SEC-WP001-R1 implemented and READY_FOR_CHATGPT_REVIEW.
-Next Action: Await ChatGPT Control Plane review of SEC-WP001 implementation.
+The project is currently at Phase 0 (Security & Reliability Foundation) with SEC-WP001 COMPLETED and CLOSED.
+Next Action: Await explicit Project Owner authorization before starting `OPS-WP001 — Runtime Version Gate`.

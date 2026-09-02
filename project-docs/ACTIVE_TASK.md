@@ -1,44 +1,47 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: SEC-WP001 — Secret Hygiene
-CORRECTIVE_STATUS: SEC-WP001-R1 Test Isolation Corrective Completed
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: OPS-WP001 — Runtime Version Gate
+STATUS: READY_NOT_STARTED
 AUTHORIZED_BY: ChatGPT / Control Plane
-TASK_TYPE: SECURITY_HYGIENE
+TASK_TYPE: OPERATIONAL_HARDENING
 ```
 
 ---
 
-## 📋 Completed Work Package Summary: SEC-WP001 & SEC-WP001-R1
+## 📋 Completed Work Package Summary: SEC-WP001 (CLOSED / PASS)
 
-### Implemented Security Controls & Test Isolation Corrective:
-1. **Removed Secret File from Git Tracking (`Scope A`)**:
-   - Executed `git rm --cached -- telegram-config.json` to untrack secret file from public GitHub repository.
-   - Local runtime config `telegram-config.json` is preserved on disk for local execution and is gitignored by `.gitignore`.
+### Security Closure Details:
+- **SEC-WP001 — Secret Hygiene**: **CLOSED / PASS**
+- **SEC-WP001-R1 — Test Isolation Corrective**: **CLOSED / PASS**
+- **SEC-WP001-R2 — Nest DI Regression Corrective**: **CLOSED / PASS**
+
+### Human Security Evidence & Acceptance:
+1. **Compromised Telegram Token Revocation & Rotation**:
+   - The compromised Telegram Bot Token exposed in historical commits was revoked and rotated via `@BotFather` by the Project Owner.
+   - The new token is configured locally on disk only (`telegram-config.json`) and is **NEVER** tracked or committed to Git.
+   - Telegram Settings Save succeeded cleanly.
+   - Telegram Test = **PASS** (Test message delivered successfully to Telegram).
+   - No token value is recorded in Git or documentation.
+2. **Secret File Untracking**:
+   - `telegram-config.json` untracked from Git tracking (`git rm --cached`).
+   - `telegram-config.json` remains gitignored by `.gitignore` for local runtime execution.
    - Safe template `telegram-config.example.json` remains tracked.
-2. **Prevented Telegram Token Exposure to Browser (`Scope B`)**:
-   - Refactored `TelegramService` and `AppController`: `GET /api/telegram/settings` and `POST /api/telegram/settings` return `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
-   - Updated `saveConfig`: A blank/whitespace `botToken` supplied from UI preserves existing stored token on backend.
-   - Updated Dashboard UI modal: `botToken` input is never preloaded or exposed. If token exists, displays safe placeholder `"Bot Token ตั้งค่าแล้ว — กรอกใหม่เฉพาะเมื่อต้องการเปลี่ยน"`.
-   - Test button (`POST /api/telegram/test`) functions cleanly using stored token even when UI input is blank.
-   - Suppressed secret value logging in all NestJS logger statements.
-3. **Test Isolation Corrective (`SEC-WP001-R1`)**:
-   - Isolated `TelegramService` test suite in `src/app.controller.spec.ts` using an isolated temporary file path (`os.tmpdir()`).
-   - Verified that running `npm test` does **NOT** create, modify, truncate, or delete the real repository-root `telegram-config.json` (SHA256 verified 100% unchanged).
-   - Added real blank-token flow test proving existing stored token is preserved internally, not returned in response, and `botTokenConfigured` remains true.
-   - Added mocked-fetch test proving `sendTestMessage()` proceeds using preserved stored token without making real Telegram network requests or exposing token values in returns/logs.
-4. **Safe Secret Audit (`Scope C`)**:
-   - `git grep -E "[0-9]{8,10}:[a-zA-Z0-9_-]{35}"` confirmed 0 tracked current files contain token-like secrets.
-   - Historical check `git log --oneline -- telegram-config.json` confirmed `telegram-config.json` existed in repository history from initial commit `999c163`.
-   - Git history rewrite was **NOT** performed in SEC-WP001 (requires separate explicit authorization).
-5. **Token Security Assessment**:
-   - The old Telegram token must be considered **COMPROMISED** because it existed in public repository history.
-   - **TOKEN ROTATION** via `@BotFather` remains a **HUMAN REQUIRED ACTION**.
+3. **API & UI Token Shield**:
+   - `GET /api/telegram/settings` and `POST /api/telegram/settings` return safe shape `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
+   - Blank/empty `botToken` supplied from UI preserves existing configured token on backend.
+   - Dashboard UI modal displays safe placeholder `"Bot Token ตั้งค่าแล้ว — กรอกใหม่เฉพาะเมื่อต้องการเปลี่ยน"`.
+4. **Test Isolation & Nest DI Corrective**:
+   - Unit tests use `process.cwd()` spy pointing to temporary directories (`os.tmpdir()`), ensuring `npm test` never reads/writes the repository-root `telegram-config.json` (SHA256 hash verified 100% unchanged).
+   - Reverted `TelegramService` constructor back to zero parameters (`constructor() { this.loadConfig(); }`), resolving NestJS DI provider resolution cleanly.
+   - Truthful test count: **28 / 28** Jest unit tests passing cleanly.
+5. **Git History Assessment**:
+   - Historical Git rewrite was **NOT** performed. This is acceptable because the exposed credential in historical Git was revoked and is no longer valid.
 
 ---
 
-## ⛔ Execution Policy
+## 🚀 Next Approved Work Package
 
-- **Work Package Status**: `READY_FOR_CHATGPT_REVIEW` (Do NOT mark CLOSED yet).
-- **Next Step**: Await review and authorization from ChatGPT / Control Plane.
+- **Next Gate**: `OPS-WP001 — Runtime Version Gate`
+- **Status**: `READY / NOT STARTED`
+- **Instruction**: Do NOT start `OPS-WP001` implementation until explicitly authorized by Project Owner.

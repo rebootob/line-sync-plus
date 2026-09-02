@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post SEC-WP001 & SEC-WP001-R1 Secret Hygiene & Test Isolation Implementation)
+**Last Updated**: 2026-09-02 (Post SEC-WP001 Secret Hygiene Final Closure)
 
 ---
 
@@ -28,22 +28,15 @@
 
 ---
 
-## 🔒 Security & Secret Hygiene (SEC-WP001 / SEC-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔒 Security & Secret Hygiene (SEC-WP001 STATUS: CLOSED / PASS)
 
 - **Untracked Secret File**: `telegram-config.json` removed from Git tracking (`git rm --cached`), gitignored by `.gitignore`, local runtime file preserved on disk.
 - **Safe Template**: `telegram-config.example.json` remains tracked without real credentials.
 - **API Token Shield**: `GET /api/telegram/settings` and `POST /api/telegram/settings` return `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
 - **Blank Token Preservation**: Saving settings with empty `botToken` from UI preserves existing stored token on backend.
 - **Dashboard UI Protection**: `botToken` input is never preloaded. Displays placeholder `"Bot Token ตั้งค่าแล้ว — กรอกใหม่เฉพาะเมื่อต้องการเปลี่ยน"` when token is configured.
-- **SEC-WP001-R1 Test Isolation Corrective**:
-  - `TelegramService` unit tests use isolated temporary `os.tmpdir()` config files.
-  - `npm test` verified 100% non-destructive to real local `telegram-config.json` (SHA256 hash matched before and after test run).
-  - Mocked global `fetch` test proves preserved token works without real network calls.
-- **Audit Findings**:
-  - Current tracked files contain **0** Telegram-token-like matches.
-  - Historical check confirmed `telegram-config.json` existed in history from initial commit (`999c163`).
-  - Old token must be considered **COMPROMISED**; **TOKEN ROTATION** remains a **HUMAN REQUIRED ACTION**.
-  - Git history rewrite was **NOT** performed in SEC-WP001.
+- **Credential Rotation**: Compromised historical token was revoked and rotated via `@BotFather` by Project Owner. Telegram live test after rotation = **PASS**.
+- **Test Isolation & Nest DI**: `npm test` verified 100% non-destructive to real local `telegram-config.json`. Production `TelegramService` constructor has 0 parameters for clean NestJS DI resolution. Truthful test count: **28 / 28** passed.
 
 ---
 
@@ -71,7 +64,7 @@
 
 ---
 
-## 🚀 Active / Next Work Package
+## 🚀 Next Approved Work Package
 
-- **Active Work Package**: `SEC-WP001 — Secret Hygiene` (SEC-WP001-R1 test isolation corrective completed)
-- **Status**: `READY_FOR_CHATGPT_REVIEW`
+- **Next Work Package**: `OPS-WP001 — Runtime Version Gate`
+- **Status**: `READY / NOT STARTED`
