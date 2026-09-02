@@ -4,7 +4,7 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: Initial BUG-WP001-UATLOG-R5 commit pending
+* HEAD: 49639c0 (fix(observability): enforce confirmed-write spool removal on backend success flag BUG-WP001-UATLOG-R5)
 * Working Tree: Clean (BUG-WP001-UATLOG-R5 implementation completed)
 
 ## Project Purpose
