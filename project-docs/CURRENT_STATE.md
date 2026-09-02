@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post SYNC-WP001-R4 Confirmed Contacts Schema + LINE Nickname Mapping + Rate-Limit Guard)
+**Last Updated**: 2026-09-02 (Post SYNC-WP001-R5 Full Directory Source Correction to /chats)
 
 ---
 
@@ -28,17 +28,21 @@
 
 ---
 
-## 🔄 Customer Directory Synchronization (SYNC-WP001-R4 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔄 Customer Directory Synchronization (SYNC-WP001-R5 STATUS: READY_FOR_CHATGPT_REVIEW)
 
-- **Worker Version**: `28.7` (`run/LineSyncApp.js` v28.7).
-- **Backend Required Version**: `28.7` (`src/runtime-version.ts`).
+- **Worker Version**: `28.8` (`run/LineSyncApp.js` v28.8).
+- **Backend Required Version**: `28.8` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
-- **Live Response Alignment**:
-  - Consumes `resp.list` array and `resp.next` cursor from `GET /api/v2/bots/{botId}/contacts`.
+- **Full Sync Source**:
+  - `GET /api/v2/bots/{botId}/chats?folderType=ALL&limit=20&prioritizePinnedChat=true`.
+  - Authoritative read-only evidence confirmed `/contacts` (5,112 unique) is a strict subset of `/chats` (9,741-9,742 unique).
+- **Extraction & Safety**:
+  - Consumes `resp.list` array and `resp.next` cursor.
   - Maps `displayName` using `profile.nickname` -> `profile.name` -> `"ลูกค้า"`.
-  - Identity remains `profile.userId`.
+  - Identity remains `profile.userId` (`^U[0-9a-fA-F]{32}$`).
+  - Zero extraction or persistence of `latestEvent` / message text / tokens.
+  - Non-destructive DB policy leaves missing DB records (e.g. 6 DB-only records) untouched.
   - Bounded 429/403 rate-limit retries (max 3 retries, increasing cooldown) + 200ms page pacing.
-  - Fail-closed pagination and schema validation; aborts as ERROR on retry exhaustion.
 
 ---
 
@@ -81,9 +85,9 @@
 - Customer sync trigger button `🔄 Sync รายชื่อลูกค้า` (`btnSyncCustomers`).
 - Authoritative backend `/bot/status` query gate with strict `typeof statusData.enabled === 'boolean'` validation in `startCustomerSync()`.
 
-### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.7)
-- Fail-closed sequential LINE contacts directory sync with Web Lock protection (`linesync_customer_sync_v1`).
-- Aligned `resp.list` schema parser, `profile.nickname` display name mapping, 429/403 rate-limit retries, and granular 9-metric full-run reporting banner.
+### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.8)
+- Fail-closed sequential LINE chat directory sync with Web Lock protection (`linesync_customer_sync_v1`).
+- Aligned `resp.list` schema parser against `/chats?folderType=ALL&limit=20&prioritizePinnedChat=true`, `profile.nickname` display name mapping, 429/403 rate-limit retries, and neutral reporting wording.
 
 ---
 
@@ -97,7 +101,7 @@
   - `REL-WP001`, `REL-WP001-R1`, `REL-WP001-R2` (`CLOSED / PASS`)
   - `OA-WP001`, `OA-WP001-R1` (`CLOSED / PASS`)
 - **Active Work Package**:
-  - `SYNC-WP001-R4 — Confirmed Contacts Schema + LINE Nickname Mapping + Rate-Limit Guard` (`READY_FOR_CHATGPT_REVIEW`)
-  - `SYNC-WP001 — LINE OA Customer Directory Sync to DB` (`NOT CLOSED / LIVE UAT BLOCKED PENDING R4 REVIEW`)
+  - `SYNC-WP001-R5 — Full Directory Source Correction to /chats` (`READY_FOR_CHATGPT_REVIEW`)
+  - `SYNC-WP001 — LINE OA Customer Directory Sync to DB` (`NOT CLOSED / LIVE UAT PENDING R5 REVIEW`)
 - **Next Work Package Candidate**:
   - `REL-WP002 — Job Lease + Heartbeat` (`READY / NOT STARTED` — Project Owner authorization required)

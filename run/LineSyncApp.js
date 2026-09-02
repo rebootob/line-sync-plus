@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.7
+// @version      28.8
 // @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SYNC-WP001 Directory Sync Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.7';
+    const WORKER_VERSION = '28.8';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -1601,7 +1601,7 @@
             `;
         }
 
-        updateUI(`OA: ${botId}<br>กำลังเริ่มเชื่อมต่อ LINE Contacts API...`);
+        updateUI(`OA: ${botId}<br>กำลังเริ่มเชื่อมต่อ LINE Chat Directory...`);
 
         let contactsFetched = 0;
         let inserted = 0;
@@ -1624,7 +1624,7 @@
 
         try {
             while (pagesFetched < maxPages) {
-                let url = `https://chat.line.biz/api/v2/bots/${botId}/contacts?query=&sortKey=DISPLAY_NAME&sortOrder=ASC&filterKey=ALL&limit=20`;
+                let url = `https://chat.line.biz/api/v2/bots/${botId}/chats?folderType=ALL&limit=20&prioritizePinnedChat=true`;
                 if (nextCursor) {
                     url += `&next=${encodeURIComponent(nextCursor)}`;
                 }
@@ -1672,8 +1672,8 @@
                 pageRetryCount = 0;
 
                 if (!resp || !Array.isArray(resp.list)) {
-                    console.error(`🛑 [SYNC] LINE Contacts API returned invalid response structure on page ${pagesFetched}. Aborting.`);
-                    updateUI(`❌ รูปแบบข้อมูลตอบกลับจาก LINE Contacts API ไม่ถูกต้อง หน้า ${pagesFetched}`, false, true);
+                    console.error(`🛑 [SYNC] LINE Chat Directory API returned invalid response structure on page ${pagesFetched}. Aborting.`);
+                    updateUI(`❌ รูปแบบข้อมูลตอบกลับจาก LINE Chat Directory ไม่ถูกต้อง หน้า ${pagesFetched}`, false, true);
                     return;
                 }
 

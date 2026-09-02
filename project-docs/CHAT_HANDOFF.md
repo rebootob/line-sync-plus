@@ -4,12 +4,12 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* LAST_REVIEWED_IMPLEMENTATION_BASELINE: e73d8136cdae7abd9c5584bfbf921ace0e14c887
-* Working Tree: Clean (SYNC-WP001-R4 READY_FOR_CHATGPT_REVIEW)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 4677c8b6c7fbd7f37e6b41b3128341386b07215b
+* Working Tree: Clean (SYNC-WP001-R5 READY_FOR_CHATGPT_REVIEW)
 
 ## Project Purpose
 
-LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.7) running inside `chat.line.biz` to send multi-type messages, sync customer directories, manage quotas, handle blocks/errors safely, report summary reports to Telegram, and persist browser diagnostic events.
+LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.8) running inside `chat.line.biz` to send multi-type messages, sync customer directories, manage quotas, handle blocks/errors safely, report summary reports to Telegram, and persist browser diagnostic events.
 
 ## Technology Stack
 
@@ -19,27 +19,26 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
 - **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
-## Work Package Status: SYNC-WP001-R4
+## Work Package Status: SYNC-WP001-R5
 
-* **SYNC-WP001-R4**: `READY_FOR_CHATGPT_REVIEW`
-* **SYNC-WP001**: `NOT CLOSED / LIVE UAT BLOCKED PENDING R4 REVIEW`
+* **SYNC-WP001-R5**: `READY_FOR_CHATGPT_REVIEW`
+* **SYNC-WP001**: `NOT CLOSED / LIVE UAT PENDING R5 REVIEW`
 * **OA-WP001**: `CLOSED / PASS` (Accepted on Worker v28.5)
 * **OA-WP001-R1**: `CLOSED / PASS`
 * **REL-WP001**: `CLOSED / PASS`
 * **REL-WP002**: `READY / NOT STARTED` (AUTHORIZATION REQUIRED)
 * **REL-WP003**: `NOT STARTED`
 * **Version Contracts**:
-  - Worker Version: `28.7`
+  - Worker Version: `28.8`
   - Runtime Contract Version: `2`
-  - Required Worker Version: `28.7`
+  - Required Worker Version: `28.8`
 
-## Live Schema & Rate-Limit Corrective Summary (SYNC-WP001-R4)
+## Live Schema & Source Correction Summary (SYNC-WP001-R5)
 
-1. **Live Schema Alignment**: `run/LineSyncApp.js` parses `resp.list` array and `resp.next` cursor from `GET /api/v2/bots/{botId}/contacts`.
-2. **Display Name Mapping**: Maps `displayName` via `profile.nickname` -> `profile.name` -> `"ลูกค้า"`. Identity remains `profile.userId`.
-3. **Bounded Rate-Limit Safety**: Handles 429/403 with bounded retries (max 3, increasing cooldown) + 200ms page pacing.
-4. **Version Bump**: Bumped Worker version to `28.7`.
+1. **Full Sync Endpoint Correction**: Switched customer directory source from `/contacts` to `/chats?folderType=ALL&limit=20&prioritizePinnedChat=true`. Live read-only evidence proved `/contacts` (5,112 unique) is a strict subset of `/chats` (9,741-9,742 unique). Overlap with DB = 9,741 (0 chats-only, 6 DB-only preserved).
+2. **Extraction & Safety**: Consumes `resp.list` and `resp.next`. Maps `profile.nickname` -> `profile.name` -> `"ลูกค้า"`. Identity remains `profile.userId`. Zero message/event data extracted.
+3. **Version Bump**: Bumped Worker version to `28.8`.
 
 ## Exact Recommended Next Step
 
-Await independent ChatGPT Control Plane code review and Project Owner instructions for SYNC-WP001-R4 review or next work package.
+Await independent ChatGPT Control Plane code review and Project Owner instructions for SYNC-WP001-R5 review or next work package.
