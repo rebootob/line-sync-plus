@@ -6,6 +6,7 @@ import { CustomerGroup } from './entities/customer-group.entity';
 import { CustomerGroupMember } from './entities/customer-group-member.entity';
 import { Campaign } from './entities/campaign.entity';
 import { CampaignJob } from './entities/campaign-job.entity';
+import { OaRuntimeState } from './entities/oa-runtime-state.entity';
 
 import { TelegramService } from './telegram.service';
 import * as fs from 'fs';
@@ -17,15 +18,37 @@ describe('AppController', () => {
 
   const mockCustomerRepo = {
     find: jest.fn().mockResolvedValue([
-      { lineUserId: 'U12345', displayName: '101 Somchai' },
+      { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', lineUserId: 'U12345', displayName: '101 Somchai' },
     ]),
+    findOne: jest.fn().mockImplementation((opts) => {
+      const w = opts && opts.where ? opts.where : {};
+      if (w.lineUserId === 'UFOREIGN_USER_ID') return Promise.resolve(null);
+      if (w.botId === 'U09d6b978fcbfb5275e533ca9b788eb22' && (w.lineUserId === 'U12345' || !w.lineUserId)) {
+        return Promise.resolve({ botId: 'U09d6b978fcbfb5275e533ca9b788eb22', lineUserId: 'U12345', isBlocked: false });
+      }
+      if (w.botId === 'U09d6b978fcbfb5275e533ca9b788eb22' && w.lineUserId) {
+        return Promise.resolve({ botId: 'U09d6b978fcbfb5275e533ca9b788eb22', lineUserId: w.lineUserId, isBlocked: false });
+      }
+      return Promise.resolve(null);
+    }),
+    createQueryBuilder: jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([
+        { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', total: '9737', active: '9176', blocked: '561' },
+      ]),
+    }),
+    save: jest.fn().mockImplementation(c => Promise.resolve(c)),
   };
 
   const mockGroupRepo = {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue(null),
     create: jest.fn().mockImplementation(dto => dto),
-    save: jest.fn().mockResolvedValue({ id: 'g1', name: 'Test Group' }),
+    save: jest.fn().mockResolvedValue({ id: 'g1', name: 'Test Group', botId: 'U09d6b978fcbfb5275e533ca9b788eb22' }),
     delete: jest.fn().mockResolvedValue({ affected: 1 }),
   };
 
@@ -41,7 +64,7 @@ describe('AppController', () => {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue(null),
     create: jest.fn().mockImplementation(dto => dto),
-    save: jest.fn().mockResolvedValue({ id: 'c1', name: 'Test Campaign', successCount: 0 }),
+    save: jest.fn().mockResolvedValue({ id: 'c1', name: 'Test Campaign', successCount: 0, botId: 'U09d6b978fcbfb5275e533ca9b788eb22' }),
   };
 
   const mockCampaignJobRepo = {
@@ -50,6 +73,12 @@ describe('AppController', () => {
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn().mockImplementation(dto => dto),
     save: jest.fn().mockResolvedValue([]),
+  };
+
+  const mockOaRuntimeStateRepo = {
+    findOne: jest.fn().mockResolvedValue({ id: 'global', activeBotId: 'U09d6b978fcbfb5275e533ca9b788eb22' }),
+    create: jest.fn().mockImplementation(dto => dto),
+    save: jest.fn().mockImplementation(entity => Promise.resolve(entity)),
   };
 
   const mockTelegramService = {
@@ -68,6 +97,7 @@ describe('AppController', () => {
         { provide: getRepositoryToken(CustomerGroupMember), useValue: mockGroupMemberRepo },
         { provide: getRepositoryToken(Campaign), useValue: mockCampaignRepo },
         { provide: getRepositoryToken(CampaignJob), useValue: mockCampaignJobRepo },
+        { provide: getRepositoryToken(OaRuntimeState), useValue: mockOaRuntimeStateRepo },
         { provide: TelegramService, useValue: mockTelegramService },
       ],
     }).compile();
@@ -77,9 +107,11 @@ describe('AppController', () => {
 
   describe('getAllCustomers', () => {
     it('should return cleaned display name with block status', async () => {
-      const result = await appController.getAllCustomers();
+      const mockRes = { status: jest.fn().mockReturnThis() } as any;
+      const result = await appController.getAllCustomers('U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
       expect(result).toEqual([
         { 
+          botId: 'U09d6b978fcbfb5275e533ca9b788eb22',
           lineUserId: 'U12345', 
           displayName: '101 Somchai', 
           cleanedDisplayName: 'Somchai',
@@ -447,11 +479,11 @@ describe('AppController', () => {
       };
     });
 
-    it('1. GET /api/runtime/version returns contract version 1 and required worker version 28.4', () => {
+    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.5', () => {
       const res = appController.getRuntimeVersion();
       expect(res).toEqual({
-        runtimeContractVersion: 1,
-        requiredWorkerVersion: '28.4',
+        runtimeContractVersion: 2,
+        requiredWorkerVersion: '28.5',
       });
     });
 
@@ -459,27 +491,27 @@ describe('AppController', () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find');
       findSpy.mockClear();
 
-      const res = await appController.getNextJob(undefined, mockRes);
+      const res = await appController.getNextJob(undefined, undefined, mockRes);
 
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.4',
+        requiredWorkerVersion: '28.5',
       });
       // Prove version gate executes BEFORE job query/claim logic
       expect(findSpy).not.toHaveBeenCalled();
     });
 
-    it('3. GET /api/campaign/next with WRONG worker version ("28.3") -> BLOCKED / 409 Conflict', async () => {
+    it('3. GET /api/campaign/next with WRONG worker version ("28.4") -> BLOCKED / 409 Conflict', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find');
       findSpy.mockClear();
 
-      const res = await appController.getNextJob('28.3', mockRes);
+      const res = await appController.getNextJob('28.4', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
 
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.4',
+        requiredWorkerVersion: '28.5',
       });
       expect(findSpy).not.toHaveBeenCalled();
     });
@@ -493,7 +525,7 @@ describe('AppController', () => {
       saveJobSpy.mockClear();
       saveCampSpy.mockClear();
 
-      await appController.getNextJob('27.0', mockRes);
+      await appController.getNextJob('27.0', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
 
       expect(mockRes.statusCode).toBe(409);
       expect(findJobSpy).not.toHaveBeenCalled();
@@ -501,10 +533,10 @@ describe('AppController', () => {
       expect(saveCampSpy).not.toHaveBeenCalled();
     });
 
-    it('5. GET /api/campaign/next with EXACT version ("28.4") -> reaches normal job claim logic', async () => {
+    it('5. GET /api/campaign/next with EXACT version ("28.5") and valid OA header -> reaches normal job claim logic', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
 
-      const res = await appController.getNextJob('28.4', mockRes);
+      const res = await appController.getNextJob('28.5', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
 
       expect(mockRes.statusCode).toBe(200);
       expect(findSpy).toHaveBeenCalled();
@@ -573,6 +605,84 @@ describe('AppController', () => {
 
       expect(scriptContent).toContain('if (!isTabIdentityVerified) return false;');
       expect(scriptContent).toContain('TAB IDENTITY UNVERIFIED');
+    });
+  });
+
+  describe('OA-WP001 — OA Context Isolation & Controlled LINE OA Switch Security Tests', () => {
+    it('1. GET /api/oa/contexts returns grouped customer metrics per botId', async () => {
+      const contexts = await appController.getOaContexts();
+      expect(contexts).toEqual([
+        { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', total: 9737, active: 9176, blocked: 561 }
+      ]);
+    });
+
+    it('2. GET /api/customers requires and filters by botId (fails closed when missing/invalid)', async () => {
+      const mockRes = { statusCode: 200, status: jest.fn().mockImplementation(c => { mockRes.statusCode = c; return mockRes; }) } as any;
+
+      const resBad = await appController.getAllCustomers(undefined, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(resBad).toEqual({ success: false, message: 'Missing or invalid botId query parameter' });
+
+      const resGood = await appController.getAllCustomers('U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      expect(resGood).toHaveLength(1);
+    });
+
+    it('3. POST /api/oa/active rejects switch if Master Bot is running or processing job exists', async () => {
+      const mockRes = { statusCode: 200, status: jest.fn().mockImplementation(c => { mockRes.statusCode = c; return mockRes; }) } as any;
+
+      // Master bot enabled -> conflict
+      appController.toggleBotStatus({ enabled: true });
+      const resActiveBotRunning = await appController.setActiveOa({ botId: 'U09d6b978fcbfb5275e533ca9b788eb22' }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(resActiveBotRunning).toEqual({ success: false, message: 'Master Bot must be paused before switching OA context' });
+
+      // Master bot paused -> allowed
+      appController.toggleBotStatus({ enabled: false });
+      const resSuccess = await appController.setActiveOa({ botId: 'U09d6b978fcbfb5275e533ca9b788eb22' }, mockRes);
+      expect(resSuccess).toEqual({ success: true, activeBotId: 'U09d6b978fcbfb5275e533ca9b788eb22' });
+    });
+
+    it('4. POST /api/campaign/add rejects requests if botId does not match active OA or target is outside OA', async () => {
+      const mockRes = { statusCode: 200, status: jest.fn().mockImplementation(c => { mockRes.statusCode = c; return mockRes; }) } as any;
+
+      // Target outside OA
+      const resBadTarget = await appController.addCampaign({
+        botId: 'U09d6b978fcbfb5275e533ca9b788eb22',
+        message: 'Hello',
+        targetIds: ['UFOREIGN_USER_ID']
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(resBadTarget).toEqual({ success: false, message: 'Target ID UFOREIGN_USER_ID does not belong to OA U09d6b978fcbfb5275e533ca9b788eb22' });
+    });
+
+    it('5. GET /api/campaign/next rejects missing OA header or worker/active OA mismatch before queue query', async () => {
+      const mockRes = { statusCode: 200, status: jest.fn().mockImplementation(c => { mockRes.statusCode = c; return mockRes; }) } as any;
+      const findSpy = jest.spyOn(mockCampaignJobRepo, 'find');
+      findSpy.mockClear();
+
+      // Missing OA header
+      const resMissingOa = await appController.getNextJob('28.5', undefined, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(resMissingOa).toEqual({ status: 'missing_oa_context', message: 'X-LineSync-OA-Context header missing or invalid' });
+      expect(findSpy).not.toHaveBeenCalled();
+
+      // OA Mismatch (worker sends foreign OA)
+      const resMismatchOa = await appController.getNextJob('28.5', 'U11111111222222223333333344444444', mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(resMismatchOa.status).toBe('oa_context_mismatch');
+      expect(findSpy).not.toHaveBeenCalled();
+    });
+
+    it('6. Tampermonkey script contains version 28.5, controlled OA switch, job OA fencing, and physical send OA guard', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.5'");
+      expect(scriptContent).toContain('headers[\'X-LineSync-OA-Context\']');
+      expect(scriptContent).toContain('checkAndExecuteControlledOaSwitch');
+      expect(scriptContent).toContain('verifyCurrentOAContext');
+      expect(scriptContent).toContain('JOB OA CONTEXT MISMATCH');
+      expect(scriptContent).toContain('OA_CONTEXT_MISMATCH');
     });
   });
 });

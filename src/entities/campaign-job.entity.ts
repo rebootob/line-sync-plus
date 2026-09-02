@@ -8,6 +8,9 @@ export class CampaignJob {
   @Column({ type: 'varchar', length: 255 })
   campaignId: string;
 
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  botId: string | null;
+
   @Column({ type: 'varchar', length: 50 })
   lineUserId: string;
 

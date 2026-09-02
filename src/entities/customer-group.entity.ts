@@ -11,6 +11,9 @@ export class CustomerGroup {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  botId: string | null;
+
   @CreateDateColumn({ type: 'timestamp without time zone' })
   createdAt: Date;
 

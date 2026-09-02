@@ -111,6 +111,46 @@ export class DatabaseInitService implements OnModuleInit {
         );
       `);
 
+      // 🛡️ OA-WP001 Safe Additive Migration
+      await this.dataSource.query(`
+        ALTER TABLE customer_groups ADD COLUMN IF NOT EXISTS "botId" character varying(64);
+      `);
+
+      await this.dataSource.query(`
+        ALTER TABLE customer_group_members ADD COLUMN IF NOT EXISTS "botId" character varying(64);
+      `);
+
+      await this.dataSource.query(`
+        ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS "botId" character varying(64);
+      `);
+
+      await this.dataSource.query(`
+        ALTER TABLE campaign_jobs ADD COLUMN IF NOT EXISTS "botId" character varying(64);
+      `);
+
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS oa_runtime_state (
+          "id" character varying(64) NOT NULL DEFAULT 'global',
+          "activeBotId" character varying(64),
+          "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+          CONSTRAINT "PK_oa_runtime_state_id" PRIMARY KEY ("id")
+        );
+      `);
+
+      await this.dataSource.query(`
+        INSERT INTO oa_runtime_state ("id", "activeBotId")
+        VALUES ('global', NULL)
+        ON CONFLICT ("id") DO NOTHING;
+      `);
+
+      try {
+        await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_customers_botId" ON customers ("botId");`);
+        await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_customer_groups_botId" ON customer_groups ("botId");`);
+        await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_customer_group_members_botId_groupId" ON customer_group_members ("botId", "groupId");`);
+        await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaigns_botId" ON campaigns ("botId");`);
+        await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_jobs_botId_status" ON campaign_jobs ("botId", "status");`);
+      } catch (e) {}
+
       this.logger.log('✅ Database schema verified/initialized successfully.');
     } catch (error) {
       this.logger.error('❌ Failed to initialize database schema:', error);

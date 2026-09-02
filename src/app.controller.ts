@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, NotFoundException, Res, Req, Headers, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, NotFoundException, Res, Req, Headers, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import type { Request, Response } from 'express';
@@ -9,11 +9,15 @@ import { CustomerGroup } from './entities/customer-group.entity';
 import { CustomerGroupMember } from './entities/customer-group-member.entity';
 import { Campaign } from './entities/campaign.entity';
 import { CampaignJob } from './entities/campaign-job.entity';
+import { OaRuntimeState } from './entities/oa-runtime-state.entity';
 import { TelegramService, TelegramConfig } from './telegram.service';
 import { RUNTIME_CONTRACT_VERSION, REQUIRED_WORKER_VERSION } from './runtime-version';
 
 @Controller('api')
 export class AppController {
+  private static workerBotId: string | null = null;
+  private static workerSeenAt: number | null = null;
+
   constructor(
     @InjectRepository(Customer)
     private customerRepository: Repository<Customer>,
@@ -30,13 +34,117 @@ export class AppController {
     @InjectRepository(CampaignJob)
     private campaignJobRepository: Repository<CampaignJob>,
 
+    @InjectRepository(OaRuntimeState)
+    private oaRuntimeStateRepository: Repository<OaRuntimeState>,
+
     private telegramService: TelegramService,
   ) {}
 
-  // 1. ดึงรายชื่อลูกค้าทั้งหมดพร้อมจัดรูปแบบชื่อ และสถานะบล็อก
+  private updateWorkerObservationalState(headerBotId?: string) {
+    if (headerBotId && /^U[0-9a-fA-F]{32}$/.test(headerBotId.trim())) {
+      AppController.workerBotId = headerBotId.trim();
+      AppController.workerSeenAt = Date.now();
+    }
+  }
+
+  // 🛡️ OA-WP001 OA CONTEXT DISCOVERY & MANAGEMENT ENDPOINTS
+  @Get('oa/contexts')
+  async getOaContexts() {
+    const raw = await this.customerRepository
+      .createQueryBuilder('c')
+      .select('c.botId', 'botId')
+      .addSelect('COUNT(*)', 'total')
+      .addSelect('SUM(CASE WHEN c.isBlocked = false THEN 1 ELSE 0 END)', 'active')
+      .addSelect('SUM(CASE WHEN c.isBlocked = true THEN 1 ELSE 0 END)', 'blocked')
+      .where('c.botId IS NOT NULL')
+      .groupBy('c.botId')
+      .orderBy('COUNT(*)', 'DESC')
+      .getRawMany();
+
+    return raw.map(row => ({
+      botId: row.botId,
+      total: parseInt(row.total, 10) || 0,
+      active: parseInt(row.active, 10) || 0,
+      blocked: parseInt(row.blocked, 10) || 0,
+    }));
+  }
+
+  @Get('oa/active')
+  async getActiveOa(@Headers('x-linesync-oa-context') workerOaHeader?: string) {
+    this.updateWorkerObservationalState(workerOaHeader);
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    const activeBotId = state ? state.activeBotId : null;
+    const workerBotId = AppController.workerBotId;
+    const workerSeenAt = AppController.workerSeenAt;
+    const aligned = !!(activeBotId && workerBotId && activeBotId === workerBotId);
+
+    return {
+      activeBotId,
+      workerBotId,
+      workerSeenAt,
+      aligned,
+    };
+  }
+
+  @Post('oa/active')
+  async setActiveOa(
+    @Body() body: { botId: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!body || !body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Invalid botId format' };
+    }
+
+    const requestedBotId = body.botId.trim();
+
+    // 1. Verify existence in customers table
+    const existingCustomer = await this.customerRepository.findOne({ where: { botId: requestedBotId } });
+    if (!existingCustomer) {
+      res.status(HttpStatus.NOT_FOUND);
+      return { success: false, message: 'Requested OA botId does not exist in customers table' };
+    }
+
+    // 2. Verify Master Bot is PAUSED
+    if (AppController.isBotEnabled) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: 'Master Bot must be paused before switching OA context' };
+    }
+
+    // 3. Verify no currently processing job
+    const processingJobCount = await this.campaignJobRepository.count({ where: { status: 'processing' } });
+    if (processingJobCount > 0) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: 'Cannot switch OA while a campaign job is currently processing' };
+    }
+
+    // 4. Persist in oa_runtime_state
+    let state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    if (!state) {
+      state = this.oaRuntimeStateRepository.create({ id: 'global', activeBotId: requestedBotId });
+    } else {
+      state.activeBotId = requestedBotId;
+    }
+    await this.oaRuntimeStateRepository.save(state);
+
+    console.log(`🌐 activeBotId switched to: ${requestedBotId}`);
+    return { success: true, activeBotId: requestedBotId };
+  }
+
+  // 1. ดึงรายชื่อลูกค้าตาม botId ที่ระบุเท่านั้น (OA-WP001 Isolation)
   @Get('customers')
-  async getAllCustomers() {
+  async getAllCustomers(
+    @Query('botId') botId: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!botId || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId query parameter' };
+    }
+
+    const cleanBotId = botId.trim();
     const customers = await this.customerRepository.find({
+      where: { botId: cleanBotId },
       order: { createdAt: 'DESC' },
     });
     
@@ -58,39 +166,43 @@ export class AppController {
   @Post('upload/image')
   async uploadImage(@Body() body: { base64: string; filename?: string }) {
     if (!body.base64) {
-      return { success: false, message: 'ไม่มีข้อมูลรูปภาพ' };
+      return { success: false, message: 'ไม่มีข้อมูลไฟล์รูปภาพ' };
     }
 
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
+    try {
+      const matches = body.base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) {
+        return { success: false, message: 'รูปแบบ Base64 รูปภาพไม่ถูกต้อง' };
+      }
+
+      const imageBuffer = Buffer.from(matches[2], 'base64');
+      const filename = body.filename || `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.png`;
+
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const filePath = path.join(uploadDir, filename);
+      fs.writeFileSync(filePath, imageBuffer);
+
+      const imageUrl = `/uploads/${filename}`;
+      console.log(`🖼️ อัปโหลดรูปภาพสำเร็จ: ${imageUrl}`);
+
+      return {
+        success: true,
+        imageUrl: imageUrl,
+      };
+    } catch (e) {
+      console.error('❌ ไม่สามารถอัปโหลดรูปภาพได้:', e);
+      return { success: false, message: 'เกิดข้อผิดพลาดในการบันทึกรูปภาพบนเซิร์ฟเวอร์' };
     }
-
-    const base64Data = body.base64.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    const rawFilename = body.filename || 'local_image.png';
-    const cleanFilename = rawFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const savedFilename = `${Date.now()}_${cleanFilename}`;
-    const filePath = path.join(uploadsDir, savedFilename);
-
-    fs.writeFileSync(filePath, buffer);
-
-    const port = process.env.PORT || 3005;
-    const fileUrl = `http://localhost:${port}/api/uploads/${savedFilename}`;
-    console.log(`📸 บันทึกรูปภาพ Local สำเร็จ: ${fileUrl}`);
-
-    return {
-      success: true,
-      url: fileUrl,
-      filename: savedFilename,
-    };
   }
 
   // 1.2 ให้บริการดึงไฟล์รูปภาพ Local
   @Get('uploads/:filename')
   serveUpload(@Param('filename') filename: string, @Res() res: Response) {
-    const filePath = path.join(process.cwd(), 'uploads', filename);
+    const filePath = path.join(process.cwd(), 'public', 'uploads', filename);
     if (!fs.existsSync(filePath)) {
       throw new NotFoundException('ไม่พบไฟล์รูปภาพที่ระบุ');
     }
@@ -101,17 +213,27 @@ export class AppController {
   // 2. ระบบจัดการกลุ่มลูกค้า (Customer Group APIs)
   // ==========================================
 
-  // ดึงรายการกลุ่มทั้งหมดพร้อมจำนวนสมาชิก
+  // ดึงรายการกลุ่มตาม botId ที่ระบุเท่านั้น (OA-WP001 Isolation)
   @Get('groups')
-  async getAllGroups() {
+  async getAllGroups(
+    @Query('botId') botId: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!botId || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId query parameter' };
+    }
+
+    const cleanBotId = botId.trim();
     const groups = await this.groupRepository.find({
+      where: { botId: cleanBotId },
       order: { createdAt: 'DESC' },
     });
 
     const result = await Promise.all(
       groups.map(async (group) => {
         const memberCount = await this.groupMemberRepository.count({
-          where: { groupId: group.id },
+          where: { groupId: group.id, botId: cleanBotId },
         });
         return {
           ...group,
@@ -139,16 +261,35 @@ export class AppController {
     };
   }
 
-  // สร้างกลุ่มใหม่พร้อมรายชื่อสมาชิก
+  // สร้างกลุ่มใหม่พร้อมรายชื่อสมาชิก (OA-WP001 Member Verification)
   @Post('groups')
   async createGroup(
-    @Body() body: { name: string; description?: string; targetIds: string[] },
+    @Body() body: { botId: string; name: string; description?: string; targetIds: string[] },
+    @Res({ passthrough: true }) res: Response,
   ) {
+    if (!body || !body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId parameter' };
+    }
+
+    const cleanBotId = body.botId.trim();
+
     if (!body.name || !body.targetIds || body.targetIds.length === 0) {
+      res.status(HttpStatus.BAD_REQUEST);
       return { success: false, message: 'กรุณาระบุชื่อกลุ่มและเลือกสมาชิกอย่างน้อย 1 คน' };
     }
 
+    // Verify EVERY targetId belongs to cleanBotId in customers table
+    for (const userId of body.targetIds) {
+      const customer = await this.customerRepository.findOne({ where: { botId: cleanBotId, lineUserId: userId } });
+      if (!customer) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: `Target ID ${userId} does not belong to OA ${cleanBotId}` };
+      }
+    }
+
     const group = this.groupRepository.create({
+      botId: cleanBotId,
       name: body.name.trim(),
       description: body.description ? body.description.trim() : null,
     });
@@ -156,6 +297,7 @@ export class AppController {
 
     const members = body.targetIds.map(userId =>
       this.groupMemberRepository.create({
+        botId: cleanBotId,
         groupId: savedGroup.id,
         lineUserId: userId,
       }),
@@ -181,11 +323,12 @@ export class AppController {
   // 3. ระบบจัดการแคมเปญส่งข้อความ (Campaign & DB Queue APIs)
   // ==========================================
 
-  // สร้างแคมเปญและสร้างคิวงานในฐานข้อมูล (รองรับ Scheduled Time & Multi-type)
+  // สร้างแคมเปญและสร้างคิวงานในฐานข้อมูล (รองรับ Scheduled Time & Multi-type & OA Ownership)
   @Post('campaign/add')
   async addCampaign(
     @Body()
     body: {
+      botId: string;
       name?: string;
       messageType?: string;
       message: string;
@@ -194,9 +337,34 @@ export class AppController {
       targetIds: string[];
       scheduledAt?: string; // ISO string date-time
     },
+    @Res({ passthrough: true }) res: Response,
   ) {
+    if (!body || !body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId parameter' };
+    }
+
+    const cleanBotId = body.botId.trim();
+
+    // Verify botId equals activeBotId in oa_runtime_state
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+    }
+
     if (!body.targetIds || body.targetIds.length === 0) {
+      res.status(HttpStatus.BAD_REQUEST);
       return { success: false, message: 'ไม่มีรายชื่อเป้าหมาย' };
+    }
+
+    // Verify every targetId belongs to cleanBotId in customers
+    for (const userId of body.targetIds) {
+      const customer = await this.customerRepository.findOne({ where: { botId: cleanBotId, lineUserId: userId } });
+      if (!customer) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: `Target ID ${userId} does not belong to OA ${cleanBotId}` };
+      }
     }
 
     const messageType = body.messageType || 'text';
@@ -215,8 +383,9 @@ export class AppController {
       }
     }
 
-    // สร้าง Record แคมเปญใน DB
+    // สร้าง Record แคมเปญใน DB พร้อม botId
     const campaign = this.campaignRepository.create({
+      botId: cleanBotId,
       name: campaignName,
       messageType: messageType,
       message: body.message,
@@ -230,9 +399,10 @@ export class AppController {
     });
     const savedCampaign = await this.campaignRepository.save(campaign);
 
-    // สร้าง Record คิวงานรายบุคคลใน DB
+    // สร้าง Record คิวงานรายบุคคลใน DB พร้อม botId
     const jobs = body.targetIds.map(userId =>
       this.campaignJobRepository.create({
+        botId: cleanBotId,
         campaignId: savedCampaign.id,
         lineUserId: userId,
         status: 'pending',
@@ -240,7 +410,7 @@ export class AppController {
     );
     await this.campaignJobRepository.save(jobs);
 
-    console.log(`📥 บันทึกแคมเปญลง DB เรียบร้อย: "${savedCampaign.name}" (${jobs.length} รายการ, สถานะ: ${initialStatus})`);
+    console.log(`📥 บันทึกแคมเปญลง DB เรียบร้อย: "${savedCampaign.name}" (${jobs.length} รายการ, สถานะ: ${initialStatus}, OA: ${cleanBotId})`);
 
     return {
       success: true,
@@ -279,12 +449,14 @@ export class AppController {
     };
   }
 
-  // API สำหรับ Tampermonkey มาขอรับคิวงานถัดไปจาก DB (พร้อมระบบ Scheduled & Stale Recovery)
+  // API สำหรับ Tampermonkey มาขอรับคิวงานถัดไปจาก DB (พร้อมระบบ Scheduled, OA Gate & Stale Recovery)
   @Get('campaign/next')
   async getNextJob(
     @Headers('x-linesync-worker-version') workerVersion: string | undefined,
+    @Headers('x-linesync-oa-context') workerOaHeader: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
+    // A. Version validation
     if (!workerVersion || workerVersion.trim() !== REQUIRED_WORKER_VERSION) {
       res.status(HttpStatus.CONFLICT);
       return {
@@ -293,12 +465,48 @@ export class AppController {
       };
     }
 
+    // B. OA Header validation
+    if (!workerOaHeader || !/^U[0-9a-fA-F]{32}$/.test(workerOaHeader.trim())) {
+      res.status(HttpStatus.CONFLICT);
+      return {
+        status: 'missing_oa_context',
+        message: 'X-LineSync-OA-Context header missing or invalid',
+      };
+    }
+
+    const workerBotId = workerOaHeader.trim();
+    this.updateWorkerObservationalState(workerBotId);
+
+    // C. Persisted Active OA validation
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    const activeBotId = state ? state.activeBotId : null;
+
+    if (!activeBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return {
+        status: 'oa_not_selected',
+        message: 'No active LINE OA selected in system',
+      };
+    }
+
+    // D. Worker OA == Active OA validation
+    if (workerBotId !== activeBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return {
+        status: 'oa_context_mismatch',
+        activeBotId,
+        message: `Worker OA (${workerBotId}) does not match active OA (${activeBotId})`,
+      };
+    }
+
+    // E. Master Bot enabled validation
     if (!AppController.isBotEnabled) {
       return { status: 'empty', reason: 'Master Bot is Paused' };
     }
 
+    // F. ONLY THEN query/claim jobs
     const pendingJobs = await this.campaignJobRepository.find({
-      where: { status: 'pending' },
+      where: { status: 'pending', botId: activeBotId },
       order: { createdAt: 'ASC' },
       take: 100,
     });
@@ -310,10 +518,10 @@ export class AppController {
     const readyCandidates: { job: CampaignJob; campaign: Campaign }[] = [];
 
     for (const j of pendingJobs) {
-      const camp = await this.campaignRepository.findOne({ where: { id: j.campaignId } });
+      const camp = await this.campaignRepository.findOne({ where: { id: j.campaignId, botId: activeBotId } });
       if (!camp) continue;
 
-      // หากแคมเปญถูกสั่งหยุด หรือ หยุดชั่วคราว (โควต้าเต็ม / Error เกินกำหนด / ผู้ใช้สั่งหยุด / Paused) ให้ข้าม
+      // หากแคมเปญถูกสั่งหยุด หรือ หยุดชั่วคราว ให้ข้าม
       if (['stopped_limit', 'stopped_error', 'stopped_user', 'paused', 'failed', 'completed'].includes(camp.status)) continue;
 
       // หากตั้งเวลาส่งล่วงหน้า แล้วยังไม่ถึงเวลา ให้ข้าม
@@ -322,7 +530,7 @@ export class AppController {
       readyCandidates.push({ job: j, campaign: camp });
     }
 
-    // เรียงตามลำดับเวลา scheduledAt ก่อน (ถ้าระบุ) แล้วตามด้วย createdAt
+    // เรียงตามลำดับเวลา scheduledAt ก่อน แล้วตามด้วย createdAt
     readyCandidates.sort((a, b) => {
       const timeA = a.campaign.scheduledAt ? new Date(a.campaign.scheduledAt).getTime() : new Date(a.campaign.createdAt).getTime();
       const timeB = b.campaign.scheduledAt ? new Date(b.campaign.scheduledAt).getTime() : new Date(b.campaign.createdAt).getTime();
@@ -346,13 +554,13 @@ export class AppController {
     if (!selectedJob) {
       const staleTime = new Date(Date.now() - 15 * 1000);
       const processingJobs = await this.campaignJobRepository.find({
-        where: { status: 'processing', updatedAt: LessThan(staleTime) },
+        where: { status: 'processing', botId: activeBotId, updatedAt: LessThan(staleTime) },
         order: { updatedAt: 'ASC' },
         take: 20,
       });
 
       for (const j of processingJobs) {
-        const camp = await this.campaignRepository.findOne({ where: { id: j.campaignId } });
+        const camp = await this.campaignRepository.findOne({ where: { id: j.campaignId, botId: activeBotId } });
         if (!camp || ['stopped_limit', 'stopped_error', 'stopped_user', 'paused', 'failed', 'completed'].includes(camp.status)) continue;
         if (camp.scheduledAt && new Date(camp.scheduledAt).getTime() > nowMs) continue;
 
@@ -378,6 +586,7 @@ export class AppController {
     return {
       jobId: selectedJob.id,
       campaignId: selectedJob.campaignId,
+      botId: selectedJob.botId || activeBotId,
       userId: selectedJob.lineUserId,
       messageType: targetCampaign.messageType || 'text',
       message: targetCampaign.message || '',
@@ -389,14 +598,18 @@ export class AppController {
 
   // API สำหรับ Tampermonkey มารายงานว่าส่งเสร็จแล้ว
   @Post('campaign/success')
-  async markSuccess(@Body() body: { jobId?: string; userId?: string }) {
+  async markSuccess(@Body() body: { jobId?: string; userId?: string; botId?: string }) {
     let job: CampaignJob | null = null;
 
     if (body.jobId) {
       job = await this.campaignJobRepository.findOne({ where: { id: body.jobId } });
     } else if (body.userId) {
+      const whereClause: any = { lineUserId: body.userId, status: 'processing' };
+      if (body.botId) {
+        whereClause.botId = body.botId;
+      }
       job = await this.campaignJobRepository.findOne({
-        where: { lineUserId: body.userId, status: 'processing' },
+        where: whereClause,
         order: { updatedAt: 'DESC' },
       });
     }
@@ -436,14 +649,18 @@ export class AppController {
 
   // API สำหรับ Tampermonkey มารายงานว่าส่งล้มเหลว (พร้อมอัปเดตปิดสถานะผู้ใช้บล็อก/ส่งไม่ได้)
   @Post('campaign/fail')
-  async markFail(@Body() body: { jobId?: string; userId?: string; reason?: string; isBlocked?: boolean }) {
+  async markFail(@Body() body: { jobId?: string; userId?: string; botId?: string; reason?: string; isBlocked?: boolean }) {
     let job: CampaignJob | null = null;
 
     if (body.jobId) {
       job = await this.campaignJobRepository.findOne({ where: { id: body.jobId } });
     } else if (body.userId) {
+      const whereClause: any = { lineUserId: body.userId, status: 'processing' };
+      if (body.botId) {
+        whereClause.botId = body.botId;
+      }
       job = await this.campaignJobRepository.findOne({
-        where: { lineUserId: body.userId, status: 'processing' },
+        where: whereClause,
         order: { updatedAt: 'DESC' },
       });
     }
@@ -476,12 +693,16 @@ export class AppController {
       const isUserBlocked = body.isBlocked || (body.reason && (body.reason.includes('บล็อก') || body.reason.includes('ไม่สามารถส่งข้อความ')));
       if (isUserBlocked && job.lineUserId) {
         try {
-          const customer = await this.customerRepository.findOne({ where: { lineUserId: job.lineUserId } });
+          const custWhere: any = { lineUserId: job.lineUserId };
+          if (job.botId) {
+            custWhere.botId = job.botId;
+          }
+          const customer = await this.customerRepository.findOne({ where: custWhere });
           if (customer) {
             customer.isBlocked = true;
             customer.blockReason = body.reason || '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว';
             await this.customerRepository.save(customer);
-            console.log(`🚫 ปิดสถานะผู้ใช้ในตาราง Customers เป็น "บล็อก/ส่งไม่ได้แล้ว": ${job.lineUserId}`);
+            console.log(`🚫 ปิดสถานะผู้ใช้ในตาราง Customers เป็น "บล็อก/ส่งไม่ได้แล้ว": ${job.lineUserId} (OA: ${job.botId})`);
           }
         } catch(e) {
           console.error(`⚠️ ไม่สามารถอัปเดตสถานะบล็อกให้ผู้ใช้ ${job.lineUserId}:`, e);

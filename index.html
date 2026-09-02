@@ -86,10 +86,20 @@
             <div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <h2 style="margin: 0; color: #1e293b;">🚀 LineSync Plus - Customer & Broadcast Management</h2>
-                    <span id="runtimeVersionBadge" style="font-size:11px; color:#475569; background:#f1f5f9; padding:2px 8px; border-radius:12px; border:1px solid #cbd5e1;">Runtime Contract: v1 | Required Worker: v28.4</span>
+                    <span id="runtimeVersionBadge" style="font-size:11px; color:#475569; background:#f1f5f9; padding:2px 8px; border-radius:12px; border:1px solid #cbd5e1;">Runtime Contract: v2 | Required Worker: v28.5</span>
                     <button id="masterBotToggleBtn" onclick="toggleMasterBotSwitch()" class="action-btn" style="background:#16a34a; padding:4px 10px; font-size:12px; font-weight:bold; border-radius:20px;" title="สวิตช์เปิด-ปิดการทำงานของบอทภาพรวม ( Master Switch )">
                         🟢 บอททำงานปกติ [กดพักบอท ⏸️]
                     </button>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                    <span style="font-weight:bold; font-size:12px; color:#334155;">LINE OA Context:</span>
+                    <select id="oaSelectDropdown" style="padding:4px 8px; font-size:12px; border-radius:6px; border:1px solid #cbd5e1; background:white;">
+                        <option value="">⏳ กำลังโหลดรายการ LINE OA...</option>
+                    </select>
+                    <button id="switchOaBtn" onclick="switchOaContext()" class="action-btn" style="background:#0284c7; padding:4px 10px; font-size:12px; font-weight:bold; border-radius:6px;" title="สลับไปยัง LINE OA ที่เลือก">
+                        🔄 เปลี่ยน LINE OA
+                    </button>
+                    <span id="activeOaStatusBadge" style="font-size:12px; color:#475569; font-weight:bold; padding:2px 8px; border-radius:4px; background:#e2e8f0;">Active: -</span>
                 </div>
                 <div id="statusBadge" style="font-size: 13px; color: #64748b; margin-top: 4px;">กำลังโหลดข้อมูล...</div>
             </div>
@@ -512,15 +522,102 @@
             }
         }
 
+        let currentActiveBotId = null;
+
+        async function loadOaContextsUI() {
+            try {
+                const [resContexts, resActive] = await Promise.all([
+                    fetch(`${API_BASE}/oa/contexts`),
+                    fetch(`${API_BASE}/oa/active`)
+                ]);
+                const contexts = await resContexts.json();
+                const activeData = await resActive.json();
+
+                currentActiveBotId = activeData.activeBotId || null;
+
+                const selectEl = document.getElementById('oaSelectDropdown');
+                if (contexts.length === 0) {
+                    selectEl.innerHTML = '<option value="">ไม่พบข้อมูล LINE OA</option>';
+                } else {
+                    selectEl.innerHTML = contexts.map((ctx, idx) => {
+                        const shortId = ctx.botId ? `${ctx.botId.substring(0, 8)}...` : 'Unknown';
+                        return `<option value="${ctx.botId}" ${ctx.botId === currentActiveBotId ? 'selected' : ''}>OA #${idx + 1} — ${shortId} (${ctx.total.toLocaleString()} คน)</option>`;
+                    }).join('');
+                }
+
+                const badgeEl = document.getElementById('activeOaStatusBadge');
+                if (currentActiveBotId) {
+                    badgeEl.innerHTML = `🟢 Active: ${currentActiveBotId.substring(0, 10)}...`;
+                    badgeEl.style.background = '#dcfce7';
+                    badgeEl.style.color = '#15803d';
+                } else {
+                    badgeEl.innerHTML = '⚠️ กรุณาเลือก LINE OA ก่อนใช้งาน';
+                    badgeEl.style.background = '#fef3c7';
+                    badgeEl.style.color = '#b45309';
+                }
+            } catch (e) {
+                console.error('Failed to load OA contexts', e);
+            }
+        }
+
+        async function switchOaContext() {
+            const selectEl = document.getElementById('oaSelectDropdown');
+            const targetBotId = selectEl.value;
+            if (!targetBotId) {
+                alert('กรุณาเลือก LINE OA ที่ต้องการสลับก่อนครับ');
+                return;
+            }
+
+            if (targetBotId === currentActiveBotId) {
+                alert('LINE OA ที่เลือกเป็นรายการปัจจุบันอยู่แล้วครับ');
+                return;
+            }
+
+            if (!confirm(`คุณต้องการสลับไปยัง LINE OA [ ${targetBotId} ] ใช่หรือไม่?\n\nหมายเหตุ: การสลับจะต้องพักการทำงานบอทภาพรวมก่อน`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/oa/active`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ botId: targetBotId })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ สลับไปยัง LINE OA Context [ ${targetBotId.substring(0, 10)}... ] เรียบร้อยแล้ว!`);
+                    selectedUsers.clear();
+                    await loadData();
+                } else {
+                    alert(`❌ ไม่สามารถสลับ LINE OA ได้: ${data.message || 'เกิดข้อผิดพลาด'}`);
+                }
+            } catch (e) {
+                alert('❌ ไม่สามารถสลับ LINE OA ได้ (เกิดข้อผิดพลาดในการเชื่อมต่อ)');
+            }
+        }
+
         // 1. โหลดข้อมูลเริ่มต้น
         async function loadData() {
             try {
                 checkMasterBotStatus();
                 loadRuntimeVersionUI();
+                await loadOaContextsUI();
+
+                if (!currentActiveBotId) {
+                    allCustomers = [];
+                    currentGroups = [];
+                    filteredCustomers = [];
+                    document.getElementById('statusBadge').innerText = '⚠️ กรุณาเลือก LINE OA ก่อนใช้งาน';
+                    renderTable();
+                    renderGroupDropdown();
+                    updateFilterSummaryUI();
+                    return;
+                }
 
                 const [resCust, resGroups, resCampaigns] = await Promise.all([
-                    fetch(`${API_BASE}/customers`),
-                    fetch(`${API_BASE}/groups`),
+                    fetch(`${API_BASE}/customers?botId=${encodeURIComponent(currentActiveBotId)}`),
+                    fetch(`${API_BASE}/groups?botId=${encodeURIComponent(currentActiveBotId)}`),
                     fetch(`${API_BASE}/campaigns`)
                 ]);
 
@@ -530,7 +627,7 @@
 
                 filteredCustomers = [...allCustomers]; 
                 
-                document.getElementById('statusBadge').innerText = `ซิงค์ข้อมูลสำเร็จ: ${allCustomers.length.toLocaleString()} เรคคอร์ด | ${currentGroups.length} กลุ่ม`;
+                document.getElementById('statusBadge').innerText = `ซิงค์ข้อมูลสำเร็จ: ${allCustomers.length.toLocaleString()} เรคคอร์ด | ${currentGroups.length} กลุ่ม (OA: ${currentActiveBotId.substring(0, 8)}...)`;
                 renderTable();
                 renderGroupDropdown();
                 updateFilterSummaryUI();
@@ -716,6 +813,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        botId: currentActiveBotId,
                         name: name,
                         description: desc,
                         targetIds: Array.from(selectedUsers)
@@ -1418,6 +1516,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        botId: currentActiveBotId,
                         name: name,
                         messageType: messageType,
                         message: message,

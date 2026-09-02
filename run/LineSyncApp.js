@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.4
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (REL-WP001 Single-Worker Multi-Tab Lock Active)
+// @version      28.5
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (OA-WP001 OA Isolation & Controlled Switch Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.4';
+    const WORKER_VERSION = '28.5';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -486,13 +486,20 @@
 
     function fetchAPI(endpoint, method = 'GET', data = null) {
         return new Promise((resolve, reject) => {
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-LineSync-Worker-Version': WORKER_VERSION
+            };
+
+            const currentBot = getBotId();
+            if (currentBot && isValidChatContextId(currentBot)) {
+                headers['X-LineSync-OA-Context'] = currentBot;
+            }
+
             const options = {
                 method: method,
                 url: `${API_BASE}${endpoint}`,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-LineSync-Worker-Version': WORKER_VERSION
-                },
+                headers: headers,
                 onload: function(response) {
                     if (response.status >= 200 && response.status < 300) {
                         try { resolve(JSON.parse(response.responseText)); }
@@ -607,6 +614,58 @@
             return null;
         }
         return userId ? `https://chat.line.biz/${botId}/chat/${userId}` : `https://chat.line.biz/${botId}/`;
+    }
+
+    // 🛡️ OA-WP001 OA Context Verification Guard
+    function verifyCurrentOAContext(expectedBotId) {
+        if (!expectedBotId || !isValidChatContextId(expectedBotId)) return false;
+        const currentBot = getBotId();
+        if (!currentBot || !isValidChatContextId(currentBot)) return false;
+        return currentBot === expectedBotId;
+    }
+
+    // 🛡️ OA-WP001 Controlled OA Context Switch (Navigates to active OA if worker is unaligned)
+    async function checkAndExecuteControlledOaSwitch() {
+        const currentBot = getBotId();
+        if (!isValidChatContextId(currentBot)) {
+            console.warn("🛑 [OA] Controlled OA switch skipped: Current browser URL context is not a valid LINE OA.");
+            return false;
+        }
+
+        try {
+            const data = await fetchAPI('/oa/active');
+            if (!data || typeof data !== 'object') {
+                console.warn("🛑 [OA] GET /api/oa/active invalid response. Fail closed.");
+                return false;
+            }
+
+            const activeBotId = data.activeBotId;
+            if (!activeBotId || !isValidChatContextId(activeBotId)) {
+                console.warn("🛑 [OA] Active OA context not selected in backend. Fail closed.");
+                return false;
+            }
+
+            if (currentBot === activeBotId) {
+                return true; // Aligned!
+            }
+
+            // Current OA != Active OA
+            console.warn(`🌐 [OA] CONTROLLED OA SWITCH REQUESTED: Current OA ${currentBot} != Active OA ${activeBotId}`);
+
+            const savedJobId = sessionStorage.getItem('linesync_jobid');
+            if (savedJobId) {
+                console.warn(`🛑 [OA] SWITCH BLOCKED ACTIVE JOB: Saved active job ${savedJobId} exists. Refusing automatic OA navigation switch.`);
+                return false;
+            }
+
+            const targetOaUrl = `https://chat.line.biz/${activeBotId}/`;
+            console.log(`🌐 [OA] CONTROLLED OA SWITCH NAVIGATING to target OA: ${targetOaUrl}`);
+            await navigateAsLeader(targetOaUrl, 'CONTROLLED_OA_SWITCH');
+            return false;
+        } catch (e) {
+            console.warn("🛑 [OA] Controlled OA switch check exception:", e);
+            return false;
+        }
     }
 
     // 🛡️ 1. Explicit 404 & LINE Error Page Detector
@@ -763,6 +822,11 @@
             throw new Error('RECIPIENT_UNVERIFIED');
         }
 
+        if (expectedBotId && !verifyCurrentOAContext(expectedBotId)) {
+            console.error("🛑 [OA] Zero-tolerance image send guard: OA context unverified immediately before clicking image Send button!");
+            throw new Error('OA_CONTEXT_MISMATCH');
+        }
+
         const isImageLeaderConfirmed = await confirmWorkerLeadershipForSend();
         if (!isImageLeaderConfirmed) {
             console.error("🛑 [REL] Leadership check failed immediately before clicking image Send button!");
@@ -792,8 +856,8 @@
         console.log("✅ 4. รูปภาพส่งลงห้องแชตเป็นอันดับแรกเรียบร้อยแล้ว!");
     }
 
-    // 🛡️ ZERO-TOLERANCE TEXT SEND GUARD: Send chat text message with strict expectedUserId check
-    async function sendChatMessage(chatInput, expectedUserId) {
+    // 🛡️ ZERO-TOLERANCE TEXT SEND GUARD: Send chat text message with strict expectedUserId & expectedBotId check
+    async function sendChatMessage(chatInput, expectedUserId, expectedBotId) {
         console.log("🚀 [DEBUG] สั่งส่งข้อความในช่องแชท...");
 
         const isTextLeaderConfirmed = await confirmWorkerLeadershipForSend();
@@ -805,6 +869,11 @@
         if (expectedUserId && !verifyCurrentRecipient(expectedUserId)) {
             console.error("🛑 [SAFETY] Zero-tolerance text send guard: Recipient unverified immediately before text send!");
             throw new Error('RECIPIENT_UNVERIFIED');
+        }
+
+        if (expectedBotId && !verifyCurrentOAContext(expectedBotId)) {
+            console.error("🛑 [OA] Zero-tolerance text send guard: OA context unverified immediately before text send!");
+            throw new Error('OA_CONTEXT_MISMATCH');
         }
 
         const allButtons = deepQuerySelectorAll('button, input[type="submit"], [role="button"], div, span');
@@ -1012,6 +1081,12 @@
             return;
         }
 
+        const isOaAligned = await checkAndExecuteControlledOaSwitch();
+        if (!isOaAligned) {
+            setTimeout(processQueue, CHECK_INTERVAL);
+            return;
+        }
+
         try {
             const job = await fetchAPI('/campaign/next');
             if (job && job.status === 'processing') {
@@ -1021,7 +1096,12 @@
                     return;
                 }
 
-                console.log("📥 ได้คิวส่งหา User ID:", job.userId, "ประเภท:", job.messageType);
+                if (!job.botId || !isValidChatContextId(job.botId) || job.botId !== validBotId) {
+                    console.error(`🛑 [OA] JOB OA CONTEXT MISMATCH: Claimed job botId (${job.botId}) does not match current OA (${validBotId}). Aborting send.`);
+                    return;
+                }
+
+                console.log("📥 ได้คิวส่งหา User ID:", job.userId, "ประเภท:", job.messageType, "OA:", job.botId);
 
                 emitDiagnostic('JOB_RECEIVED', { jobId: job.jobId, userId: job.userId });
 
@@ -1031,6 +1111,7 @@
                 sessionStorage.setItem('linesync_type', job.messageType || 'text');
                 sessionStorage.setItem('linesync_img', job.imageUrl || '');
                 sessionStorage.setItem('linesync_link', job.linkUrl || '');
+                sessionStorage.setItem('linesync_job_botid', job.botId || '');
 
                 const targetUrl = getOAContextUrl(job.userId);
                 if (!targetUrl) {
@@ -1088,6 +1169,13 @@
     async function executeChatBot(jobData) {
         if (!hasValidWorkerLeadership()) {
             handleLeadershipLost('PRE_EXECUTE_CHECK');
+            return;
+        }
+
+        const expectedJobBotId = jobData.botId || sessionStorage.getItem('linesync_job_botid');
+        if (expectedJobBotId && !verifyCurrentOAContext(expectedJobBotId)) {
+            console.error(`🛑 [OA] Zero-tolerance executeChatBot guard: OA mismatch (Expected: ${expectedJobBotId}, Current: ${getBotId()})`);
+            isExecutingJob = false;
             return;
         }
 
@@ -1152,6 +1240,13 @@
                 return;
             }
 
+            if (expectedJobBotId && !verifyCurrentOAContext(expectedJobBotId)) {
+                clearInterval(findAndType);
+                console.error("🛑 [OA] ตรวจพบ OA Context Mismatch ระหว่างค้นหาช่องพิมพ์! ยกเลิกส่งทันที");
+                isExecutingJob = false;
+                return;
+            }
+
             const chatInput = deepQuerySelector('textarea[part="input"]') || deepQuerySelector('textarea');
 
             if (chatInput) {
@@ -1165,6 +1260,12 @@
                 if (!verifyCurrentRecipient(jobData.userId)) {
                     console.error("🛑 [SAFETY] ยืนยันผู้รับไม่ผ่านก่อนเริ่มพิมพ์! ยกเลิกการส่งทันที");
                     await handleSafeRecovery(jobData, 'RECIPIENT_UNVERIFIED');
+                    return;
+                }
+
+                if (expectedJobBotId && !verifyCurrentOAContext(expectedJobBotId)) {
+                    console.error("🛑 [OA] ยืนยัน OA Context ไม่ผ่านก่อนเริ่มพิมพ์! ยกเลิกการส่งทันที");
+                    isExecutingJob = false;
                     return;
                 }
 
@@ -1188,6 +1289,10 @@
                             throw new Error('RECIPIENT_UNVERIFIED');
                         }
 
+                        if (expectedJobBotId && !verifyCurrentOAContext(expectedJobBotId)) {
+                            throw new Error('OA_CONTEXT_MISMATCH');
+                        }
+
                         console.log("📸 1. กำลังแนบรูปภาพส่งขึ้นเป็นอันดับแรก...");
                         const imageData = await fetchImageBlob(jobData.imageUrl);
                         if (imageData && imageData.blob) {
@@ -1208,7 +1313,7 @@
                                 console.log("✅ จำลอง Paste รูปภาพใส่ช่องพิมพ์สำเร็จ!");
                             }
 
-                            await confirmAndCloseImageModal(jobData.userId);
+                            await confirmAndCloseImageModal(jobData.userId, expectedJobBotId);
                         }
                     }
 
@@ -1239,6 +1344,10 @@
                             throw new Error('RECIPIENT_UNVERIFIED');
                         }
 
+                        if (expectedJobBotId && !verifyCurrentOAContext(expectedJobBotId)) {
+                            throw new Error('OA_CONTEXT_MISMATCH');
+                        }
+
                         console.log("✍️ 5. พิมพ์ข้อความ/ลิงก์ลงในช่องแชต...");
                         chatInput.focus();
                         chatInput.click();
@@ -1256,7 +1365,7 @@
 
                         await sleep(1200);
 
-                        await sendChatMessage(chatInput, jobData.userId);
+                        await sendChatMessage(chatInput, jobData.userId, expectedJobBotId);
 
                         await sleep(3000);
                         console.log("✅ ส่งแคมเปญสำเร็จ 100%!");
@@ -1272,6 +1381,17 @@
                     const errReason = e.message || String(e) || 'Error ในกระบวนการพิมพ์';
                     if (errReason.includes('WORKER_LEADERSHIP_LOST')) {
                         handleLeadershipLost('EXECUTE_CHATBOT_THROWN');
+                    } else if (errReason.includes('OA_CONTEXT_MISMATCH')) {
+                        console.error("🛑 [OA] Physical send phase aborted due to OA_CONTEXT_MISMATCH.");
+                        sessionStorage.removeItem('linesync_jobid');
+                        sessionStorage.removeItem('linesync_uid');
+                        sessionStorage.removeItem('linesync_msg');
+                        sessionStorage.removeItem('linesync_type');
+                        sessionStorage.removeItem('linesync_img');
+                        sessionStorage.removeItem('linesync_link');
+                        sessionStorage.removeItem('linesync_job_botid');
+                        isExecutingJob = false;
+                        return;
                     } else if (errReason.includes('RECIPIENT_UNVERIFIED') || errReason.includes('NAVIGATION_404') || errReason.includes('RECIPIENT_MISMATCH')) {
                         await handleSafeRecovery(jobData, errReason);
                     } else {

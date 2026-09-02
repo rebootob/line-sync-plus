@@ -5,6 +5,9 @@ export class Campaign {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  botId: string | null;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
   name: string | null;
 

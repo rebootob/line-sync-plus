@@ -2,7 +2,10 @@ import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn } fro
 
 @Entity('customers') // ชี้ไปที่ตาราง customers ที่มีอยู่แล้ว
 export class Customer {
-  @PrimaryColumn({ type: 'varchar', length: 50 })
+  @PrimaryColumn({ type: 'varchar', length: 64 })
+  botId: string;
+
+  @PrimaryColumn({ type: 'varchar', length: 64 })
   lineUserId: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
@@ -13,9 +16,6 @@ export class Customer {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   statusMessage: string;
-
-  @Column({ type: 'varchar', nullable: true })
-  botId: string;
 
   @Column({ type: 'boolean', default: false })
   isBlocked: boolean;
