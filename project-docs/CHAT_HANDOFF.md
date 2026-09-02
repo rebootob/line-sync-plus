@@ -4,7 +4,7 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: Initial import commit pending
+* HEAD: c1c8369 (feat: initial project import, security audit and control documentation setup)
 * Working Tree: Clean (untracked files configured via .gitignore)
 
 ## Project Purpose
