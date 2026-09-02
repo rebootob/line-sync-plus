@@ -1579,11 +1579,13 @@
     }
 
     async function runCustomerSyncProcess(botId) {
+        const startTime = Date.now();
+
         let banner = document.getElementById('linesync-sync-banner');
         if (!banner) {
             banner = document.createElement('div');
             banner.id = 'linesync-sync-banner';
-            banner.style.cssText = 'position:fixed; top:10px; right:10px; z-index:999999; background:#0f172a; color:#f8fafc; padding:16px 20px; border-radius:12px; font-family:sans-serif; font-size:13px; box-shadow:0 10px 25px rgba(0,0,0,0.5); border:1px solid #334155; min-width:320px;';
+            banner.style.cssText = 'position:fixed; top:10px; right:10px; z-index:999999; background:#0f172a; color:#f8fafc; padding:16px 20px; border-radius:12px; font-family:sans-serif; font-size:13px; box-shadow:0 10px 25px rgba(0,0,0,0.5); border:1px solid #334155; min-width:340px;';
             document.body.appendChild(banner);
         }
 
@@ -1592,21 +1594,22 @@
             banner.style.borderColor = isError ? '#ef4444' : (isComplete ? '#22c55e' : '#3b82f6');
             banner.innerHTML = `
                 <div style="font-weight:bold; font-size:14px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between;">
-                    <span>🔄 LineSync Customer Directory Sync</span>
+                    <span>${isComplete ? '✅ Sync รายชื่อลูกค้าสำเร็จ' : (isError ? '❌ เกิดข้อผิดพลาดในการ Sync' : '🔄 กำลัง Sync รายชื่อลูกค้า...')}</span>
                     <span style="font-size:11px; background:${isError ? '#7f1d1d' : (isComplete ? '#14532d' : '#1e3a8a')}; padding:2px 6px; border-radius:4px;">${isError ? 'ERROR' : (isComplete ? 'PASS' : 'SYNCING')}</span>
                 </div>
                 <div style="line-height:1.5; color:#cbd5e1;">${text}</div>
             `;
         }
 
-        updateUI(`LINE OA Context: <b>${botId.substring(0, 12)}...</b><br>กำลังเริ่มเชื่อมต่อ LINE Contacts API...`);
+        updateUI(`OA: ${botId}<br>กำลังเริ่มเชื่อมต่อ LINE Contacts API...`);
 
+        let contactsFetched = 0;
+        let inserted = 0;
+        let updatedName = 0;
+        let existingUnchanged = 0;
+        let duplicateInSync = 0;
+        let invalid = 0;
         let pagesFetched = 0;
-        let contactsSeen = 0;
-        let totalInserted = 0;
-        let totalUpdated = 0;
-        let totalUnchanged = 0;
-        let totalInvalid = 0;
 
         let nextCursor = null;
         const seenCursors = new Set();
@@ -1622,9 +1625,6 @@
                 }
 
                 pagesFetched++;
-                updateUI(`LINE OA Context: <b>${botId.substring(0, 12)}...</b><br>
-                          หน้า: ${pagesFetched.toLocaleString()} | พบแล้ว: ${contactsSeen.toLocaleString()} คน<br>
-                          DB -> เพิ่มใหม่: ${totalInserted} | อัปเดต: ${totalUpdated} | ไม่เปลี่ยน: ${totalUnchanged}`);
 
                 const resp = await new Promise((resolve) => {
                     GM_xmlhttpRequest({
@@ -1655,7 +1655,7 @@
                 }
 
                 const contacts = resp.contacts || resp.items || resp.data || [];
-                contactsSeen += contacts.length;
+                contactsFetched += contacts.length;
 
                 for (const item of contacts) {
                     const profile = item ? item.profile : null;
@@ -1668,9 +1668,19 @@
                             displayName: (name && typeof name === 'string') ? name.trim() : 'ลูกค้า'
                         });
                     } else {
-                        totalInvalid++;
+                        invalid++;
                     }
                 }
+
+                updateUI(`
+                    OA: <b>${botId.substring(0, 10)}...</b><br>
+                    หน้า: <b>${pagesFetched.toLocaleString()}</b><br>
+                    ดึงแล้ว: <b>${contactsFetched.toLocaleString()}</b><br>
+                    เพิ่มใหม่: <b>${inserted.toLocaleString()}</b><br>
+                    ชื่อเปลี่ยน: <b>${updatedName.toLocaleString()}</b><br>
+                    มีอยู่แล้ว: <b>${existingUnchanged.toLocaleString()}</b><br>
+                    ข้าม/ผิดรูปแบบ: <b>${invalid.toLocaleString()}</b>
+                `);
 
                 if (batchRecords.length >= BATCH_SIZE) {
                     const postRes = await postSyncBatch(botId, batchRecords);
@@ -1679,10 +1689,11 @@
                         updateUI(`❌ ไม่สามารถบันทึกข้อมูลลงฐานข้อมูลได้: ${postRes ? postRes.message : 'Connection Error'}`, false, true);
                         return;
                     }
-                    totalInserted += (postRes.inserted || 0);
-                    totalUpdated += (postRes.updated || 0);
-                    totalUnchanged += (postRes.unchanged || 0);
-                    totalInvalid += (postRes.invalid || 0);
+                    inserted += (postRes.inserted || 0);
+                    updatedName += (postRes.updatedName || 0);
+                    existingUnchanged += (postRes.existingUnchanged || 0);
+                    duplicateInSync += (postRes.duplicateInBatch || 0);
+                    invalid += (postRes.invalid || 0);
                     batchRecords = [];
                 }
 
@@ -1707,22 +1718,35 @@
                     updateUI(`❌ ไม่สามารถบันทึกข้อมูลส่วนสุดท้ายลงฐานข้อมูลได้: ${postRes ? postRes.message : 'Connection Error'}`, false, true);
                     return;
                 }
-                totalInserted += (postRes.inserted || 0);
-                totalUpdated += (postRes.updated || 0);
-                totalUnchanged += (postRes.unchanged || 0);
-                totalInvalid += (postRes.invalid || 0);
+                inserted += (postRes.inserted || 0);
+                updatedName += (postRes.updatedName || 0);
+                existingUnchanged += (postRes.existingUnchanged || 0);
+                duplicateInSync += (postRes.duplicateInBatch || 0);
+                invalid += (postRes.invalid || 0);
                 batchRecords = [];
             }
 
+            let dbTotalAfterSync = 0;
+            try {
+                const custRes = await fetchAPI(`/customers?botId=${encodeURIComponent(botId)}`);
+                dbTotalAfterSync = (custRes && Array.isArray(custRes)) ? custRes.length : 0;
+            } catch (e) {
+                console.warn("⚠️ [SYNC] Could not fetch final customer total from DB.", e);
+            }
+
+            const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+
             updateUI(`
-                <b>✅ ซิงค์รายชื่อลูกค้าสำเร็จ! (PASS)</b><br><br>
-                • LINE OA: <b>${botId.substring(0, 12)}...</b><br>
-                • จำนวนหน้าที่ดึง: <b>${pagesFetched.toLocaleString()}</b><br>
-                • รายชื่อที่พบทั้งหมด: <b>${contactsSeen.toLocaleString()}</b> คน<br>
-                • เพิ่มลูกค้าใหม่ (Insert): <b>${totalInserted.toLocaleString()}</b> คน<br>
-                • อัปเดตชื่อ (Update): <b>${totalUpdated.toLocaleString()}</b> คน<br>
-                • ข้อมูลไม่เปลี่ยนแปลง (Unchanged): <b>${totalUnchanged.toLocaleString()}</b> คน<br>
-                • ข้อมูลไม่ถูกต้อง/ข้าม (Invalid): <b>${totalInvalid.toLocaleString()}</b> คน
+                <div style="margin-bottom:6px;"><b>LINE OA:</b><br>${botId}</div>
+                <div style="margin-bottom:6px;"><b>ดึงจาก LINE:</b> ${contactsFetched.toLocaleString()} รายการ</div>
+                <div style="margin-bottom:6px;"><b>เพิ่มลูกค้าใหม่:</b> ${inserted.toLocaleString()} คน</div>
+                <div style="margin-bottom:6px;"><b>ชื่อเปลี่ยน / อัปเดต:</b> ${updatedName.toLocaleString()} คน</div>
+                <div style="margin-bottom:6px;"><b>มีอยู่แล้ว / ซ้ำกับ DB:</b> ${existingUnchanged.toLocaleString()} คน</div>
+                <div style="margin-bottom:6px;"><b>ซ้ำภายในข้อมูลที่ดึงรอบนี้:</b> ${duplicateInSync.toLocaleString()} รายการ</div>
+                <div style="margin-bottom:6px;"><b>ข้อมูลไม่สมบูรณ์ / ข้าม:</b> ${invalid.toLocaleString()} รายการ</div>
+                <div style="margin-bottom:6px;"><b>จำนวนหน้าที่ดึง:</b> ${pagesFetched.toLocaleString()} หน้า</div>
+                <div style="margin-bottom:6px;"><b>ลูกค้าใน DB หลัง Sync:</b> ${dbTotalAfterSync.toLocaleString()} คน</div>
+                <div><b>เวลาที่ใช้:</b> ${elapsedSeconds} วินาที</div>
             `, true, false);
 
         } catch (err) {

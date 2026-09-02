@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post SYNC-WP001 LINE OA Customer Directory Sync)
+**Last Updated**: 2026-09-02 (Post SYNC-WP001 Refined Reporting Metrics)
 
 ---
 
@@ -33,11 +33,10 @@
 - **Worker Version**: `28.6` (`run/LineSyncApp.js` v28.6).
 - **Backend Required Version**: `28.6` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
-- **Directory Sync Architecture**:
-  - `POST /api/customers/sync-batch` accepts batch array up to 250 customer records.
-  - Enforces loopback IP origin (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`), valid `botId` format (`^U[0-9a-fA-F]{32}$`), `botId === activeBotId`, and Master Bot PAUSED status.
-  - Deduplicates records within batch, inserts new customers, updates changed `displayName`s, preserves unchanged records, and preserves existing block/safety status.
-  - Client Userscript fetches contacts from `chat.line.biz/api/v2/bots/{botId}/contacts` using `credentials: 'include'` and cursor pagination (`response.next`).
+- **Reporting & Metric Contract**:
+  - `POST /api/customers/sync-batch` returns `{ success, received, inserted, updatedName, existingUnchanged, duplicateInBatch, invalid }`.
+  - Client Userscript tracks 9 independent metrics: `contactsFetched`, `inserted`, `updatedName`, `existingUnchanged`, `duplicateInSync`, `invalid`, `pagesFetched`, `dbTotalAfterSync`, `elapsedSeconds`.
+  - Displays live progress banner and final Thai summary modal upon completion.
   - Web Lock `linesync_customer_sync_v1` guarantees single-tab execution.
   - Opaque pagination cursors are never persisted or logged.
 
@@ -49,7 +48,7 @@
   - **UAT-01 (Database Migration / OA Discovery)**: PASS (OA #1: 9,737 total; OA #2: 2,153 total).
   - **UAT-02 (Dashboard OA Isolation)**: PASS (OA #1 displayed only OA #1 customers; OA #2 displayed only OA #2 customers).
   - **UAT-03 (Controlled Dashboard OA Switch)**: PASS (Master Bot must be paused before switch).
-  - **UAT-04 (Controlled Physical LINE OA Switch)**: PASS (Worker v28.5/v28.6 aligned physical OA with activeBotId).
+  - **UAT-04 (Controlled Physical LINE OA Switch)**: PASS (Worker v28.6 aligned physical OA with activeBotId).
   - **UAT-05 (OA #2 Live Send Path)**: PASS (Full send path under OA #2 verified; wrong OA send = 0).
   - **UAT-06 (Cross-OA Queue Isolation)**: PASS (OA #2 worker does not claim OA #1 pending jobs).
 
@@ -85,7 +84,7 @@
 
 ### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.6)
 - Sequential LINE contacts directory sync with Web Lock protection (`linesync_customer_sync_v1`).
-- Controlled OA switch detection and main URL redirect (`checkAndExecuteControlledOaSwitch()`).
+- Granular 9-metric reporting and Thai summary popup.
 
 ---
 

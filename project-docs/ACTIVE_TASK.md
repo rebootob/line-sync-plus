@@ -1,7 +1,7 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: SYNC-WP001 — LINE OA Customer Directory Sync to DB
+ACTIVE_WORK_PACKAGE: SYNC-WP001 — LINE OA Customer Directory Sync to DB (Refined Reporting Metrics)
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner & ChatGPT Control Plane
 TASK_TYPE: FEATURE_IMPLEMENTATION
@@ -26,26 +26,24 @@ TASK_TYPE: FEATURE_IMPLEMENTATION
 
 ---
 
-## 🔍 Confirmed Discovery & Technical Details
+## 🔍 Confirmed Metrics & Reporting Model
 
-1. **LINE OA Contacts API Contract**:
-   - Endpoint: `GET https://chat.line.biz/api/v2/bots/{botId}/contacts?query=&sortKey=DISPLAY_NAME&sortOrder=ASC&filterKey=ALL&limit=20`
-   - Page size: `limit=20`
-   - Pagination mechanism: Opaque runtime cursor `response.next` passed as `&next=<cursor>` in subsequent requests.
-   - Privacy & Security invariant: Opaque cursor values are **NEVER** hardcoded, persisted to DB/session, written to diagnostic logs, or printed in full.
+1. **Independent Sync Metrics**:
+   - `contactsFetched`: Total contact records received from LINE across all pages BEFORE DB deduplication.
+   - `inserted`: Customer did not previously exist under `(botId, lineUserId)` identity and was newly inserted.
+   - `updatedName`: Customer already existed under `botId + lineUserId`, but `displayName` changed and was updated.
+   - `existingUnchanged`: Customer already existed under `botId + lineUserId` and `displayName` was unchanged. (Primary user-facing "มีอยู่แล้ว / ซ้ำกับ DB" count).
+   - `duplicateInSync`: Duplicate `lineUserId` encountered more than once during the SAME sync run. Tracked independently from `existingUnchanged`.
+   - `invalid`: Missing/invalid `profile.userId` or otherwise unusable contact.
+   - `pagesFetched`: Total LINE contacts API pages fetched.
+   - `dbTotalAfterSync`: Final number of Customer records belonging to the synced `botId` after sync completes.
+   - `elapsedSeconds`: Total elapsed sync execution time in seconds.
 
-2. **Directory Identity & Storage Mapping**:
-   - Primary key: Composite `(botId, lineUserId)`.
-   - Contact mapping: `contact.profile.userId` -> `Customer.lineUserId`, `contact.profile.name` -> `Customer.displayName`.
-   - Non-destructive sync: Existing `isBlocked`, `blockReason`, `pictureUrl`, `statusMessage`, `imageUrl`, and `createdAt` safety information are strictly preserved.
-   - Unchanged records are not re-saved to DB. Missing customers from a sync run are never deleted or marked blocked.
+2. **Backend API Contract (`POST /api/customers/sync-batch`)**:
+   - Returns `{ success: true, received, inserted, updatedName, existingUnchanged, duplicateInBatch, invalid }`.
 
-3. **Multi-OA & Safety Invariants**:
-   - 3-way OA alignment gate: `physicalBotId === activeBotId === requestedSyncBotId`.
-   - Master Bot MUST be PAUSED before sync execution.
-   - Exclusive Web Lock `linesync_customer_sync_v1` prevents concurrent sync jobs across browser tabs.
-   - Loopback enforcement: `POST /api/customers/sync-batch` accepts requests strictly from `127.0.0.1`, `::1`, `::ffff:127.0.0.1`.
-   - Max batch size: 250 records per POST request.
+3. **Privacy Invariants**:
+   - Opaque pagination cursors, tokens, cookies, and auth headers are **NEVER** persisted, written to diagnostic logs, or printed.
 
 ---
 

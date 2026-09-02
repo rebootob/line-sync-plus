@@ -53,7 +53,7 @@ Key Operational Goals:
 |                      Tampermonkey Userscript (LineSyncApp.js v28.6)              |
 |                             Running in chat.line.biz                              |
 |                                                                                   |
-|  - LINE OA Customer Directory Sync (SYNC-WP001 READY_FOR_CHATGPT_REVIEW)          |
+|  - LINE OA Directory Sync & 9-Metric Reporting (SYNC-WP001 READY_FOR_REVIEW)      |
 |  - Multi-OA Context Isolation & Identity Fencing (OA-WP001 / R1 CLOSED / PASS)     |
 |  - Single Worker Multi-Tab Lock (REL-WP001 / R1 / R2 CLOSED / PASS)               |
 |  - Document-Lifetime Tab Identity Lock & Clone Defense (ensureTabIdentity)        |
@@ -76,6 +76,7 @@ Key Operational Goals:
 1. **Customer & Group Management**:
    - Multi-OA customer profile synchronization (`(botId, lineUserId)` composite primary key).
    - Full directory synchronization from `chat.line.biz/api/v2/bots/{botId}/contacts` via `POST /api/customers/sync-batch`.
+   - Granular 9-metric directory sync reporting (`contactsFetched`, `inserted`, `updatedName`, `existingUnchanged`, `duplicateInSync`, `invalid`, `pagesFetched`, `dbTotalAfterSync`, `elapsedSeconds`).
    - Tag assignment, group creation, member mapping, and deletion with explicit `botId` scoping.
 2. **Campaign & Queue Engine**:
    - Multi-type campaign dispatching (`text`, `image_only`, `link_only`, `text_link`, `image_link`).
@@ -92,7 +93,7 @@ Key Operational Goals:
 
 The LineSync Plus safety model operates on strict **fail-closed** principles:
 
-- **Customer Directory Sync Hard Fencing (SYNC-WP001 READY_FOR_CHATGPT_REVIEW)**: `POST /api/customers/sync-batch` enforces loopback origin (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`), valid `botId` format (`^U[0-9a-fA-F]{32}$`), `botId === activeBotId`, and Master Bot PAUSED status. Batch size is capped at 250. Client sync is protected by exclusive Web Lock `linesync_customer_sync_v1`. Non-destructive (no customer deletes or status resets). Opaque pagination cursors are never persisted or logged.
+- **Customer Directory Sync Hard Fencing & Metric Integrity (SYNC-WP001 READY_FOR_CHATGPT_REVIEW)**: `POST /api/customers/sync-batch` enforces loopback origin (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`), valid `botId` format (`^U[0-9a-fA-F]{32}$`), `botId === activeBotId`, and Master Bot PAUSED status. Returns exact breakdown `{ success, received, inserted, updatedName, existingUnchanged, duplicateInBatch, invalid }`. Client sync is protected by exclusive Web Lock `linesync_customer_sync_v1`. Non-destructive (no customer deletes or status resets). Opaque pagination cursors are never persisted or logged.
 - **Strict OA Identity Fencing (OA-WP001 / OA-WP001-R1 CLOSED / PASS)**: Terminal fallback reporting requires valid `botId` + `lineUserId` + `status: 'processing'`. Physical send guards in worker require valid `expectedBotId` matching current OA. Saved job recovery reads `linesync_job_botid` and calls `clearLocalActiveJobState()` if missing/invalid. Queue processor enforces `selectedJob.botId === activeBotId` and `targetCampaign.botId === activeBotId`. Group endpoints require valid `?botId=...`.
 - **Single Worker Multi-Tab Lock & Clone Defense (REL-WP001 CLOSED / PASS)**: `ensureWorkerLeadership()` enforces that only ONE active worker tab claims jobs or executes DOM mutations within a browser profile/storage partition.
 - **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path (`/${botId}/chat/${expectedUserId}`) and DOM attribute validation before any text insertion or image send click.
@@ -154,7 +155,7 @@ Over the course of safety hardening, 13 work packages were identified, implement
   - **UAT-04 (Controlled Physical LINE OA Switch)**: PASS (Worker aligned physical OA with activeBotId).
   - **UAT-05 (OA #2 Live Send Path)**: PASS (Full send path under OA #2 verified; wrong OA send = 0).
   - **UAT-06 (Cross-OA Queue Isolation)**: PASS (OA #2 worker does not claim OA #1 pending jobs).
-- **SYNC-WP001**: **READY_FOR_CHATGPT_REVIEW** (Implementation & unit tests 100% complete)
+- **SYNC-WP001**: **READY_FOR_CHATGPT_REVIEW** (Refined 9-metric reporting & unit tests 100% complete)
 
 ---
 

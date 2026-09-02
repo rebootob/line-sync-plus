@@ -4,7 +4,7 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 1d1640080c97b9ff180d0be7ea11da84090a1f6c (docs: close OA-WP001 after live cross-OA UAT)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 696db541c2a4957e149669b1d10f43b5bc542044 (sync: add OA-isolated customer directory sync)
 * Working Tree: Clean (SYNC-WP001 READY_FOR_CHATGPT_REVIEW)
 
 ## Project Purpose
@@ -32,14 +32,19 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
   - Runtime Contract Version: `2`
   - Required Worker Version: `28.6`
 
-## Discovery Findings & Implementation Summary (SYNC-WP001)
+## Refined Metrics & Reporting Implementation Summary (SYNC-WP001)
 
-1. **LINE Contacts API Discovery**:
-   - Endpoint: `GET /api/v2/bots/{botId}/contacts?query=&sortKey=DISPLAY_NAME&sortOrder=ASC&filterKey=ALL&limit=20`
-   - Opaque pagination cursor `response.next`.
-   - Cursor privacy invariant: Cursor values are never hardcoded, persisted, written to diagnostic logs, or printed.
-2. **Backend Sync Batch Endpoint**: `POST /api/customers/sync-batch` accepts batch up to 250 records, requires loopback origin, valid botId format, matching activeBotId, and Master Bot PAUSED. Deduplicates in batch and preserves existing block/safety status.
-3. **Userscript Execution**: Triggered via `#sync-customers` hash navigation, protected by `linesync_customer_sync_v1` Web Lock.
+1. **Independent Metric Contract**:
+   - `contactsFetched`: Total contact records received from LINE across pages.
+   - `inserted`: Newly inserted customers.
+   - `updatedName`: Existing customers with updated `displayName`.
+   - `existingUnchanged`: Existing customers with unchanged `displayName` (Primary "มีอยู่แล้ว / ซ้ำกับ DB").
+   - `duplicateInSync`: Duplicate `lineUserId` encountered in same sync run.
+   - `invalid`: Unusable/invalid contacts.
+   - `pagesFetched`: Total API pages fetched.
+   - `dbTotalAfterSync`: Final customer count in DB for synced `botId`.
+   - `elapsedSeconds`: Total sync execution time.
+2. **Backend Batch Endpoint**: `POST /api/customers/sync-batch` returns `{ success: true, received, inserted, updatedName, existingUnchanged, duplicateInBatch, invalid }`.
 
 ## Exact Recommended Next Step
 

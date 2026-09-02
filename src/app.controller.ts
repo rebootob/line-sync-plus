@@ -206,6 +206,7 @@ export class AppController {
 
     const receivedCount = body.records.length;
     let invalidCount = 0;
+    let duplicateInBatchCount = 0;
 
     const validMap = new Map<string, string>();
     for (const rec of body.records) {
@@ -215,7 +216,9 @@ export class AppController {
       }
       const uid = rec.lineUserId.trim();
       const name = (rec.displayName && typeof rec.displayName === 'string') ? rec.displayName.trim() : 'ลูกค้า';
-      if (!validMap.has(uid)) {
+      if (validMap.has(uid)) {
+        duplicateInBatchCount++;
+      } else {
         validMap.set(uid, name);
       }
     }
@@ -226,8 +229,9 @@ export class AppController {
         success: true,
         received: receivedCount,
         inserted: 0,
-        updated: 0,
-        unchanged: 0,
+        updatedName: 0,
+        existingUnchanged: 0,
+        duplicateInBatch: duplicateInBatchCount,
         invalid: invalidCount,
       };
     }
@@ -280,8 +284,9 @@ export class AppController {
       success: true,
       received: receivedCount,
       inserted: toInsert.length,
-      updated: toUpdate.length,
-      unchanged: unchangedCount,
+      updatedName: toUpdate.length,
+      existingUnchanged: unchangedCount,
+      duplicateInBatch: duplicateInBatchCount,
       invalid: invalidCount,
     };
   }

@@ -976,7 +976,7 @@ describe('AppController', () => {
       }, reqMock, resMock);
 
       expect(res.success).toBe(true);
-      expect(res.updated).toBe(1);
+      expect(res.updatedName).toBe(1);
       expect(res.inserted).toBe(0);
       expect(existingCust.displayName).toBe('ชื่อใหม่');
       expect(saveSpy).toHaveBeenCalled();
@@ -998,8 +998,8 @@ describe('AppController', () => {
       }, reqMock, resMock);
 
       expect(res.success).toBe(true);
-      expect(res.unchanged).toBe(1);
-      expect(res.updated).toBe(0);
+      expect(res.existingUnchanged).toBe(1);
+      expect(res.updatedName).toBe(0);
       expect(res.inserted).toBe(0);
     });
 
@@ -1062,6 +1062,7 @@ describe('AppController', () => {
       expect(res.success).toBe(true);
       expect(res.received).toBe(2);
       expect(res.inserted).toBe(1);
+      expect(res.duplicateInBatch).toBe(1);
       expect(createSpy).toHaveBeenCalledTimes(1);
     });
 
