@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post SEC-WP001 Secret Hygiene Final Closure)
+**Last Updated**: 2026-09-02 (Post OPS-WP001 Runtime Version Gate Implementation)
 
 ---
 
@@ -28,15 +28,13 @@
 
 ---
 
-## 🔒 Security & Secret Hygiene (SEC-WP001 STATUS: CLOSED / PASS)
+## 🛑 Runtime Version Gate (OPS-WP001 STATUS: READY_FOR_CHATGPT_REVIEW)
 
-- **Untracked Secret File**: `telegram-config.json` removed from Git tracking (`git rm --cached`), gitignored by `.gitignore`, local runtime file preserved on disk.
-- **Safe Template**: `telegram-config.example.json` remains tracked without real credentials.
-- **API Token Shield**: `GET /api/telegram/settings` and `POST /api/telegram/settings` return `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
-- **Blank Token Preservation**: Saving settings with empty `botToken` from UI preserves existing stored token on backend.
-- **Dashboard UI Protection**: `botToken` input is never preloaded. Displays placeholder `"Bot Token ตั้งค่าแล้ว — กรอกใหม่เฉพาะเมื่อต้องการเปลี่ยน"` when token is configured.
-- **Credential Rotation**: Compromised historical token was revoked and rotated via `@BotFather` by Project Owner. Telegram live test after rotation = **PASS**.
-- **Test Isolation & Nest DI**: `npm test` verified 100% non-destructive to real local `telegram-config.json`. Production `TelegramService` constructor has 0 parameters for clean NestJS DI resolution. Truthful test count: **28 / 28** passed.
+- **Backend Runtime Contract**: Declared in `src/runtime-version.ts` (`RUNTIME_CONTRACT_VERSION = 1`, `REQUIRED_WORKER_VERSION = '28.3'`).
+- **Endpoint**: `GET /api/runtime/version` returns safe version contract info.
+- **Fail-Closed Queue Gate**: `GET /api/campaign/next` checks `X-LineSync-Worker-Version` header before any DB query or job claim. Returns HTTP 409 Conflict if header is missing or incompatible.
+- **Client Automation Worker v28.3**: `run/LineSyncApp.js` v28.3 sends `X-LineSync-Worker-Version: 28.3` header on all API calls and performs `checkRuntimeCompatibility()` before processing queue or resuming active jobs on page load.
+- **Dashboard Operator Visibility**: Displays `Runtime Contract: v1 | Required Worker: v28.3` badge in dashboard header.
 
 ---
 
@@ -47,12 +45,13 @@
 - Timezone-safe local timestamp handling using `TIMESTAMP WITHOUT TIME ZONE` and epoch millisecond comparison (`Date.now()`).
 
 ### 2. NestJS REST API (`src/app.controller.ts`)
-- REST API endpoints for customer list, grouping, multi-type campaign creation, job dispatch queue (`GET /api/campaign/next`), Telegram setting APIs (secure shape), and trusted loopback browser diagnostic event logger (`POST /api/diagnostics/browser-event`).
+- REST API endpoints for customer list, grouping, multi-type campaign creation, job dispatch queue with fail-closed version gate (`GET /api/campaign/next`), Telegram setting APIs (secure shape), runtime info (`GET /api/runtime/version`), and trusted loopback browser diagnostic event logger (`POST /api/diagnostics/browser-event`).
 
 ### 3. Web Dashboard (`index.html`)
-- Interactive dashboard UI with toolbar search, status/name filters, quick selection shortcuts (`✅ เลือกเฉพาะ Active ทั้งหมด`, `🎯 เลือก 100 คนแรก`, `🧹 ล้างการเลือก`), schedule management, deep analytics, and secure Telegram setting modal.
+- Interactive dashboard UI with toolbar search, status/name filters, quick selection shortcuts, schedule management, deep analytics, secure Telegram setting modal, and runtime version contract indicator.
 
-### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.2)
+### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.3)
+- Fail-closed runtime version handshake (`checkRuntimeCompatibility()`).
 - Strict OA context validation (`isValidChatContextId` testing `/^U[0-9a-fA-F]{32}$/`).
 - Fail-closed context navigation (`getOAContextUrl` returns `null` when context is missing/invalid).
 - Active job preservation during missing context (`handleSafeRecovery` preserves session parameters without calling `finishJob` or incrementing `retryCount`).
@@ -64,7 +63,10 @@
 
 ---
 
-## 🚀 Next Approved Work Package
+## 🚀 Active / Next Work Packages
 
-- **Next Work Package**: `OPS-WP001 — Runtime Version Gate`
-- **Status**: `READY / NOT STARTED`
+- **Active Work Package**: `OPS-WP001 — Runtime Version Gate` (`READY_FOR_CHATGPT_REVIEW`)
+- **Next Work Packages**:
+  - `REL-WP001`: `NOT STARTED`
+  - `REL-WP002`: `NOT STARTED`
+  - `REL-WP003`: `NOT STARTED`

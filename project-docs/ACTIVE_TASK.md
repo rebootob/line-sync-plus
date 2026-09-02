@@ -2,46 +2,48 @@
 
 ```yaml
 ACTIVE_WORK_PACKAGE: OPS-WP001 — Runtime Version Gate
-STATUS: READY_NOT_STARTED
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: ChatGPT / Control Plane
 TASK_TYPE: OPERATIONAL_HARDENING
 ```
 
 ---
 
-## 📋 Completed Work Package Summary: SEC-WP001 (CLOSED / PASS)
+## 📋 Completed Work Package Summary: OPS-WP001
 
-### Security Closure Details:
-- **SEC-WP001 — Secret Hygiene**: **CLOSED / PASS**
-- **SEC-WP001-R1 — Test Isolation Corrective**: **CLOSED / PASS**
-- **SEC-WP001-R2 — Nest DI Regression Corrective**: **CLOSED / PASS**
-
-### Human Security Evidence & Acceptance:
-1. **Compromised Telegram Token Revocation & Rotation**:
-   - The compromised Telegram Bot Token exposed in historical commits was revoked and rotated via `@BotFather` by the Project Owner.
-   - The new token is configured locally on disk only (`telegram-config.json`) and is **NEVER** tracked or committed to Git.
-   - Telegram Settings Save succeeded cleanly.
-   - Telegram Test = **PASS** (Test message delivered successfully to Telegram).
-   - No token value is recorded in Git or documentation.
-2. **Secret File Untracking**:
-   - `telegram-config.json` untracked from Git tracking (`git rm --cached`).
-   - `telegram-config.json` remains gitignored by `.gitignore` for local runtime execution.
-   - Safe template `telegram-config.example.json` remains tracked.
-3. **API & UI Token Shield**:
-   - `GET /api/telegram/settings` and `POST /api/telegram/settings` return safe shape `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
-   - Blank/empty `botToken` supplied from UI preserves existing configured token on backend.
-   - Dashboard UI modal displays safe placeholder `"Bot Token ตั้งค่าแล้ว — กรอกใหม่เฉพาะเมื่อต้องการเปลี่ยน"`.
-4. **Test Isolation & Nest DI Corrective**:
-   - Unit tests use `process.cwd()` spy pointing to temporary directories (`os.tmpdir()`), ensuring `npm test` never reads/writes the repository-root `telegram-config.json` (SHA256 hash verified 100% unchanged).
-   - Reverted `TelegramService` constructor back to zero parameters (`constructor() { this.loadConfig(); }`), resolving NestJS DI provider resolution cleanly.
-   - Truthful test count: **28 / 28** Jest unit tests passing cleanly.
-5. **Git History Assessment**:
-   - Historical Git rewrite was **NOT** performed. This is acceptable because the exposed credential in historical Git was revoked and is no longer valid.
+### Implemented Operational Version Gate Controls:
+1. **Backend Runtime Contract (`src/runtime-version.ts`)**:
+   - Declared `RUNTIME_CONTRACT_VERSION = 1` and `REQUIRED_WORKER_VERSION = '28.3'`.
+2. **Backend Runtime Version Endpoint (`GET /api/runtime/version`)**:
+   - Exposes safe contract info `{ runtimeContractVersion: 1, requiredWorkerVersion: "28.3" }` without exposing system paths or secrets.
+3. **Fail-Closed Gate on `GET /api/campaign/next`**:
+   - Reads `X-LineSync-Worker-Version` header at the VERY BEGINNING of `getNextJob()` before querying or mutating any `CampaignJob` or `Campaign`.
+   - If missing or header != `'28.3'`, immediately blocks job claim with HTTP 409 Conflict (`{ status: "version_mismatch", requiredWorkerVersion: "28.3" }`).
+   - Rejection occurs BEFORE job selection, claim status mutation, counter increment, or recipient payload disclosure.
+4. **Tampermonkey Worker v28.3 (`run/LineSyncApp.js`)**:
+   - Metadata updated `@version 28.3`.
+   - Declared constant `const WORKER_VERSION = '28.3'`.
+   - `fetchAPI()` automatically sends header `X-LineSync-Worker-Version: WORKER_VERSION`.
+   - Added `checkRuntimeCompatibility()` performing handshake against `/api/runtime/version`.
+   - Gate in `processQueue()` blocks fetching `/campaign/next` if compatibility check fails.
+   - Page-load active job recovery requires runtime compatibility PASS before resuming saved job. If incompatible, active job session state is safely preserved without finishing/failing or executing.
+5. **Dashboard Visibility (`index.html`)**:
+   - Displays non-intrusive badge `Runtime Contract: v1 | Required Worker: v28.3` fetched dynamically via `loadRuntimeVersionUI()`.
+6. **Deployment Rollout Safety Order**:
+   - **Step 1**: Pause campaign / ensure no active campaign job.
+   - **Step 2**: Deploy Backend runtime gate requiring worker `28.3`.
+   - **Step 3**: Update Tampermonkey worker to v28.3.
+   - **Step 4**: Verify runtime compatibility PASS.
+   - **Step 5**: Resume campaign operation.
+   - *Deployment Safety Note*: OPS-WP001 cannot retroactively stop a message that an OLD worker already physically started sending before deployment.
 
 ---
 
-## 🚀 Next Approved Work Package
+## ⛔ Execution Policy
 
-- **Next Gate**: `OPS-WP001 — Runtime Version Gate`
-- **Status**: `READY / NOT STARTED`
-- **Instruction**: Do NOT start `OPS-WP001` implementation until explicitly authorized by Project Owner.
+- **Work Package Status**: `READY_FOR_CHATGPT_REVIEW` (Do NOT mark CLOSED yet).
+- **Next Work Packages**:
+  - `REL-WP001`: `NOT STARTED`
+  - `REL-WP002`: `NOT STARTED`
+  - `REL-WP003`: `NOT STARTED`
+- **Next Step**: Await review and authorization from ChatGPT / Control Plane.

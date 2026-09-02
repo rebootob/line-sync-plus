@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-**LineSync Plus** is an automated customer contact synchronization, group segmentation, and broadcast campaign management platform operating against the **LINE Official Account (LINE OA)** Web Interface (`chat.line.biz`). The system consists of a NestJS backend REST API, a single-page HTML web dashboard, a PostgreSQL database, and a client-side Tampermonkey automation script (`run/LineSyncApp.js` v28.2).
+**LineSync Plus** is an automated customer contact synchronization, group segmentation, and broadcast campaign management platform operating against the **LINE Official Account (LINE OA)** Web Interface (`chat.line.biz`). The system consists of a NestJS backend REST API, a single-page HTML web dashboard, a PostgreSQL database, and a client-side Tampermonkey automation script (`run/LineSyncApp.js` v28.3).
 
 This document serves as the master source-of-truth for project architecture, safety models, complete 10-package incident corrective history, live UAT evidence, technical debt, secret hygiene mandates, and the Phase 0–5 development roadmap.
 
@@ -53,7 +53,7 @@ Key Operational Goals:
 
 +-----------------------------------------------------------------------------------+
 |                          Client Automation & Observability                        |
-|                      Tampermonkey Userscript (LineSyncApp.js v28.2)              |
+|                      Tampermonkey Userscript (LineSyncApp.js v28.3)              |
 |                             Running in chat.line.biz                              |
 |                                                                                   |
 |  - Strict OA Context Validator (isValidChatContextId)                             |
@@ -73,7 +73,7 @@ Key Operational Goals:
    - Tag assignment, group creation, member mapping, and deletion.
 2. **Campaign & Queue Engine**:
    - Multi-type campaign dispatching (`text`, `image_only`, `link_only`, `text_link`, `image_link`).
-   - Atomic job queue handling via `GET /api/campaign/next` with status reporting (`/campaign/success`, `/campaign/fail`, `/campaign/stop`).
+   - Atomic job queue handling via `GET /api/campaign/next` with status reporting (`/campaign/success`, `/campaign/fail`, `/campaign/stop`) and fail-closed runtime version gate (`X-LineSync-Worker-Version`).
    - Local timezone scheduling support.
 3. **Telegram Notification Subsystem**:
    - Formatted HTML campaign progress and completion summary reporting via Telegram Bot API.
@@ -87,6 +87,7 @@ Key Operational Goals:
 The LineSync Plus safety model operates on strict **fail-closed** principles to eliminate risks of context loss or misdirection:
 
 - **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path (`/${botId}/chat/${expectedUserId}`) and DOM attribute validation before any text insertion or image send click.
+- **Fail-Closed Runtime Version Gate (OPS-WP001)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.3'` before querying or claiming any job.
 - **Full-Lifecycle Execution Lock**: `isExecutingJob` remains active across the entire job lifecycle (navigation verification -> input discovery -> payload preparation -> recipient re-verification -> send -> terminal job report) preventing re-entrant duplicate sends.
 - **Circuit Breaker**: Halts campaign execution automatically if 10 consecutive system errors occur (`sessionStorage.setItem('linesync_consecutive_errors', ...)`).
 - **Quota Limit Protection**: Detects LINE OA quota limit alerts on-screen and immediately stops campaign processing without recording system errors.
@@ -145,6 +146,7 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - **BUG-WP001**: **CLOSED**
 - **BUG-WP001-UATLOG**: **CLOSED**
 - **BUG-WP002**: **CLOSED**
+- **SEC-WP001**: **CLOSED**
 - **83-recipient baseline UAT**: 83 targets / 80 success / 3 blocked / no observed 404
 - **UAT-1100 Campaign Evidence (LineSyncApp v28.2)**:
   - Target = 1,100
@@ -165,16 +167,7 @@ Over the course of safety hardening, 10 corrective work packages were identified
 ### Secret Hygiene P0 Mandate (`SEC-WP001` STATUS: COMPLETED / CLOSED)
 - **CRITICAL**: The repository `rebootob/line-sync-plus` is **PUBLIC**.
 - **PROHIBITED**: Under no circumstances may `.env` files, API keys, passwords, database credentials, access tokens, refresh tokens, private keys, or LINE channel secrets be committed or pushed to Git.
-- **SEC-WP001 Final Closure**:
-  - `telegram-config.json` untracked from Git main (`git rm --cached`).
-  - Local runtime config `telegram-config.json` preserved on disk and gitignored by `.gitignore`.
-  - Safe template `telegram-config.example.json` remains tracked without real credentials.
-  - `GET /api/telegram/settings` and `POST /api/telegram/settings` return `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
-  - Blank `botToken` supplied from UI preserves existing stored token on backend.
-  - **Test Isolation & DI Corrective**: Unit tests in `src/app.controller.spec.ts` use temporary `os.tmpdir()` config files; production `TelegramService` constructor has zero parameters for NestJS DI compatibility.
-  - Current tracked files scan confirmed **0** Telegram-token-like matches.
-  - Compromised historical token was **revoked and rotated** via `@BotFather` by Project Owner. Live Telegram test after rotation = **PASS**.
-  - Historical Git rewrite was **NOT** performed; historical revoked credential is no longer valid.
+- **SEC-WP001 Status**: Untracked secret `telegram-config.json` from Git. Compromised token revoked and rotated via `@BotFather` by Project Owner. Live Telegram test after rotation = **PASS**.
 
 ### Technical Debt Items
 - Database credentials currently reside in local `.env` (gitignored). Production setup requires secure environment secret injection.
@@ -193,7 +186,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 - **Phase 0 — Security & Reliability Foundation**: **IN PROGRESS**
   - Safety hardening (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002`, `BUG-WP002-R1`): **COMPLETED**
   - `SEC-WP001` (Secret Hygiene): **COMPLETED / CLOSED**
-  - `OPS-WP001` (Runtime Version Gate): **READY / NOT STARTED**
+  - `OPS-WP001` (Runtime Version Gate): **READY_FOR_CHATGPT_REVIEW**
   - `REL-WP001`: **NOT STARTED**
   - `REL-WP002`: **NOT STARTED**
   - `REL-WP003`: **NOT STARTED**
@@ -208,10 +201,10 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
+   - Operational runtime version gate (`OPS-WP001` READY_FOR_CHATGPT_REVIEW).
    - Secret hygiene & test isolation (`SEC-WP001` COMPLETED / CLOSED).
    - Fail-closed recipient verification & OA context validation (Completed in WP001/WP002).
 2. **P1 (Observability & Operational Hardening)**:
-   - `OPS-WP001` Runtime Version Gate (READY / NOT STARTED).
    - Real-time diagnostic event stream UI widget in Dashboard.
 3. **P2 (Analytics & Automation)**:
    - Automated Telegram alert on session expiry / auth loss.
@@ -221,25 +214,26 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 13. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 (BUG-WP002-R1).
-- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, and fail-closed state preservation.
+- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 (OPS-WP001).
+- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, and fail-closed runtime version gates.
 
 ---
 
 ## 14. Recommended Next Work Packages
 
-- **OPS-WP001**: Runtime Version Gate (**READY / NOT STARTED**).
+- **OPS-WP001**: Runtime Version Gate (**READY_FOR_CHATGPT_REVIEW**).
+- **REL-WP001**: Single-Worker Execution Lock / Multi-Tab Defense (**NOT STARTED**).
 - **WP-UI-LOGS**: Implement browser diagnostic log viewer tab in single-page dashboard.
-- **WP-AUTH-ALERT**: Implement session disconnect & re-authentication alert via Telegram.
 
 ---
 
 ## 15. Success Metrics
 
 - **Zero Misdeliveries**: 0% message delivery to wrong recipients.
+- **Zero Incompatible Worker Claims**: 0 campaign jobs claimed by outdated browser workers.
 - **Zero Poisoning Loops**: 0 infinite 404 redirect loops on invalid bot IDs.
 - **100% Spool Integrity**: 0 lost navigation diagnostic events during page transitions.
-- **100% Test Pass Rate**: All Jest unit tests (28/28) passing cleanly.
+- **100% Test Pass Rate**: All Jest unit tests (33/33) passing cleanly.
 
 ---
 
@@ -254,5 +248,5 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-The project is currently at Phase 0 (Security & Reliability Foundation) with SEC-WP001 COMPLETED and CLOSED.
-Next Action: Await explicit Project Owner authorization before starting `OPS-WP001 — Runtime Version Gate`.
+The project is currently at Phase 0 (Security & Reliability Foundation) with OPS-WP001 implemented and READY_FOR_CHATGPT_REVIEW.
+Next Action: Await ChatGPT Control Plane review of OPS-WP001 implementation.

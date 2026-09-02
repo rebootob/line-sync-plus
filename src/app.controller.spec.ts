@@ -433,6 +433,84 @@ describe('AppController', () => {
       expect(resolvedService).toBeInstanceOf(TelegramService);
     });
   });
+
+  describe('OPS-WP001 — Fail-Closed Runtime Version Gate Tests', () => {
+    let mockRes: any;
+
+    beforeEach(() => {
+      mockRes = {
+        statusCode: 200,
+        status: jest.fn().mockImplementation((code: number) => {
+          mockRes.statusCode = code;
+          return mockRes;
+        }),
+      };
+    });
+
+    it('1. GET /api/runtime/version returns contract version 1 and required worker version 28.3', () => {
+      const res = appController.getRuntimeVersion();
+      expect(res).toEqual({
+        runtimeContractVersion: 1,
+        requiredWorkerVersion: '28.3',
+      });
+    });
+
+    it('2. GET /api/campaign/next with NO worker-version header -> BLOCKED / 409 Conflict', async () => {
+      const findSpy = jest.spyOn(mockCampaignJobRepo, 'find');
+      findSpy.mockClear();
+
+      const res = await appController.getNextJob(undefined, mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(res).toEqual({
+        status: 'version_mismatch',
+        requiredWorkerVersion: '28.3',
+      });
+      // Prove version gate executes BEFORE job query/claim logic
+      expect(findSpy).not.toHaveBeenCalled();
+    });
+
+    it('3. GET /api/campaign/next with WRONG worker version ("28.2") -> BLOCKED / 409 Conflict', async () => {
+      const findSpy = jest.spyOn(mockCampaignJobRepo, 'find');
+      findSpy.mockClear();
+
+      const res = await appController.getNextJob('28.2', mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(res).toEqual({
+        status: 'version_mismatch',
+        requiredWorkerVersion: '28.3',
+      });
+      expect(findSpy).not.toHaveBeenCalled();
+    });
+
+    it('4. Version rejection happens BEFORE job claim/mutation (No DB query/save performed)', async () => {
+      const findJobSpy = jest.spyOn(mockCampaignJobRepo, 'find');
+      const saveJobSpy = jest.spyOn(mockCampaignJobRepo, 'save');
+      const saveCampSpy = jest.spyOn(mockCampaignRepo, 'save');
+
+      findJobSpy.mockClear();
+      saveJobSpy.mockClear();
+      saveCampSpy.mockClear();
+
+      await appController.getNextJob('27.0', mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(findJobSpy).not.toHaveBeenCalled();
+      expect(saveJobSpy).not.toHaveBeenCalled();
+      expect(saveCampSpy).not.toHaveBeenCalled();
+    });
+
+    it('5. GET /api/campaign/next with EXACT version ("28.3") -> reaches normal job claim logic', async () => {
+      const findSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
+
+      const res = await appController.getNextJob('28.3', mockRes);
+
+      expect(mockRes.statusCode).toBe(200);
+      expect(findSpy).toHaveBeenCalled();
+      expect(res).toEqual({ status: 'empty' });
+    });
+  });
 });
 
 

@@ -4,12 +4,12 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 02b1942e6bb28e386f969081dabdb3726f269424 (test(security): isolate config tests without changing Nest DI)
-* Working Tree: Clean (SEC-WP001 documentation closure completed)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 6d4798b00103fb675d403905ec0f22b36feaeadf (docs: close SEC-WP001 after Telegram credential rotation)
+* Working Tree: Clean (OPS-WP001 implementation completed)
 
 ## Project Purpose
 
-LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.2) running inside `chat.line.biz` to send multi-type messages, manage quotas, handle blocks/errors safely, report detailed summary reports to Telegram, and persist atomic, navigation-safe browser diagnostic events to local backend logs.
+LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.3) running inside `chat.line.biz` to send multi-type messages, manage quotas, handle blocks/errors safely, report detailed summary reports to Telegram, and persist atomic, navigation-safe browser diagnostic events to local backend logs.
 
 ## Technology Stack
 
@@ -19,39 +19,44 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
 - **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
-## Security Work Package Final Closure: SEC-WP001 (CLOSED / PASS)
+## Work Package Status: OPS-WP001 — Runtime Version Gate
 
-* **SEC-WP001 Status**: **CLOSED / PASS**
-* **SEC-WP001-R1 Status**: **CLOSED / PASS**
-* **SEC-WP001-R2 Status**: **CLOSED / PASS**
+* **Status**: `READY_FOR_CHATGPT_REVIEW`
+* **Key Implementation Details**:
+  1. Created `src/runtime-version.ts` declaring `RUNTIME_CONTRACT_VERSION = 1` and `REQUIRED_WORKER_VERSION = '28.3'`.
+  2. Exposed `GET /api/runtime/version` returning safe runtime version info.
+  3. Added fail-closed gate at the VERY BEGINNING of `GET /api/campaign/next` validating `X-LineSync-Worker-Version` header before querying/mutating any job or campaign. Missing/incompatible version returns HTTP 409 Conflict.
+  4. Updated Tampermonkey worker `run/LineSyncApp.js` to `@version 28.3` with `WORKER_VERSION = '28.3'`.
+  5. Configured `fetchAPI()` to attach `X-LineSync-Worker-Version: WORKER_VERSION` header automatically.
+  6. Added `checkRuntimeCompatibility()` handshake function in worker.
+  7. Added version gate in `processQueue()` and page-load active job recovery (preserves saved job safely if incompatible).
+  8. Displayed minimal runtime contract visibility in Dashboard UI (`index.html`).
+  9. Added 5 focused Jest unit tests in `src/app.controller.spec.ts` covering missing header rejection, wrong version rejection, pre-claim rejection timing, and valid version execution.
+  10. All 33 Jest unit tests passing cleanly; `node --check run/LineSyncApp.js` PASS; Nest build PASS.
 
-### Key Verified Results:
-1. Untracked secret config file `telegram-config.json` from Git (`git rm --cached`).
-2. Preserved local runtime `telegram-config.json` on disk (gitignored by `.gitignore`).
-3. Safe template `telegram-config.example.json` remains tracked.
-4. `GET /api/telegram/settings` and `POST /api/telegram/settings` return safe shape `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
-5. Blank `botToken` supplied from Dashboard UI preserves existing stored token on backend.
-6. Unit tests fully isolated using `process.cwd()` spy pointing to temporary `os.tmpdir()` config directories (`npm test` SHA256 verified 100% non-destructive).
-7. Reverted production `TelegramService` constructor to zero parameters, resolving NestJS DI provider resolution cleanly.
-8. Compromised historical Telegram Bot Token was revoked and rotated via `@BotFather` by Project Owner.
-9. Live Telegram Test after rotation = **PASS** (Test message delivered successfully).
-10. Truthful test count: **28 / 28** Jest unit tests passing cleanly.
-11. Git history rewrite was NOT performed; revoked historical credential is no longer valid.
+## Deployment Rollout Safety Order
+
+1. Pause / ensure no active campaign job.
+2. Deploy Backend runtime gate requiring worker 28.3.
+3. Update Tampermonkey worker to v28.3.
+4. Verify runtime compatibility PASS.
+5. Resume campaign operation.
+
+*Deployment Safety Note*: OPS-WP001 cannot retroactively stop a message that an OLD worker already physically started sending before deployment.
 
 ## Current State
 
-Fully functional, hardened, and secured. Verified via `npm test` (28/28 tests passed), `npm run build` (clean NestJS build), `git diff --check` (clean exit code 0), and `git ls-files telegram-config.json` (NO OUTPUT).
+Fully functional and verified via `npm test` (33/33 tests passed), `npm run build` (clean NestJS build), `node --check run/LineSyncApp.js` (clean syntax), `git diff --check` (clean exit code 0), and `git ls-files telegram-config.json` (NO OUTPUT).
 
 ## Relevant Files
 
-- `src/telegram.service.ts`: Secret mask, getSafeConfig, saveConfig blank token preservation, zero-parameter DI constructor.
-- `src/app.controller.ts`: GET /api/telegram/settings returns getSafeConfig().
-- `index.html`: Telegram modal input token masking & placeholder indicator.
-- `src/app.controller.spec.ts`: Isolated unit test suite covering SEC-WP001 requirements and Nest DI smoke test.
+- `src/runtime-version.ts`: Runtime contract constant declarations.
+- `src/app.controller.ts`: GET /api/runtime/version and GET /api/campaign/next fail-closed version gate.
+- `run/LineSyncApp.js`: v28.3 worker, WORKER_VERSION header, checkRuntimeCompatibility handshake.
+- `index.html`: Operator visibility badge.
+- `src/app.controller.spec.ts`: Unit test suite for version gate.
 - `project-docs/ACTIVE_TASK.md`, `project-docs/CHAT_HANDOFF.md`, `project-docs/CURRENT_STATE.md`, `project-docs/PROJECT_STATUS_ROADMAP.md`.
 
-## Next Work Package Assignment
+## Exact Recommended Next Step
 
-* **Next Work Package**: `OPS-WP001 — Runtime Version Gate`
-* **Status**: `READY / NOT STARTED`
-* **Authorization Required**: Await explicit Project Owner authorization before starting implementation.
+Await ChatGPT / Project Owner review of OPS-WP001 implementation on GitHub repository `rebootob/line-sync-plus`.

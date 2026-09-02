@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.2
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP002-R1 Preserve Active Job When OA Context Unavailable)
+// @version      28.3
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (OPS-WP001 Runtime Version Gate Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -11,6 +11,7 @@
 (function() {
     'use strict';
 
+    const WORKER_VERSION = '28.3';
     const API_BASE = 'http://localhost:3005/api';
     const CHECK_INTERVAL = 4000;
     const MAX_RETRIES = 2;
@@ -29,7 +30,7 @@
     let isExecutingJob = false;
     let isFlushingSpool = false;
 
-    console.log("🤖 LineSync Plus Bot v28.2: พร้อมทำงาน (BUG-WP002-R1 Active)...");
+    console.log(`🤖 LineSync Plus Bot v${WORKER_VERSION}: พร้อมทำงาน (OPS-WP001 Active)...`);
 
     // 🛡️ Strict LINE Chat OA Context ID Validator (^U + 32 hex chars)
     function isValidChatContextId(value) {
@@ -88,7 +89,7 @@
                 _sqId: sqId,
                 clientTimestamp: payload.clientTimestamp || new Date().toISOString(),
                 event: String(payload.event || 'UNKNOWN').slice(0, 50),
-                scriptVersion: '28.2',
+                scriptVersion: WORKER_VERSION,
                 tabSessionId: getTabSessionId(),
                 jobId: String(payload.jobId || '').slice(0, 100),
                 expectedUserId: String(payload.expectedUserId || payload.userId || '').slice(0, 100),
@@ -160,7 +161,7 @@
             const payload = {
                 clientTimestamp: context.clientTimestamp || new Date().toISOString(),
                 event: eventName,
-                scriptVersion: '28.2',
+                scriptVersion: WORKER_VERSION,
                 tabSessionId: getTabSessionId(),
                 jobId: jobId,
                 expectedUserId: context.expectedUserId || context.userId || sessionStorage.getItem('linesync_uid') || '',
@@ -187,11 +188,17 @@
             const options = {
                 method: method,
                 url: `${API_BASE}${endpoint}`,
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-LineSync-Worker-Version': WORKER_VERSION
+                },
                 onload: function(response) {
                     if (response.status >= 200 && response.status < 300) {
                         try { resolve(JSON.parse(response.responseText)); }
                         catch (e) { resolve(response.responseText); }
+                    } else if (response.status === 409) {
+                        try { resolve(JSON.parse(response.responseText)); }
+                        catch (e) { resolve({ status: 'version_mismatch', requiredWorkerVersion: WORKER_VERSION }); }
                     } else {
                         reject(`Error: ${response.status}`);
                     }
@@ -201,6 +208,43 @@
             if (data) options.data = JSON.stringify(data);
             GM_xmlhttpRequest(options);
         });
+    }
+
+    let isRuntimeCompatible = false;
+    let lastCompatibilityCheckTime = 0;
+    let isCompatibilityWarningShown = false;
+
+    // 🛡️ WORKER RUNTIME HANDSHAKE (OPS-WP001 Fail-Closed Version Gate)
+    async function checkRuntimeCompatibility() {
+        const now = Date.now();
+        if (isRuntimeCompatible && (now - lastCompatibilityCheckTime < 10000)) {
+            return true;
+        }
+
+        try {
+            const res = await fetchAPI('/runtime/version');
+            if (res && res.requiredWorkerVersion === WORKER_VERSION) {
+                isRuntimeCompatible = true;
+                lastCompatibilityCheckTime = now;
+                isCompatibilityWarningShown = false;
+                return true;
+            } else {
+                isRuntimeCompatible = false;
+                const requiredVer = (res && res.requiredWorkerVersion) ? res.requiredWorkerVersion : 'UNKNOWN';
+                if (!isCompatibilityWarningShown) {
+                    console.warn(`🛑 [OPS] RUNTIME VERSION BLOCKED: Worker ${WORKER_VERSION} is incompatible with required backend version ${requiredVer}`);
+                    isCompatibilityWarningShown = true;
+                }
+                return false;
+            }
+        } catch (e) {
+            isRuntimeCompatible = false;
+            if (!isCompatibilityWarningShown) {
+                console.warn(`🛑 [OPS] RUNTIME VERSION BLOCKED: Unable to reach /runtime/version endpoint`);
+                isCompatibilityWarningShown = true;
+            }
+            return false;
+        }
     }
 
     function deepQuerySelector(selector, root = document) {
@@ -646,6 +690,11 @@
             return;
         }
 
+        const isCompatible = await checkRuntimeCompatibility();
+        if (!isCompatible) {
+            return;
+        }
+
         try {
             const job = await fetchAPI('/campaign/next');
             if (job && job.status === 'processing') {
@@ -949,7 +998,7 @@
         emitDiagnostic('BOT_START');
         flushPendingDiagnostics().catch(() => {});
 
-        setTimeout(() => {
+        setTimeout(async () => {
             const savedJobId = sessionStorage.getItem('linesync_jobid');
             const savedMsg = sessionStorage.getItem('linesync_msg');
             const savedUid = sessionStorage.getItem('linesync_uid');
@@ -967,6 +1016,12 @@
             } : null;
 
             if (savedJobData) {
+                const isCompatible = await checkRuntimeCompatibility();
+                if (!isCompatible) {
+                    console.warn("🛑 [OPS] Page-load active job resumption blocked: Runtime compatibility check failed. Preserving active job session safely.");
+                    return;
+                }
+
                 emitDiagnostic('PAGE_LOAD_ACTIVE_JOB', { jobId: savedJobData.jobId, userId: savedJobData.userId });
 
                 if (checkIfErrorPage()) {

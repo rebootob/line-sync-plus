@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, NotFoundException, Res, Req } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, NotFoundException, Res, Req, Headers, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import type { Request, Response } from 'express';
@@ -10,6 +10,7 @@ import { CustomerGroupMember } from './entities/customer-group-member.entity';
 import { Campaign } from './entities/campaign.entity';
 import { CampaignJob } from './entities/campaign-job.entity';
 import { TelegramService, TelegramConfig } from './telegram.service';
+import { RUNTIME_CONTRACT_VERSION, REQUIRED_WORKER_VERSION } from './runtime-version';
 
 @Controller('api')
 export class AppController {
@@ -269,9 +270,29 @@ export class AppController {
     return { success: true, enabled: AppController.isBotEnabled };
   }
 
+  // API สำหรับตรวจสอบเวอร์ชัน Runtime Contract และ Worker Version ที่ต้องการ (OPS-WP001)
+  @Get('runtime/version')
+  getRuntimeVersion() {
+    return {
+      runtimeContractVersion: RUNTIME_CONTRACT_VERSION,
+      requiredWorkerVersion: REQUIRED_WORKER_VERSION,
+    };
+  }
+
   // API สำหรับ Tampermonkey มาขอรับคิวงานถัดไปจาก DB (พร้อมระบบ Scheduled & Stale Recovery)
   @Get('campaign/next')
-  async getNextJob() {
+  async getNextJob(
+    @Headers('x-linesync-worker-version') workerVersion: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!workerVersion || workerVersion.trim() !== REQUIRED_WORKER_VERSION) {
+      res.status(HttpStatus.CONFLICT);
+      return {
+        status: 'version_mismatch',
+        requiredWorkerVersion: REQUIRED_WORKER_VERSION,
+      };
+    }
+
     if (!AppController.isBotEnabled) {
       return { status: 'empty', reason: 'Master Bot is Paused' };
     }
