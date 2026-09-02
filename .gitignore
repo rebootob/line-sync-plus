@@ -14,6 +14,7 @@ lerna-debug.log*
 
 # OS
 .DS_Store
+Thumbs.db
 
 # Tests
 /coverage
@@ -27,8 +28,6 @@ lerna-debug.log*
 *.launch
 .settings/
 *.sublime-workspace
-
-# IDE - VSCode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -37,20 +36,20 @@ lerna-debug.log*
 
 # dotenv environment variable files
 .env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+.env.*
+!.env.example
 
-# temp directory
+# Config secrets
+telegram-config.json
+
+# User Uploads & Temporary Assets
+uploads/*
+!uploads/.gitkeep
+
+# Temporary / Backup folders & files
+/backup_v1_before_new_features
+/src_bk
 .temp
 .tmp
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Diagnostic reports (https://nodejs.org/api/report.html)
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+*.txt
+!README.md

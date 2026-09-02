@@ -2,93 +2,107 @@
 
 ## Repository
 
-* Repository: c:\Users\allda\Desktop\Dev\git\line-sync-plus
-* Branch: master
-* HEAD: (Initial commit pending)
-* Working tree: Untracked project files ready for initial commit
+* Repository: rebootob/line-sync-plus
+* Canonical Branch: main
+* HEAD: Initial import commit pending
+* Working Tree: Clean (untracked files configured via .gitignore)
 
 ## Project Purpose
 
-LineSync Plus is an automated LINE Official Account (LINE OA) customer management and message broadcasting system. It combines a NestJS backend REST API (with PostgreSQL database and TypeORM) for managing customer contacts, customer groups, and broadcast campaigns with a client-side Tampermonkey userscript (`LineSyncApp.js`) that runs inside LINE OA web (`chat.line.biz`) to send messages, manage quotas, handle blocks/errors safely, and report completion status to Telegram.
+LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v27.0) running inside `chat.line.biz` to send multi-type messages, manage quotas, handle blocks/errors safely, and report detailed summary reports to Telegram.
+
+## Technology Stack
+
+- **Backend**: NestJS (v11), Node.js, TypeScript, TypeORM, PostgreSQL (`pg`)
+- **Frontend Dashboard**: HTML5, CSS3, JavaScript (Fetch API, DOM manipulation)
+- **Client Automation**: Tampermonkey Userscript (Native DOM & Synthetic Event dispatch)
+- **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
+- **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
 ## Architecture
 
-- **Backend Framework**: NestJS (TypeScript, TypeORM, PostgreSQL)
-- **Database Schema**:
-  - `Customer`: Line User IDs, display names, block status, block reasons
-  - `CustomerGroup` & `CustomerGroupMember`: Group definitions and target mappings
-  - `Campaign`: Campaign metadata, type, target count, success/fail counts, scheduled time (`scheduledAt`), start time (`startedAt`), status (`pending`, `processing`, `paused`, `completed`, `stopped_limit`, `stopped_error`, `stopped_user`, `failed`)
-  - `CampaignJob`: Individual queue items per customer per campaign
-- **Frontend Dashboard**: Single-page web dashboard (`index.html`) providing customer management, group tagging, multi-type campaign creation, schedule management modal, real-time filters, deep analytics, and Telegram notification configuration.
-- **Client Automation**: Tampermonkey userscript (`run/LineSyncApp.js` v27.0) executing DOM manipulation & React synthetic events inside `chat.line.biz`, featuring Circuit Breaker safety, Quota detection, auto block exclusion, and automatic return to main chat list view.
-- **Notification Subsystem**: `TelegramService` (`src/telegram.service.ts`) sending rich HTML campaign completion reports and connection test messages via Telegram Bot API.
+- **Backend REST API (`src/app.controller.ts`)**: Serves contact listings, group tag mappings, multi-type campaign creation, job dispatch queue with stale item recovery, master bot switch, scheduled campaign controls, and Telegram settings.
+- **Database Layer (`src/entities/`)**: TypeORM PostgreSQL entities for `Customer`, `CustomerGroup`, `CustomerGroupMember`, `Campaign`, and `CampaignJob` with local timezone (`TIMESTAMP WITHOUT TIME ZONE`) handling.
+- **Client Userscript (`run/LineSyncApp.js` v27.0)**: Operates inside LINE OA web interface (`https://chat.line.biz/*`), performing automated chat inputs, image pastes, quota limit checks, Circuit Breaker error handling, auto block exclusions, and automatic return to main chat list page.
+- **Notification Subsystem (`src/telegram.service.ts`)**: Sends rich HTML campaign completion reports and connection tests to Telegram.
+
+## Major Modules
+
+1. **Customer & Group Management**: Clean name formatting, block status flagging, group creation, member mapping, and deletion.
+2. **Campaign & Queue Engine**: Supports 5 message types (`text`, `image_only`, `link_only`, `text_link`, `image_link`), job dispatching (`GET /api/campaign/next`), success/fail result reporting, and local time scheduling.
+3. **Master Bot Switch & Safety**: Global bot pause/resume switch, Circuit Breaker (stops after 10 consecutive non-blocked errors), and auto-stop on quota full banner.
+4. **Dashboard Toolbar & Filters**: Search box, Status filter (`Active`/`Blocked`), Name filter (`Named`/`Unnamed`), and Quick Selection shortcuts (`✅ เลือกเฉพาะ Active ทั้งหมด`, `🎯 เลือก 100 คนแรก`, `🧹 ล้างการเลือก`).
+5. **Telegram Summary Reporter**: Formatted HTML notification sent on campaign completion (`completed`, `stopped_limit`, `stopped_error`, `stopped_user`) with Thai labels, duration math, and top failure reasons.
+
+## External Integrations
+
+- **LINE OA Web Interface (`https://chat.line.biz/*` / `https://manager.line.biz/*`)**: Automated via Tampermonkey userscript (`LineSyncApp.js`).
+- **Telegram Bot API (`https://api.telegram.org/bot<TOKEN>/sendMessage`)**: Automated HTML summary reports.
 
 ## Current State
 
-The system is fully functional and passes NestJS builds and Jest unit tests. Key features implemented and verified:
-- PostgreSQL database integration via TypeORM
-- Customer listing, cleaning display names, block status detection
-- Customer group creation, assignment, and deletion
-- Campaign creation (text, image, link, text+link, image+link)
-- Campaign scheduling with local timezone handling (`TIMESTAMP WITHOUT TIME ZONE`)
-- Circuit breaker (10 consecutive non-blocked errors trigger emergency stop)
-- Automatic exclusion of blocked users from error count
-- Master bot pause/resume switch API and UI control
-- Multi-schedule queue modal with pause/hold/resume/reschedule controls
-- Advanced main customer table filters (Status: Active/Blocked; Name: Named/Unnamed) and quick selection actions
-- Tampermonkey v27.0 with auto-return to main chat list page after sending or queue completion
-- Telegram completion summary report with Thai message type labels and icons
+Fully functional, verified via Jest unit tests (`npm test`) and NestJS build compilation (`npm run build`).
 
 ## Completed Work
 
-- Implemented NestJS backend REST controllers, TypeORM entities, and migration services
-- Implemented dashboard UI (`index.html`) with toolbar, modals, analytics, and schedule manager
-- Implemented Tampermonkey userscript `run/LineSyncApp.js` (v27.0)
-- Implemented Telegram notification integration (`TelegramService`) with test endpoint and configuration API
-- Added Thai language localization for campaign message types across UI, modals, and Telegram reports
-- Passed `npm test` (Jest unit test suite: 1 passed)
-- Passed `npm run build` (`nest build`)
+- Implemented NestJS REST APIs, PostgreSQL schema, and database initialization.
+- Implemented dashboard UI (`index.html`) with toolbar, real-time filters, quick selection shortcuts, schedule manager modal, deep analytics, and Telegram setting modal.
+- Implemented Tampermonkey userscript `run/LineSyncApp.js` (v27.0) with auto-return to main chat list.
+- Implemented `TelegramService` with Thai message type localization.
+- Performed security audit: Excluded credentials, `.env`, `telegram-config.json`, build artifacts, and uploaded media from git tracking.
+- Created `telegram-config.example.json` and `.env.example`.
+- Created Control Plane documentation (`START_HERE.md`, `CURRENT_STATE.md`, `ACTIVE_TASK.md`, `CHAT_HANDOFF.md`).
 
-## Active / Unfinished Work
+## Unfinished Work
 
-- Initial Git commit onboarding and handoff verification.
+- None for the current onboarding package.
+
+## Known Issues / Risks
+
+- Requires active PostgreSQL database service (default port 5433).
+- Tampermonkey userscript requires an active browser tab logged into `https://chat.line.biz/`.
 
 ## Relevant Files
 
-- `src/app.controller.ts`: NestJS API controller endpoints for customers, groups, campaigns, bot status, and Telegram.
-- `src/app.module.ts`: NestJS application module definitions.
+- `src/app.controller.ts`: Main API controller.
+- `src/app.module.ts`: Root NestJS application module.
 - `src/telegram.service.ts`: Telegram notification service.
-- `src/entities/campaign.entity.ts`: Campaign TypeORM entity.
-- `src/entities/campaign-job.entity.ts`: Campaign job queue item entity.
-- `src/customer.entity.ts`: Customer entity.
-- `src/database-init.service.ts`: Database initialization and schema migration service.
-- `index.html`: Dashboard UI.
-- `run/LineSyncApp.js`: Tampermonkey automation script (v27.0).
-- `src/app.controller.spec.ts`: Unit test suite.
-- `package.json`: Project dependencies and npm scripts.
+- `src/entities/`: TypeORM entity definitions.
+- `index.html`: Web dashboard UI.
+- `run/LineSyncApp.js`: Tampermonkey userscript (v27.0).
+- `project-docs/`: Project control documentation suite.
 
-## Tests / Evidence
+## Tests / Validation Evidence
 
-- `npm test`: Executed Jest test suite. Output: `PASS src/app.controller.spec.ts` (1 test passed).
-- `npm run build`: Executed `nest build`. Output: Exit code 0 (Build clean).
+- **Unit Tests**: `npm test` -> `PASS src/app.controller.spec.ts` (1 test passed).
+- **Build Verification**: `npm run build` -> Exit code 0 (`nest build` completed clean).
 
-## Risks / Issues
+## Security Notes
 
-- PostgreSQL connection requires running PostgreSQL server instance on port 5433 with credentials specified in `AppModule` / environment variables.
-- Tampermonkey userscript requires active browser session on `https://chat.line.biz/` for executing campaign jobs.
+- Security Audit Completed: No secrets, passwords, API keys, tokens, or credentials are tracked in Git.
+- `telegram-config.json` (containing user Telegram credentials) is added to `.gitignore`.
+- `.env` files and `uploads/*` are added to `.gitignore`.
 
-## Changes Since Previous Handoff
+## Changes Made During Initial Handoff
 
-- Initial repository discovery, documentation, and handoff file creation under `project-docs/CHAT_HANDOFF.md`.
+- Created project-docs documentation suite (`START_HERE.md`, `CURRENT_STATE.md`, `ACTIVE_TASK.md`, `CHAT_HANDOFF.md`).
+- Added `telegram-config.example.json` and `.env.example`.
+- Added `uploads/.gitkeep` and removed zero-byte scratch text files.
+- Configured `.gitignore` for public GitHub repository publishing.
+- Prepared Git repository with canonical branch `main` and remote `https://github.com/rebootob/line-sync-plus.git`.
 
-## Exact Next Step
+## Exact Recommended Next Step
 
-Commit initial codebase and `project-docs/CHAT_HANDOFF.md` to `master` branch and hand off to ChatGPT for review.
+Await ChatGPT / Project Owner review of GitHub repository `rebootob/line-sync-plus`.
 
 ## Antigravity Status
 
 IDLE
 
+## Active Work Package
+
+NONE
+
 ## Authorization Required
 
-Project Owner / Control Plane authorization required before performing git push or initiating further feature implementations.
+YES — ChatGPT / Project Owner must authorize the next implementation work package.
