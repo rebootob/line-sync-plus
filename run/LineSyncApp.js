@@ -98,7 +98,7 @@
         } catch (e) {}
     }
 
-    // 🛡️ ATOMIC / MERGE-SAFE SPOOL FLUSH
+    // 🛡️ ATOMIC / MERGE-SAFE SPOOL FLUSH (BUG-WP001-UATLOG-R5 Confirmed-Write Spool Removal)
     async function flushPendingDiagnostics() {
         if (isFlushingSpool) return;
         isFlushingSpool = true;
@@ -110,24 +110,39 @@
 
             for (let i = 0; i < initialSnapshot.length; i++) {
                 const item = initialSnapshot[i];
-                if (!item || !item.event || !item._sqId) continue;
+
+                // Safely discard malformed spool entries that can never be flushed
+                if (!item || typeof item !== 'object' || !item.event || !item._sqId) {
+                    const currentSpool = getSpool();
+                    const indexToRemove = currentSpool.findIndex(el => !el || el._sqId === item?._sqId);
+                    if (indexToRemove !== -1) {
+                        currentSpool.splice(indexToRemove, 1);
+                        saveSpool(currentSpool);
+                    }
+                    continue;
+                }
 
                 // Strip internal matching key _sqId before sending to backend
                 const { _sqId, ...backendPayload } = item;
 
                 try {
-                    await fetchAPI('/diagnostics/browser-event', 'POST', backendPayload);
+                    const result = await fetchAPI('/diagnostics/browser-event', 'POST', backendPayload);
 
-                    // ATOMIC REMOVAL: Re-read CURRENT spool from sessionStorage after successful POST
-                    const currentSpool = getSpool();
-                    const indexToRemove = currentSpool.findIndex(el => el._sqId === _sqId);
+                    // REMOVE FROM SPOOL ONLY IF BACKEND CONFIRMED SUCCESSFUL WRITE ({ success: true })
+                    if (result && result.success === true) {
+                        const currentSpool = getSpool();
+                        const indexToRemove = currentSpool.findIndex(el => el._sqId === _sqId);
 
-                    if (indexToRemove !== -1) {
-                        currentSpool.splice(indexToRemove, 1);
-                        saveSpool(currentSpool);
+                        if (indexToRemove !== -1) {
+                            currentSpool.splice(indexToRemove, 1);
+                            saveSpool(currentSpool);
+                        }
+                    } else {
+                        // Backend returned { success: false } or rejection: retain event and stop current flush
+                        break;
                     }
                 } catch (err) {
-                    // Stop current flush loop immediately on transport failure to preserve event ordering
+                    // Transport failure: retain event and stop current flush
                     break;
                 }
             }
