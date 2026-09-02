@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LineSync Plus | Customer & Broadcast Management</title>
+    <style>
+        :root { 
+            --primary: #00c300; 
+            --primary-dark: #009900; 
+            --bg: #f5f7fa; 
+            --text: #333; 
+            --border: #e2e8f0;
+            --danger: #ef4444;
+            --danger-dark: #dc2626;
+            --secondary: #3b82f6;
+            --secondary-dark: #1d4ed8;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .dashboard-container { max-width: 1280px; margin: 0 auto; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 20px; }
+        
+        /* Header & Toolbar */
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 15px; margin-bottom: 20px; }
+        .toolbar { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        .toolbar-group { display: flex; gap: 8px; align-items: center; }
+        
+        .search-box { flex: 1; min-width: 250px; padding: 10px 15px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; }
+        .search-box:focus { border-color: var(--primary); }
+        .select-box { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; background: white; cursor: pointer; }
+
+        .action-btn { background: var(--primary); color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .action-btn:hover { background: var(--primary-dark); }
+        .action-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        .action-btn-secondary { background: var(--secondary); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .action-btn-secondary:hover { background: var(--secondary-dark); }
+
+        .action-btn-danger { background: #f87171; color: white; border: none; padding: 10px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .action-btn-danger:hover { background: var(--danger); }
+
+        .action-btn-outline { background: white; color: #475569; border: 1px solid var(--border); padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .action-btn-outline:hover { background: #f1f5f9; }
+
+        /* Table */
+        .table-wrapper { height: 500px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; position: relative; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+        thead th { background: #f8fafc; padding: 12px 15px; border-bottom: 2px solid var(--border); position: sticky; top: 0; z-index: 1; color: #475569; font-weight: 600; }
+        tbody td { padding: 12px 15px; border-bottom: 1px solid var(--border); }
+        tbody tr:hover { background: #f1f8e9; }
+        .checkbox-cell { text-align: center; width: 40px; }
+        .name-clean { color: #15803d; font-weight: 600; }
+        .name-original { color: #64748b; font-size: 12px; }
+        .line-id { color: #64748b; font-family: monospace; }
+
+        /* Pagination */
+        .pagination { display: flex; justify-content: space-between; align-items: center; padding-top: 15px; font-size: 14px; color: #64748b; }
+        .page-controls button { padding: 5px 12px; margin: 0 5px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer; }
+        .page-controls button:hover:not(:disabled) { background: #f1f5f9; }
+        .page-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Modal Popup Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-card { background: white; border-radius: 10px; width: 90%; max-width: 650px; max-height: 90vh; overflow-y: auto; padding: 25px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 18px; }
+        .modal-title { margin: 0; font-size: 18px; font-weight: bold; color: var(--text); }
+        .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #94a3b8; }
+        .close-btn:hover { color: #334155; }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; color: #334155; }
+        .form-control { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+        .form-control:focus { border-color: var(--primary); outline: none; }
+        textarea.form-control { resize: vertical; min-height: 90px; }
+
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; display: inline-block; }
+        .badge-pending { background: #fef3c7; color: #d97706; }
+        .badge-processing { background: #dbeafe; color: #2563eb; }
+        .badge-completed { background: #dcfce7; color: #16a34a; }
+        .badge-failed { background: #fee2e2; color: #dc2626; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-container">
+        <div class="header">
+            <div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <h2 style="margin: 0; color: #1e293b;">🚀 LineSync Plus - Customer & Broadcast Management</h2>
+                    <button id="masterBotToggleBtn" onclick="toggleMasterBotSwitch()" class="action-btn" style="background:#16a34a; padding:4px 10px; font-size:12px; font-weight:bold; border-radius:20px;" title="สวิตช์เปิด-ปิดการทำงานของบอทภาพรวม ( Master Switch )">
+                        🟢 บอททำงานปกติ [กดพักบอท ⏸️]
+                    </button>
+                </div>
+                <div id="statusBadge" style="font-size: 13px; color: #64748b; margin-top: 4px;">กำลังโหลดข้อมูล...</div>
+            </div>
+            <div style="text-align: right;">
+                <button class="action-btn-secondary" onclick="openTelegramModal()" style="margin-bottom: 6px; margin-right: 6px; background:#0284c7; color:white; border:none;" title="ตั้งค่าการแจ้งเตือนรายงานเข้า Telegram">
+                    📱 ตั้งค่า Telegram
+                </button>
+                <button class="action-btn-secondary" onclick="openScheduledModal()" style="margin-bottom: 6px; margin-right: 6px; background:#7e22ce; color:white; border:none;" title="เปิดหน้ารายการตารางตั้งเวลาส่งล่วงหน้า">
+                    ⏰ ตารางตั้งเวลาส่ง (Scheduled List)
+                </button>
+                <button class="action-btn-secondary" onclick="openAnalyticsModal()" style="margin-bottom: 6px; margin-right: 6px; background:#4f46e5; color:white; border:none;" title="เปิดหน้ารายงานการส่งเชิงลึก">
+                    📊 รายงานเชิงลึก (Deep Analytics)
+                </button>
+                <button class="action-btn-outline" onclick="openHistoryModal()" style="margin-bottom: 6px;">
+                    📜 ประวัติการส่งแคมเปญ
+                </button>
+                <div><strong id="selectedCount" style="color: var(--primary);">เลือกแล้ว: 0 คน</strong></div>
+            </div>
+        </div>
+
+        <div class="toolbar" style="flex-wrap: wrap; gap: 10px;">
+            <div class="toolbar-group" style="flex: 1; flex-wrap: wrap; gap: 8px;">
+                <input type="text" id="searchInput" class="search-box" placeholder="🔍 ค้นหาชื่อ หรือ รหัส Line ID..." oninput="handleFilters()" style="min-width: 200px;">
+                
+                <select id="statusFilterSelect" class="select-box" onchange="handleFilters()" title="กรองตามสถานะแชท/บล็อก">
+                    <option value="all">👥 ทุกสถานะลูกค้า</option>
+                    <option value="active">🟢 Active ส่งได้ปกติ</option>
+                    <option value="blocked">🔴 บล็อก/ส่งไม่ได้แล้ว</option>
+                </select>
+
+                <select id="nameFilterSelect" class="select-box" onchange="handleFilters()" title="กรองตามการระบุชื่อ">
+                    <option value="all">🏷️ ชื่อทั้งหมด</option>
+                    <option value="named">👤 มีชื่อระบุ</option>
+                    <option value="unnamed">❓ ไม่ระบุชื่อ</option>
+                </select>
+
+                <select id="groupSelect" class="select-box" onchange="handleGroupSelect()" title="เลือกกลุ่มลูกค้า">
+                    <option value="">📁 เลือกกลุ่มลูกค้า...</option>
+                </select>
+
+                <button class="action-btn-secondary" onclick="openSaveGroupModal()" title="บันทึกรายชื่อที่เลือกเป็นกลุ่มประจำ">
+                    💾 บันทึกเป็นกลุ่ม
+                </button>
+                <button class="action-btn-danger" id="btnDeleteGroup" onclick="deleteCurrentGroup()" style="display:none;" title="ลบกลุ่มที่เลือกออกจากระบบ">
+                    🗑️ ลบกลุ่ม
+                </button>
+            </div>
+
+            <div class="toolbar-group">
+                <button class="action-btn" id="btnPrepareCampaign" onclick="openCampaignModal()" disabled>
+                    🚀 สร้างแคมเปญส่งข้อความ
+                </button>
+            </div>
+        </div>
+
+        <!-- แถบปุ่มทางลัดเลือกเป้าหมาย (Quick Selection Bar) -->
+        <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 8px 14px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; flex-wrap: wrap;">
+                <strong style="color: #475569;">⚡ ทางลัดเลือกเป้าหมาย:</strong>
+                <button class="action-btn-outline" style="font-size: 12px; padding: 4px 10px; background: #f0fdf4; color: #16a34a; border-color: #bbf7d0;" onclick="selectAllActiveOnly()" title="เลือกเฉพาะลูกค้า Active (ที่ไม่บล็อก) ทั้งหมดที่กำลังแสดงผล">
+                    ✅ เลือกเฉพาะ Active ทั้งหมด
+                </button>
+                <button class="action-btn-outline" style="font-size: 12px; padding: 4px 10px; background: #eff6ff; color: #2563eb; border-color: #bfdbfe;" onclick="selectFirstN(100)" title="เลือก 100 คนแรกที่พร้อมรับข่าวสาร">
+                    🎯 เลือก 100 คนแรก
+                </button>
+                <button class="action-btn-outline" style="font-size: 12px; padding: 4px 10px; color: #64748b;" onclick="clearSelection()" title="ยกเลิกการเลือกทั้งหมด">
+                    🧹 ล้างการเลือก
+                </button>
+            </div>
+            <div id="filterResultSummary" style="font-size: 12px; color: #64748b; font-weight: 600;"></div>
+        </div>
+
+        <!-- แถบควบคุมแคมเปญที่กำลังรัน / หยุดชั่วคราว (Active Campaign Control Panel) -->
+        <div id="activeCampaignBanner" style="display:none; margin-bottom:15px;"></div>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="checkbox-cell"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()"></th>
+                        <th width="5%">ลำดับ</th>
+                        <th width="25%">ชื่อที่จัดรูปแบบแล้ว</th>
+                        <th width="20%">ชื่อดั้งเดิมบน LINE</th>
+                        <th width="32%">รหัส Line ID</th>
+                        <th width="15%">สถานะแชท</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="5" style="text-align: center; padding: 30px;">⏳ กำลังดึงข้อมูลจากระบบ...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination">
+            <span id="pageInfo">แสดง 0 ถึง 0 จาก 0 รายการ</span>
+            <div class="page-controls">
+                <button onclick="changePage(-1)" id="btnPrev">◀ ก่อนหน้า</button>
+                <span id="currentPageDisplay" style="font-weight: bold; margin: 0 10px;">1</span>
+                <button onclick="changePage(1)" id="btnNext">ถัดไป ▶</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: สร้างแคมเปญส่งข้อความ (Multi-Type & Template Reuse) -->
+    <div id="campaignModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">✉️ สร้างแคมเปญส่งข้อความ (LINE Broadcast)</h3>
+                <button class="close-btn" onclick="closeModal('campaignModal')">&times;</button>
+            </div>
+
+            <div class="form-group">
+                <label>🖼️ เลือกแม่แบบสื่อ/แคมเปญจากประวัติ (เพื่อใช้ซ้ำ):</label>
+                <select id="templateReuseSelect" class="form-control" onchange="applyTemplatePreset()">
+                    <option value="">-- พิมพ์สร้างใหม่ หรือ เลือกแคมเปญเดิมที่เคยส่ง --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>ชื่อแคมเปญ:</label>
+                <input type="text" id="campaignNameInput" class="form-control" placeholder="เช่น โปรโมชันประจำเดือน">
+            </div>
+
+            <div class="form-group">
+                <label>รูปแบบข้อความ (Message Type):</label>
+                <select id="messageTypeSelect" class="form-control" onchange="toggleMessageTypeFields()">
+                    <option value="text_link" selected>💬 ข้อความ + 🔗 ลิงก์ (รูปการ์ดพรีวิวเว็บ + ลิงก์ใน 1 ข้อความ)</option>
+                    <option value="image_link">🖼️ รูปภาพ + 🔗 ลิงก์ (ส่งไฟล์รูปภาพจากเครื่อง + ข้อความและลิงก์ตามหลัง)</option>
+                    <option value="image_only">🖼️ รูปภาพอย่างเดียว (ส่งเฉพาะไฟล์รูปภาพจากเครื่อง)</option>
+                    <option value="link_only">🔗 ลิงก์อย่างเดียว (ส่งเฉพาะ URL ลิงก์ปลายทาง)</option>
+                    <option value="text">💬 ข้อความธรรมดา (ส่งเฉพาะตัวอักษรล้วน)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>ข้อความที่จะส่ง:</label>
+                <textarea id="campaignMessageInput" class="form-control" placeholder="พิมพ์ข้อความที่ต้องการส่งให้ลูกค้า..."></textarea>
+            </div>
+
+            <div class="form-group" id="imageUrlGroup" style="display:none;">
+                <label>แนบรูปภาพ (เลือกจากเครื่อง หรือ ระบุ URL):</label>
+                <div style="display:flex; gap:8px; margin-bottom:6px;">
+                    <input type="text" id="campaignImageUrlInput" class="form-control" placeholder="https://example.com/image.jpg หรือ เลือกไฟล์จากเครื่อง" onchange="updateImagePreview()">
+                    <button type="button" class="action-btn-secondary" onclick="document.getElementById('localFileInput').click()" style="white-space:nowrap; padding:8px 12px; font-size:13px;">
+                        📁 เลือกไฟล์จากเครื่อง
+                    </button>
+                    <input type="file" id="localFileInput" accept="image/*" style="display:none;" onchange="handleLocalImageUpload(event)">
+                </div>
+
+                <div id="imagePreviewContainer" style="display:none; margin-top:8px; text-align:center; background:#f8fafc; padding:8px; border-radius:6px; border:1px dashed #cbd5e1;">
+                    <img id="imagePreviewImg" style="max-height:140px; border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                    <div id="imageUploadStatus" style="font-size:12px; color:#16a34a; margin-top:4px; font-weight:600;"></div>
+                </div>
+            </div>
+
+            <div class="form-group" id="linkUrlGroup" style="display:none;">
+                <label>URL ลิงก์ปลายทาง (Target Link URL):</label>
+                <input type="text" id="campaignLinkUrlInput" class="form-control" placeholder="https://example.com/promo">
+            </div>
+
+            <!-- ⏰ ระบบตั้งเวลาส่งแคมเปญล่วงหน้า -->
+            <div style="background:#f8fafc; padding:12px; border-radius:6px; border:1px solid #e2e8f0; margin-top:12px;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; color:#334155;">
+                    <input type="checkbox" id="enableScheduleCheckbox" onchange="toggleScheduleField()"> ⏰ ตั้งเวลาส่งแคมเปญล่วงหน้า (Scheduled Broadcast)
+                </label>
+                <div id="scheduleTimeGroup" style="display:none; margin-top:8px;">
+                    <label style="font-size:12px; color:#64748b;">ระบุวันและเวลาที่ต้องการให้เริ่มส่ง (เปิดเครื่อง/เบราว์เซอร์ทิ้งไว้):</label>
+                    <input type="datetime-local" id="campaignScheduledAtInput" class="form-control" style="margin-top:4px;">
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content: space-between; align-items:center; margin-top:20px;">
+                <span id="modalTargetCount" style="font-weight:bold; color:var(--primary);">เป้าหมาย: 0 คน</span>
+                <div>
+                    <button class="action-btn-outline" onclick="closeModal('campaignModal')">ยกเลิก</button>
+                    <button class="action-btn" id="btnSubmitCampaign" onclick="submitCampaign()">🚀 เริ่มส่งแคมเปญ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: ตั้งค่าการแจ้งเตือน Telegram (Telegram Report Settings Modal) -->
+    <div id="telegramModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 550px;">
+            <div class="modal-header">
+                <h3 class="modal-title">📱 ตั้งค่าแจ้งเตือนสรุปผลเข้า Telegram</h3>
+                <button class="close-btn" onclick="closeModal('telegramModal')">&times;</button>
+            </div>
+            
+            <div style="margin-top: 10px;">
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label style="font-weight:bold; font-size:13px; color:#334155;">🔑 Telegram Bot Token:</label>
+                    <input type="text" id="telegramTokenInput" class="form-control" placeholder="เช่น 7123456789:AAFxXxxXXXXX..." style="margin-top:4px;">
+                    <span style="font-size:11px; color:#64748b;">(สร้าง Bot Token ได้จาก @BotFather บน Telegram)</span>
+                </div>
+
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label style="font-weight:bold; font-size:13px; color:#334155;">💬 Telegram Chat ID:</label>
+                    <input type="text" id="telegramChatIdInput" class="form-control" placeholder="เช่น 123456789 หรือ -100xxxxxxxx" style="margin-top:4px;">
+                    <span style="font-size:11px; color:#64748b;">(เช็ค Chat ID ของคุณได้จาก @userinfobot บน Telegram)</span>
+                </div>
+
+                <div style="margin-top:15px; background:#f0f9ff; border:1px solid #bae6fd; padding:10px; border-radius:8px;">
+                    <label style="display:flex; align-items:center; cursor:pointer; font-weight:bold; color:#0369a1; font-size:13px;">
+                        <input type="checkbox" id="enableTelegramCheckbox" style="margin-right:8px; width:16px; height:16px;">
+                        🟢 เปิดใช้งานการส่งรายงานสรุปผลแคมเปญเข้า Telegram อัตโนมัติ
+                    </label>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 20px;">
+                <button class="action-btn-secondary" onclick="testTelegramSettingsUI()" style="background:#0284c7; color:white; border:none;">
+                    🧪 ทดสอบส่งข้อความ Telegram
+                </button>
+                <div>
+                    <button class="action-btn-outline" onclick="closeModal('telegramModal')">ยกเลิก</button>
+                    <button class="action-btn" onclick="saveTelegramSettingsUI()" style="background:#16a34a;">💾 บันทึกการตั้งค่า</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: รายการตารางตั้งเวลาส่งล่วงหน้า (Scheduled Campaigns List Modal) -->
+    <div id="scheduledModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 950px;">
+            <div class="modal-header">
+                <h3 class="modal-title">⏰ ตารางการส่งข้อความล่วงหน้า (Scheduled Campaigns List)</h3>
+                <button class="close-btn" onclick="closeModal('scheduledModal')">&times;</button>
+            </div>
+            
+            <div style="max-height: 480px; overflow-y: auto;">
+                <table style="width: 100%; font-size: 13px;">
+                    <thead>
+                        <tr style="background:#f8fafc;">
+                            <th width="18%">📅 กำหนดเวลาส่ง</th>
+                            <th width="20%">ชื่อแคมเปญ / ประเภท</th>
+                            <th width="14%">ผลการส่ง (สำเร็จ/ล้มเหลว)</th>
+                            <th width="16%">สถานะการรัน</th>
+                            <th width="17%">เวลาเริ่ม - เสร็จสิ้น</th>
+                            <th width="15%">การจัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scheduledTableBody">
+                        <tr><td colspan="6" style="text-align:center; padding:20px;">⏳ กำลังดึงรายการตารางส่ง...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 15px;">
+                <span style="font-size:12px; color:#64748b;">ℹ️ คุณสามารถตั้งเวลาส่งล่วงหน้าไว้หลายรายการพร้อมกันได้ และบอทจะเริ่มส่งให้อัตโนมัติตามลำดับเวลา</span>
+                <button class="action-btn-outline" onclick="closeModal('scheduledModal')">ปิดหน้าต่าง</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: หน้ารายงานเชิงลึก (Deep Analytics Dashboard) -->
+    <div id="analyticsModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3 class="modal-title">📊 รายงานเชิงลึกและการวิเคราะห์การตลาด (Deep Marketing Analytics)</h3>
+                <button class="close-btn" onclick="closeModal('analyticsModal')">&times;</button>
+            </div>
+            
+            <div id="analyticsContent" style="max-height: 520px; overflow-y: auto; padding-right: 5px;">
+                <div style="text-align:center; padding:30px;">⏳ กำลังประมวลผลรายงานเชิงลึก...</div>
+            </div>
+
+            <div style="text-align: right; margin-top: 15px;">
+                <button class="action-btn-outline" onclick="closeModal('analyticsModal')">ปิดหน้าต่าง</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: บันทึกกลุ่มใหม่ -->
+    <div id="saveGroupModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 class="modal-title">💾 บันทึกรายชื่อเป็นกลุ่มใหม่</h3>
+                <button class="close-btn" onclick="closeModal('saveGroupModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>ชื่อกลุ่มลูกค้า:</label>
+                <input type="text" id="groupNameInput" class="form-control" placeholder="เช่น กลุ่ม VIP 2026, ลูกค้าประจำ">
+            </div>
+            <div class="form-group">
+                <label>คำอธิบายเพิ่มเติม (ถ้ามี):</label>
+                <input type="text" id="groupDescInput" class="form-control" placeholder="เช่น กลุ่มลูกค้าติดตามโปรโมชัน">
+            </div>
+            <div style="text-align: right; margin-top: 15px;">
+                <button class="action-btn-outline" onclick="closeModal('saveGroupModal')">ยกเลิก</button>
+                <button class="action-btn-secondary" onclick="submitSaveGroup()">บันทึกกลุ่ม</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: ประวัติแคมเปญ (Campaign History Dashboard) -->
+    <div id="historyModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 950px;">
+            <div class="modal-header">
+                <h3 class="modal-title">📜 ประวัติการส่งแคมเปญย้อนหลัง</h3>
+                <button class="close-btn" onclick="closeModal('historyModal')">&times;</button>
+            </div>
+            <div style="max-height: 450px; overflow-y: auto;">
+                <table style="width: 100%; font-size: 13px;">
+                    <thead>
+                        <tr>
+                            <th width="16%">วันเวลา</th>
+                            <th width="22%">ชื่อแคมเปญ</th>
+                            <th width="14%">ประเภท</th>
+                            <th width="10%">เป้าหมาย</th>
+                            <th width="14%">สำเร็จ/ล้มเหลว</th>
+                            <th width="10%">สถานะ</th>
+                            <th width="14%">การจัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <tr><td colspan="7" style="text-align:center; padding:20px;">⏳ กำลังดึงประวัติ...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="text-align: right; margin-top: 15px;">
+                <button class="action-btn-outline" onclick="closeModal('historyModal')">ปิดหน้าต่าง</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: รายละเอียดผู้รับแคมเปญรายบุคคล (Campaign Detail Modal) -->
+    <div id="campaignDetailModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 850px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="detailModalTitle">🔍 รายละเอียดการส่งแคมเปญ</h3>
+                <button class="close-btn" onclick="closeModal('campaignDetailModal')">&times;</button>
+            </div>
+            <div id="detailCampaignSummary" style="background: #f8fafc; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #475569;">
+                ⏳ กำลังโหลดรายละเอียด...
+            </div>
+            <div style="max-height: 380px; overflow-y: auto;">
+                <table style="width: 100%; font-size: 13px;">
+                    <thead>
+                        <tr>
+                            <th width="6%">ลำดับ</th>
+                            <th width="22%">ชื่อที่จัดรูปแบบแล้ว</th>
+                            <th width="22%">ชื่อติดแท็กดั้งเดิมบน LINE</th>
+                            <th width="25%">รหัส LINE ID</th>
+                            <th width="12%">สถานะการส่ง</th>
+                            <th width="13%">เวลาที่ส่ง / หมายเหตุ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detailTableBody">
+                        <tr><td colspan="6" style="text-align:center; padding:20px;">⏳ กำลังดึงข้อมูลสมาชิกผู้รับ...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="text-align: right; margin-top: 15px;">
+                <button class="action-btn-outline" onclick="closeModal('campaignDetailModal'); openModal('historyModal');">◀ กลับไปหน้าประวัติ</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3005/api';
+        
+        let allCustomers = [];         
+        let filteredCustomers = [];    
+        let selectedUsers = new Set(); 
+        let currentGroups = [];
+        let campaignTemplates = [];
+
+        let currentPage = 1;
+        const rowsPerPage = 100;       
+
+        let isMasterBotEnabled = true;
+
+        async function checkMasterBotStatus() {
+            try {
+                const res = await fetch(`${API_BASE}/bot/status`);
+                const data = await res.json();
+                isMasterBotEnabled = data.enabled;
+                updateMasterBotBtnUI();
+            } catch(e) {}
+        }
+
+        async function toggleMasterBotSwitch() {
+            try {
+                const res = await fetch(`${API_BASE}/bot/toggle`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                isMasterBotEnabled = data.enabled;
+                updateMasterBotBtnUI();
+                if (isMasterBotEnabled) alert('🟢 เปิดการทำงานบอทภาพรวมเรียบร้อยแล้ว (บอทจะเริ่มดึงคิวไปส่งต่อ)');
+                else alert('🔴 พักการทำงานบอทภาพรวมเรียบร้อยแล้ว (บอทจะไม่ดึงคิวใดๆ ไปส่งชั่วคราว)');
+            } catch(e) { alert('❌ ไม่สามารถเปลี่ยนสถานะบอทได้'); }
+        }
+
+        function updateMasterBotBtnUI() {
+            const btn = document.getElementById('masterBotToggleBtn');
+            if (!btn) return;
+            if (isMasterBotEnabled) {
+                btn.style.background = '#16a34a';
+                btn.innerHTML = '🟢 บอททำงานปกติ [กดพักบอท ⏸️]';
+            } else {
+                btn.style.background = '#dc2626';
+                btn.innerHTML = '🔴 พักการทำงานบอทอยู่ [กดเปิดบอท ▶️]';
+            }
+        }
+
+        // 1. โหลดข้อมูลเริ่มต้น
+        async function loadData() {
+            try {
+                checkMasterBotStatus();
+
+                const [resCust, resGroups, resCampaigns] = await Promise.all([
+                    fetch(`${API_BASE}/customers`),
+                    fetch(`${API_BASE}/groups`),
+                    fetch(`${API_BASE}/campaigns`)
+                ]);
+
+                allCustomers = await resCust.json();
+                currentGroups = await resGroups.json();
+                const campaigns = await resCampaigns.json();
+
+                filteredCustomers = [...allCustomers]; 
+                
+                document.getElementById('statusBadge').innerText = `ซิงค์ข้อมูลสำเร็จ: ${allCustomers.length.toLocaleString()} เรคคอร์ด | ${currentGroups.length} กลุ่ม`;
+                renderTable();
+                renderGroupDropdown();
+                updateFilterSummaryUI();
+                renderActiveCampaignBanner(campaigns);
+            } catch (error) {
+                console.error(error);
+                document.getElementById('tableBody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">❌ ไม่สามารถเชื่อมต่อฐานข้อมูลได้</td></tr>`;
+            }
+        }
+
+        // 2. แสดงตารางรายชื่อลูกค้า
+        function renderTable() {
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const paginatedData = filteredCustomers.slice(start, end);
+            
+            const tbody = document.getElementById('tableBody');
+            
+            if (paginatedData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">ไม่พบข้อมูลที่ค้นหา</td></tr>`;
+            } else {
+                tbody.innerHTML = paginatedData.map((cust, index) => {
+                    const statusBadge = cust.isBlocked 
+                        ? `<span class="badge" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; font-size:11px;" title="${cust.blockReason || 'บล็อก/ส่งไม่ได้'}">🚫 บล็อก/ส่งไม่ได้</span>` 
+                        : `<span class="badge" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-size:11px;">✅ ปกติ</span>`;
+
+                    const rowStyle = cust.isBlocked ? 'background-color: #fff1f2; opacity: 0.75;' : '';
+
+                    return `
+                        <tr style="${rowStyle}">
+                            <td class="checkbox-cell">
+                                <input type="checkbox" class="row-checkbox" value="${cust.lineUserId}" 
+                                    onchange="toggleSingleSelect('${cust.lineUserId}')" 
+                                    ${selectedUsers.has(cust.lineUserId) ? 'checked' : ''}
+                                    ${cust.isBlocked ? 'disabled title="ผู้ใช้นี้บล็อกแชท ไม่สามารถเลือกได้"' : ''}>
+                            </td>
+                            <td>${start + index + 1}</td>
+                            <td class="name-clean">${cust.cleanedDisplayName}</td>
+                            <td class="name-original">${cust.displayName || '-'}</td>
+                            <td class="line-id">${cust.lineUserId}</td>
+                            <td>${statusBadge}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            updatePaginationUI();
+            updateSelectAllCheckbox();
+        }
+
+        // 3. ระบบกรองข้อมูลขั้นสูง (Advanced Realtime Filtering System)
+        function handleFilters() {
+            const keyword = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+            const statusFilter = document.getElementById('statusFilterSelect')?.value || 'all';
+            const nameFilter = document.getElementById('nameFilterSelect')?.value || 'all';
+            
+            filteredCustomers = allCustomers.filter(cust => {
+                // 1. Text Search Filter
+                const matchKeyword = !keyword || 
+                    (cust.cleanedDisplayName && cust.cleanedDisplayName.toLowerCase().includes(keyword)) ||
+                    (cust.displayName && cust.displayName.toLowerCase().includes(keyword)) ||
+                    (cust.lineUserId && cust.lineUserId.toLowerCase().includes(keyword));
+
+                // 2. Status Filter (Active vs Blocked)
+                let matchStatus = true;
+                if (statusFilter === 'active') matchStatus = !cust.isBlocked;
+                else if (statusFilter === 'blocked') matchStatus = cust.isBlocked;
+
+                // 3. Name Filter (Named vs Unnamed)
+                let matchName = true;
+                const isUnnamed = !cust.cleanedDisplayName || cust.cleanedDisplayName === 'ลูกค้า' || cust.cleanedDisplayName === 'ไม่ระบุชื่อ';
+                if (nameFilter === 'named') matchName = !isUnnamed;
+                else if (nameFilter === 'unnamed') matchName = isUnnamed;
+
+                return matchKeyword && matchStatus && matchName;
+            });
+            
+            currentPage = 1; 
+            renderTable();
+            updateFilterSummaryUI();
+        }
+
+        function handleSearch() {
+            handleFilters();
+        }
+
+        function updateFilterSummaryUI() {
+            const summaryEl = document.getElementById('filterResultSummary');
+            if (summaryEl) {
+                const activeInFilter = filteredCustomers.filter(c => !c.isBlocked).length;
+                summaryEl.innerText = `🔍 แสดงผล: ${filteredCustomers.length.toLocaleString()} คน (🟢 Active: ${activeInFilter.toLocaleString()} คน) | รวมทั้งหมด ${allCustomers.length.toLocaleString()} คน`;
+            }
+        }
+
+        // ปุ่มทางลัดเลือกเป้าหมาย
+        function selectAllActiveOnly() {
+            const activeTargets = filteredCustomers.filter(c => !c.isBlocked);
+            if (activeTargets.length === 0) {
+                alert('ไม่พบลูกค้าสถานะ Active (พร้อมรับข่าวสาร) ในผลการกรองขณะนี้ครับ');
+                return;
+            }
+            activeTargets.forEach(c => selectedUsers.add(c.lineUserId));
+            renderTable();
+            updateSelectionUI();
+        }
+
+        function selectFirstN(count) {
+            const activeTargets = filteredCustomers.filter(c => !c.isBlocked).slice(0, count);
+            if (activeTargets.length === 0) {
+                alert('ไม่พบลูกค้าสถานะ Active ในผลการกรองขณะนี้ครับ');
+                return;
+            }
+            activeTargets.forEach(c => selectedUsers.add(c.lineUserId));
+            renderTable();
+            updateSelectionUI();
+        }
+
+        function clearSelection() {
+            selectedUsers.clear();
+            renderTable();
+            updateSelectionUI();
+        }
+
+        // 4. ระบบจัดการกลุ่มลูกค้า (Group Management)
+        function renderGroupDropdown() {
+            const select = document.getElementById('groupSelect');
+            select.innerHTML = '<option value="">📁 เลือกกลุ่มลูกค้า...</option>' + 
+                currentGroups.map(g => `<option value="${g.id}">${g.name} (${g.memberCount} คน)</option>`).join('');
+        }
+
+        async function handleGroupSelect() {
+            const groupId = document.getElementById('groupSelect').value;
+            const btnDelete = document.getElementById('btnDeleteGroup');
+
+            if (!groupId) {
+                btnDelete.style.display = 'none';
+                return;
+            }
+
+            btnDelete.style.display = 'inline-block';
+
+            try {
+                const res = await fetch(`${API_BASE}/groups/${groupId}`);
+                const data = await res.json();
+
+                if (data && data.targetIds) {
+                    selectedUsers.clear();
+                    data.targetIds.forEach(id => selectedUsers.add(id));
+
+                    // ล้างคำค้นหาเดิมออก เพื่อแสดงสมาชิกกลุ่มในตารางอย่างครบถ้วน
+                    document.getElementById('searchInput').value = '';
+                    filteredCustomers = [...allCustomers];
+
+                    renderTable();
+                    updateSelectionUI();
+                }
+            } catch (err) {
+                alert('❌ ไม่สามารถโหลดข้อมูลสมาชิกกลุ่มได้');
+            }
+        }
+
+        function openSaveGroupModal() {
+            if (selectedUsers.size === 0) {
+                alert('กรุณาเลือกรายชื่อลูกค้าที่ต้องการบันทึกลงกลุ่มก่อนครับ');
+                return;
+            }
+            document.getElementById('groupNameInput').value = '';
+            document.getElementById('groupDescInput').value = '';
+            openModal('saveGroupModal');
+        }
+
+        async function submitSaveGroup() {
+            const name = document.getElementById('groupNameInput').value;
+            const desc = document.getElementById('groupDescInput').value;
+
+            if (!name || name.trim() === '') {
+                alert('กรุณากรอกชื่อกลุ่ม');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/groups`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        description: desc,
+                        targetIds: Array.from(selectedUsers)
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ บันทึกกลุ่ม "${name}" สำเร็จ (${data.memberCount} คน)`);
+                    closeModal('saveGroupModal');
+                    loadData();
+                } else {
+                    alert(`❌ ${data.message || 'บันทึกไม่สำเร็จ'}`);
+                }
+            } catch (err) {
+                alert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ');
+            }
+        }
+
+        async function deleteCurrentGroup() {
+            const groupId = document.getElementById('groupSelect').value;
+            if (!groupId) return;
+
+            const selectedGroup = currentGroups.find(g => g.id === groupId);
+            const groupName = selectedGroup ? selectedGroup.name : 'กลุ่มนี้';
+
+            if (!confirm(`คุณต้องการลบกลุ่ม "${groupName}" ใช่หรือไม่? (ไม่กระทบรายชื่อใน DB หลัก)`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/groups/${groupId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    alert('✅ ลบกลุ่มเรียบร้อย');
+                    document.getElementById('groupSelect').value = '';
+                    document.getElementById('btnDeleteGroup').style.display = 'none';
+                    loadData();
+                }
+            } catch (err) {
+                alert('❌ ไม่สามารถลบกลุ่มได้');
+            }
+        }
+
+        // 5. ระบบ Modal สร้างแคมเปญ Multi-type & Templates Reuse
+        async function openCampaignModal(reuseData = null) {
+            if (reuseData && reuseData.targetIds && reuseData.targetIds.length > 0) {
+                selectedUsers.clear();
+                reuseData.targetIds.forEach(id => selectedUsers.add(id));
+                updateSelectionUI();
+            }
+
+            if (selectedUsers.size === 0) {
+                alert('กรุณาเลือกลูกค้าเป้าหมายอย่างน้อย 1 คน หรือเลือกกลุ่มลูกค้าก่อนสร้างแคมเปญครับ');
+                return;
+            }
+
+            document.getElementById('modalTargetCount').innerText = `เป้าหมาย: ${selectedUsers.size} คน`;
+
+            // ดึงรายการแม่แบบที่เคยส่งไปแล้วมาใส่ในดรอปดาวน์
+            loadTemplatePresetDropdown();
+
+            if (reuseData) {
+                document.getElementById('campaignNameInput').value = reuseData.name ? `สำเนา - ${reuseData.name}` : '';
+                document.getElementById('messageTypeSelect').value = reuseData.messageType || 'text_link';
+                document.getElementById('campaignMessageInput').value = reuseData.message || '';
+                document.getElementById('campaignImageUrlInput').value = reuseData.imageUrl || '';
+                document.getElementById('campaignLinkUrlInput').value = reuseData.linkUrl || '';
+            } else {
+                const now = new Date();
+                document.getElementById('campaignNameInput').value = `แคมเปญ ${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} ${now.getHours()}:${now.getMinutes()}`;
+                document.getElementById('messageTypeSelect').value = 'text_link';
+                document.getElementById('campaignMessageInput').value = '';
+                document.getElementById('campaignImageUrlInput').value = '';
+                document.getElementById('campaignLinkUrlInput').value = '';
+            }
+
+            toggleMessageTypeFields();
+            updateImagePreview();
+            openModal('campaignModal');
+        }
+
+        async function handleLocalImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const statusEl = document.getElementById('imageUploadStatus');
+            statusEl.innerText = '⏳ กำลังอัปโหลดรูปภาพจากเครื่อง...';
+            statusEl.style.color = '#0284c7';
+            document.getElementById('imagePreviewContainer').style.display = 'block';
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const base64 = e.target.result;
+                try {
+                    const res = await fetch(`${API_BASE}/upload/image`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ base64: base64, filename: file.name })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        document.getElementById('campaignImageUrlInput').value = data.url;
+                        document.getElementById('imagePreviewImg').src = data.url;
+                        statusEl.innerText = `✅ โหลดรูปภาพจากเครื่องสำเร็จ: ${file.name}`;
+                        statusEl.style.color = '#16a34a';
+                    } else {
+                        statusEl.innerText = '❌ อัปโหลดรูปภาพไม่สำเร็จ';
+                        statusEl.style.color = '#dc2626';
+                    }
+                } catch (err) {
+                    console.error(err);
+                    statusEl.innerText = '❌ เกิดข้อผิดพลาดในการอัปโหลด';
+                    statusEl.style.color = '#dc2626';
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateImagePreview() {
+            const url = document.getElementById('campaignImageUrlInput').value;
+            const container = document.getElementById('imagePreviewContainer');
+            const img = document.getElementById('imagePreviewImg');
+            const statusEl = document.getElementById('imageUploadStatus');
+
+            if (url && url.trim() !== '') {
+                img.src = url;
+                container.style.display = 'block';
+                statusEl.innerText = '🖼️ พรีวิวรูปภาพ';
+                statusEl.style.color = '#475569';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        function getThaiMessageTypeLabel(type) {
+            switch (type) {
+                case 'text_link': return '💬 ข้อความ + 🔗 ลิงก์';
+                case 'text': return '💬 ข้อความธรรมดา';
+                case 'image_link': return '🖼️ รูปภาพ + 🔗 ลิงก์';
+                case 'image_only': return '🖼️ รูปภาพอย่างเดียว';
+                case 'link_only': return '🔗 ลิงก์อย่างเดียว';
+                default: return type || '💬 ข้อความ';
+            }
+        }
+
+        async function loadTemplatePresetDropdown() {
+            try {
+                const res = await fetch(`${API_BASE}/campaigns/templates`);
+                campaignTemplates = await res.json();
+                const select = document.getElementById('templateReuseSelect');
+                select.innerHTML = '<option value="">-- พิมพ์สร้างใหม่ หรือ เลือกแคมเปญเดิมที่เคยส่ง --</option>' +
+                    campaignTemplates.map(t => `<option value="${t.id}">[${getThaiMessageTypeLabel(t.messageType)}] ${t.name || (t.message ? t.message.substring(0, 30) : '')}...</option>`).join('');
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function applyTemplatePreset() {
+            const templateId = document.getElementById('templateReuseSelect').value;
+            if (!templateId) return;
+
+            const template = campaignTemplates.find(t => t.id === templateId);
+            if (template) {
+                document.getElementById('messageTypeSelect').value = template.messageType;
+                document.getElementById('campaignMessageInput').value = template.message;
+                document.getElementById('campaignImageUrlInput').value = template.imageUrl || '';
+                document.getElementById('campaignLinkUrlInput').value = template.linkUrl || '';
+                toggleMessageTypeFields();
+                updateImagePreview();
+            }
+        }
+
+        function toggleMessageTypeFields() {
+            const type = document.getElementById('messageTypeSelect').value;
+            const imgGroup = document.getElementById('imageUrlGroup');
+            const linkGroup = document.getElementById('linkUrlGroup');
+            const msgInput = document.getElementById('campaignMessageInput');
+            const msgGroup = msgInput ? msgInput.closest('.form-group') : null;
+
+            if (type === 'image_link') {
+                imgGroup.style.display = 'block';
+                linkGroup.style.display = 'block';
+                if (msgGroup) msgGroup.style.display = 'block';
+            } else if (type === 'image_only') {
+                imgGroup.style.display = 'block';
+                linkGroup.style.display = 'none';
+                if (msgGroup) msgGroup.style.display = 'none';
+            } else if (type === 'link_only') {
+                imgGroup.style.display = 'none';
+                linkGroup.style.display = 'block';
+                if (msgGroup) msgGroup.style.display = 'block';
+            } else if (type === 'text_link') {
+                imgGroup.style.display = 'none';
+                linkGroup.style.display = 'block';
+                if (msgGroup) msgGroup.style.display = 'block';
+            } else {
+                imgGroup.style.display = 'none';
+                linkGroup.style.display = 'none';
+                if (msgGroup) msgGroup.style.display = 'block';
+            }
+        }
+
+        function toggleScheduleField() {
+            const checked = document.getElementById('enableScheduleCheckbox').checked;
+            const group = document.getElementById('scheduleTimeGroup');
+            group.style.display = checked ? 'block' : 'none';
+            if (checked && !document.getElementById('campaignScheduledAtInput').value) {
+                // ค่าเริ่มต้นเป็นเวลาปัจจุบัน + 10 นาที
+                const now = new Date(Date.now() + 10 * 60 * 1000);
+                const localIso = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                document.getElementById('campaignScheduledAtInput').value = localIso;
+            }
+        }
+
+        // ฟังก์ชันควบคุมการหยุดชั่วคราว / ทำงานต่อ / หยุดส่งแคมเปญ
+        async function pauseCampaignControl(campaignId) {
+            try {
+                const res = await fetch(`${API_BASE}/campaign/pause`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaignId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('⏸️ สั่งหยุดส่งแคมเปญชั่วคราวเรียบร้อยแล้ว (บอทจะไม่ดึงคิวไปรันชั่วคราว)');
+                    loadData();
+                    if (document.getElementById('historyModal').style.display === 'flex') openHistoryModal();
+                }
+            } catch(e) { alert('❌ ไม่สามารถหยุดแคมเปญชั่วคราวได้'); }
+        }
+
+        async function resumeCampaignControl(campaignId) {
+            try {
+                const res = await fetch(`${API_BASE}/campaign/resume`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaignId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('▶️ สั่งให้แคมเปญกลับมาส่งต่อเรียบร้อยแล้ว');
+                    loadData();
+                    if (document.getElementById('historyModal').style.display === 'flex') openHistoryModal();
+                    if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+                }
+            } catch(e) { alert('❌ ไม่สามารถสั่งทำงานต่อได้'); }
+        }
+
+        async function pauseCampaignControl(campaignId) {
+            try {
+                const res = await fetch(`${API_BASE}/campaign/pause`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaignId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('⏸️ สั่งหยุดส่งแคมเปญชั่วคราวเรียบร้อยแล้ว (บอทจะไม่ดึงคิวไปรันชั่วคราว)');
+                    loadData();
+                    if (document.getElementById('historyModal').style.display === 'flex') openHistoryModal();
+                    if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+                }
+            } catch(e) { alert('❌ ไม่สามารถหยุดแคมเปญชั่วคราวได้'); }
+        }
+
+        async function openTelegramModal() {
+            openModal('telegramModal');
+            try {
+                const res = await fetch(`${API_BASE}/telegram/settings`);
+                const config = await res.json();
+                document.getElementById('telegramTokenInput').value = config.botToken || '';
+                document.getElementById('telegramChatIdInput').value = config.chatId || '';
+                document.getElementById('enableTelegramCheckbox').checked = config.enabled || false;
+            } catch (e) {
+                console.error('Failed to load Telegram settings', e);
+            }
+        }
+
+        async function saveTelegramSettingsUI() {
+            const botToken = document.getElementById('telegramTokenInput').value.trim();
+            const chatId = document.getElementById('telegramChatIdInput').value.trim();
+            const enabled = document.getElementById('enableTelegramCheckbox').checked;
+
+            try {
+                const res = await fetch(`${API_BASE}/telegram/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ botToken, chatId, enabled })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('✅ บันทึกการตั้งค่า Telegram เรียบร้อยแล้ว!');
+                    closeModal('telegramModal');
+                } else {
+                    alert(`❌ ${data.message || 'บันทึกการตั้งค่าไม่สำเร็จ'}`);
+                }
+            } catch (e) {
+                alert('❌ เกิดข้อผิดพลาดในการบันทึกการตั้งค่า Telegram');
+            }
+        }
+
+        async function testTelegramSettingsUI() {
+            const botToken = document.getElementById('telegramTokenInput').value.trim();
+            const chatId = document.getElementById('telegramChatIdInput').value.trim();
+            const enabled = document.getElementById('enableTelegramCheckbox').checked;
+
+            if (!botToken || !chatId) {
+                alert('กรุณากรอก Bot Token และ Chat ID ก่อนทดสอบส่งครับ');
+                return;
+            }
+
+            // บันทึกชั่วคราวก่อนทดสอบ
+            await fetch(`${API_BASE}/telegram/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ botToken, chatId, enabled })
+            });
+
+            try {
+                const res = await fetch(`${API_BASE}/telegram/test`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert('🎉 ส่งข้อความทดสอบสำเร็จ! กรุณาเช็คข้อความใน Telegram ของคุณ');
+                } else {
+                    alert(`❌ ${data.message || 'ทดสอบส่ง Telegram ไม่สำเร็จ'}`);
+                }
+            } catch (e) {
+                alert('❌ เกิดข้อผิดพลาดในการทดสอบส่ง Telegram');
+            }
+        }
+
+        async function openScheduledModal() {
+            openModal('scheduledModal');
+            const tbody = document.getElementById('scheduledTableBody');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">⏳ กำลังดึงรายการตารางส่ง...</td></tr>';
+
+            try {
+                const res = await fetch(`${API_BASE}/campaigns/scheduled`);
+                const campaigns = await res.json();
+
+                if (campaigns.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">📅 ไม่มีรายการแคมเปญที่ตั้งเวลาส่งล่วงหน้า</td></tr>';
+                    return;
+                }
+
+                const nowMs = Date.now();
+
+                tbody.innerHTML = campaigns.map(c => {
+                    const schedTime = c.scheduledAt ? new Date(c.scheduledAt) : null;
+                    const schedDt = schedTime ? schedTime.toLocaleString('th-TH') : '-';
+                    const createdDt = c.createdAt ? new Date(c.createdAt).toLocaleTimeString('th-TH') : '-';
+                    const updatedDt = c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString('th-TH') : '-';
+
+                    let startTimeObj = c.startedAt ? new Date(c.startedAt) : (schedTime && schedTime.getTime() <= nowMs ? schedTime : null);
+                    let updateTimeObj = c.updatedAt ? new Date(c.updatedAt) : null;
+
+                    // ป้องกันกรณี Record เก่าที่มีเวลาเริ่มรันมากกว่าเวลาเสร็จสิ้น ให้ปรับเวลาเริ่มให้ก่อนเวลาเสร็จสิ้นเสมอ
+                    if (startTimeObj && updateTimeObj && startTimeObj.getTime() > updateTimeObj.getTime()) {
+                        startTimeObj = schedTime && schedTime.getTime() <= updateTimeObj.getTime() 
+                            ? schedTime 
+                            : new Date(updateTimeObj.getTime() - 15 * 1000);
+                    }
+
+                    const startDt = startTimeObj ? startTimeObj.toLocaleTimeString('th-TH') : createdDt;
+
+                    let statusBadge = `<span class="badge" style="background:#f3e8ff; color:#7e22ce; border:1px solid #d8b4fe;">⏰ รอเริ่มรัน</span>`;
+                    let startFinishText = `<div style="font-size:11px; color:#64748b;">⚡ รัน: ⏳ ยังไม่ถึงเวลา</div>`;
+
+                    if (c.status === 'processing') {
+                        statusBadge = '<span class="badge badge-processing">⚡ กำลังส่งข้อความ</span>';
+                        startFinishText = `
+                            <div style="font-size:11px; color:#0284c7;">⚡ เริ่มรัน: ${startDt}</div>
+                            <div style="font-size:11px; color:#16a34a;">⏳ กำลังส่ง (${c.successCount}/${c.totalTargets})</div>
+                        `;
+                    } else if (c.status === 'completed') {
+                        statusBadge = '<span class="badge badge-completed">✅ ส่งสำเร็จครบถ้วน</span>';
+                        startFinishText = `
+                            <div style="font-size:11px; color:#15803d;">⚡ เริ่มรัน: ${startDt}</div>
+                            <div style="font-size:11px; color:#16a34a;">🏁 เสร็จเมื่อ: ${updatedDt}</div>
+                        `;
+                    } else if (c.status === 'paused') {
+                        statusBadge = '<span class="badge" style="background:#fefce8; color:#a16207; border:1px solid #fef08a;">⏸️ Hold พักรายการ</span>';
+                        startFinishText = `<div style="font-size:11px; color:#a16207;">⏸️ ผู้ใช้พักรายการไว้</div>`;
+                    } else if (c.status === 'stopped_limit') {
+                        statusBadge = '<span class="badge" style="background:#fff7ed; color:#c2410c; border:1px solid #ffedd5;">🛑 หยุด: โควต้าเต็ม</span>';
+                        startFinishText = `
+                            <div style="font-size:11px; color:#0284c7;">⚡ เริ่มรัน: ${startDt}</div>
+                            <div style="font-size:11px; color:#c2410c;">🛑 หยุดเมื่อ: ${updatedDt}</div>
+                        `;
+                    } else if (c.status === 'stopped_error') {
+                        statusBadge = '<span class="badge" style="background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2;">🚨 หยุด: Error 10 ครั้ง</span>';
+                        startFinishText = `
+                            <div style="font-size:11px; color:#0284c7;">⚡ เริ่มรัน: ${startDt}</div>
+                            <div style="font-size:11px; color:#b91c1c;">🚨 หยุดเมื่อ: ${updatedDt}</div>
+                        `;
+                    } else if (c.status === 'stopped_user') {
+                        statusBadge = '<span class="badge" style="background:#f3f4f6; color:#4b5563; border:1px solid #d1d5db;">⏹️ ผู้ใช้สั่งหยุด</span>';
+                        startFinishText = `
+                            <div style="font-size:11px; color:#0284c7;">⚡ เริ่มรัน: ${startDt}</div>
+                            <div style="font-size:11px; color:#4b5563;">⏹️ หยุดเมื่อ: ${updatedDt}</div>
+                        `;
+                    } else if (c.status === 'failed') {
+                        statusBadge = '<span class="badge badge-failed">❌ ล้มเหลว</span>';
+                        startFinishText = `
+                            <div style="font-size:11px; color:#0284c7;">⚡ เริ่มรัน: ${startDt}</div>
+                            <div style="font-size:11px; color:#dc2626;">❌ สิ้นสุดเมื่อ: ${updatedDt}</div>
+                        `;
+                    } else if (schedTime && schedTime.getTime() <= nowMs) {
+                        statusBadge = '<span class="badge badge-processing">⚡ ถึงเวลากำลังเข้าคิว</span>';
+                    }
+
+                    const isEditable = c.status === 'scheduled' || c.status === 'paused';
+
+                    return `
+                        <tr>
+                            <td><strong style="color:#6b21a8;">📅 ${schedDt}</strong></td>
+                            <td>
+                                <strong>${c.name || 'แคมเปญทั่วไป'}</strong>
+                                <div><span class="badge" style="background:#e2e8f0; color:#334155; font-size:10px;">${getThaiMessageTypeLabel(c.messageType)}</span></div>
+                            </td>
+                            <td>
+                                <div style="font-weight:bold; color:#334155;">เป้าหมาย ${c.totalTargets} คน</div>
+                                <div style="font-size:11px;"><span style="color:#16a34a;">✅ ${c.successCount}</span> / <span style="color:#dc2626;">❌ ${c.failedCount}</span></div>
+                            </td>
+                            <td>${statusBadge}</td>
+                            <td>${startFinishText}</td>
+                            <td>
+                                ${isEditable ? (
+                                    c.status === 'paused' 
+                                        ? `<button class="action-btn" style="padding:3px 6px; font-size:11px; margin-right:2px; background:#16a34a;" onclick='resumeCampaignControl("${c.id}")' title="ปลด Hold">▶️</button>`
+                                        : `<button class="action-btn-secondary" style="padding:3px 6px; font-size:11px; margin-right:2px; background:#eab308; color:white; border:none;" onclick='pauseCampaignControl("${c.id}")' title="Hold พักรายการ">⏸️</button>`
+                                ) : ''}
+                                ${isEditable ? `<button class="action-btn-outline" style="padding:3px 6px; font-size:11px; margin-right:2px;" onclick='rescheduleCampaignControl("${c.id}", "${c.scheduledAt}")' title="เปลี่ยนเวลาส่ง">✏️</button>` : ''}
+                                <button class="action-btn-outline" style="padding:3px 6px; font-size:11px; margin-right:2px;" onclick='openCampaignDetailModal("${c.id}")' title="ดูรายชื่อผู้รับ">🔍</button>
+                                ${isEditable ? `<button class="action-btn-danger" style="padding:3px 6px; font-size:11px;" onclick='stopCampaignControl("${c.id}")' title="ยกเลิกตารางส่ง">⏹️</button>` : ''}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red; padding:20px;">❌ ไม่สามารถโหลดรายการตารางส่งได้</td></tr>';
+            }
+        }
+
+        async function rescheduleCampaignControl(campaignId, currentIso) {
+            const currentDtStr = currentIso ? new Date(currentIso).toISOString().slice(0, 16) : '';
+            const newTime = prompt('📅 ระบุวันและเวลาส่งล่วงหน้าใหม่ (รูปแบบ: YYYY-MM-DDTHH:mm เช่น 2026-08-21T21:00):', currentDtStr);
+            if (!newTime) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/campaign/reschedule`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaignId, scheduledAt: newTime })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ เปลี่ยนวัน-เวลาส่งล่วงหน้าเรียบร้อยแล้ว: ${new Date(data.scheduledAt).toLocaleString('th-TH')}`);
+                    openScheduledModal();
+                    loadData();
+                } else {
+                    alert(`❌ ${data.message || 'ไม่สามารถเปลี่ยนเวลาได้'}`);
+                }
+            } catch(e) {
+                alert('❌ เกิดข้อผิดพลาดในการเปลี่ยนเวลาส่ง');
+            }
+        }
+
+        async function stopCampaignControl(campaignId) {
+            if (!confirm('⚠️ คุณต้องการสั่ง "หยุดทำงานถาวร" สำหรับแคมเปญนี้ใช่หรือไม่?\n(คิวงานที่เหลือทั้งหมดในแคมเปญจะถูกยกเลิกทันที)')) {
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/campaign/stop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaignId, reason: '🛑 ผู้ใช้สั่งหยุดทำงานถาวรผ่านหน้า Dashboard' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('⏹️ สั่งหยุดการทำงานแคมเปญถาวรเรียบร้อยแล้ว');
+                    loadData();
+                    if (document.getElementById('historyModal').style.display === 'flex') openHistoryModal();
+                }
+            } catch(e) { alert('❌ ไม่สามารถสั่งหยุดแคมเปญได้'); }
+        }
+
+        function renderActiveCampaignBanner(campaigns) {
+            const banner = document.getElementById('activeCampaignBanner');
+            const activeCamp = campaigns.find(c => ['processing', 'paused', 'pending', 'scheduled'].includes(c.status));
+
+            if (!activeCamp) {
+                banner.style.display = 'none';
+                banner.innerHTML = '';
+                return;
+            }
+
+            banner.style.display = 'block';
+            const isPaused = activeCamp.status === 'paused';
+            const isScheduled = activeCamp.status === 'scheduled';
+
+            let bgStyle = 'background:#f0f9ff; border:1px solid #bae6fd;';
+            let titleTxt = `⚡ กำลังส่งแคมเปญ: "${activeCamp.name || 'แคมเปญทั่วไป'}"`;
+            if (isPaused) {
+                bgStyle = 'background:#fefce8; border:1px solid #fef08a;';
+                titleTxt = `⏸️ หยุดชั่วคราว: "${activeCamp.name || 'แคมเปญทั่วไป'}"`;
+            } else if (isScheduled) {
+                bgStyle = 'background:#faf5ff; border:1px solid #e9d5ff;';
+                const sDt = activeCamp.scheduledAt ? new Date(activeCamp.scheduledAt).toLocaleString('th-TH') : '';
+                titleTxt = `⏰ ตั้งเวลาล่วงหน้า (${sDt}): "${activeCamp.name || 'แคมเปญทั่วไป'}"`;
+            }
+
+            banner.innerHTML = `
+                <div style="${bgStyle} padding:12px 16px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="color:#0369a1; font-size:14px;">${titleTxt}</strong>
+                        <span style="font-size:12px; color:#475569; margin-left:12px;">
+                            เป้าหมาย ${activeCamp.totalTargets} คน | สำเร็จ: <strong style="color:#16a34a;">${activeCamp.successCount}</strong> | ล้มเหลว/ข้าม: <strong style="color:#dc2626;">${activeCamp.failedCount}</strong>
+                        </span>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        ${isPaused 
+                            ? `<button onclick="resumeCampaignControl('${activeCamp.id}')" class="action-btn" style="background:#16a34a; padding:5px 12px; font-size:12px;">▶️ ทำงานต่อ</button>`
+                            : `<button onclick="pauseCampaignControl('${activeCamp.id}')" class="action-btn-secondary" style="background:#eab308; color:white; border:none; padding:5px 12px; font-size:12px;">⏸️ หยุดชั่วคราว</button>`
+                        }
+                        <button onclick="stopCampaignControl('${activeCamp.id}')" class="action-btn-danger" style="padding:5px 12px; font-size:12px;">⏹️ หยุดทำงานถาวร</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function openAnalyticsModal() {
+            openModal('analyticsModal');
+            const container = document.getElementById('analyticsContent');
+            container.innerHTML = '<div style="text-align:center; padding:30px;">⏳ กำลังประมวลผลรายงานเชิงลึก...</div>';
+
+            try {
+                const res = await fetch(`${API_BASE}/analytics`);
+                const data = await res.json();
+
+                const activePct = data.totalCustomers > 0 ? Math.round((data.activeCustomers / data.totalCustomers) * 100) : 100;
+                const blockedPct = 100 - activePct;
+
+                container.innerHTML = `
+                    <!-- Summary KPI Cards -->
+                    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-bottom:20px;">
+                        <div style="background:#f0fdf4; border:1px solid #bbf7d0; padding:12px; border-radius:8px; text-align:center;">
+                            <div style="font-size:12px; color:#166534; font-weight:600;">👥 ลูกค้า Active (พร้อมส่ง)</div>
+                            <div style="font-size:22px; font-weight:bold; color:#15803d; margin-top:4px;">${data.activeCustomers.toLocaleString()} คน</div>
+                            <div style="font-size:11px; color:#15803d; margin-top:2px;">${activePct}% ของลูกค้ารวม</div>
+                        </div>
+
+                        <div style="background:#fef2f2; border:1px solid #fecaca; padding:12px; border-radius:8px; text-align:center;">
+                            <div style="font-size:12px; color:#991b1b; font-weight:600;">🚫 บล็อก/ส่งไม่ได้แล้ว</div>
+                            <div style="font-size:22px; font-weight:bold; color:#dc2626; margin-top:4px;">${data.blockedCustomers.toLocaleString()} คน</div>
+                            <div style="font-size:11px; color:#dc2626; margin-top:2px;">${blockedPct}% ของลูกค้ารวม</div>
+                        </div>
+
+                        <div style="background:#eff6ff; border:1px solid #bfdbfe; padding:12px; border-radius:8px; text-align:center;">
+                            <div style="font-size:12px; color:#1e40af; font-weight:600;">✉️ ส่งบรอดแคสต์สำเร็จ</div>
+                            <div style="font-size:22px; font-weight:bold; color:#2563eb; margin-top:4px;">${data.totalSuccessSent.toLocaleString()} ครั้ง</div>
+                            <div style="font-size:11px; color:#2563eb; margin-top:2px;">จากทั้งหมด ${data.totalTargetsSent.toLocaleString()} ข้อความ</div>
+                        </div>
+
+                        <div style="background:#faf5ff; border:1px solid #e9d5ff; padding:12px; border-radius:8px; text-align:center;">
+                            <div style="font-size:12px; color:#6b21a8; font-weight:600;">🎯 อัตราสำเร็จภาพรวม</div>
+                            <div style="font-size:22px; font-weight:bold; color:#9333ea; margin-top:4px;">${data.overallSuccessRate}%</div>
+                            <div style="font-size:11px; color:#9333ea; margin-top:2px;">${data.totalCampaigns} แคมเปญทั้งหมด</div>
+                        </div>
+                    </div>
+
+                    <!-- Auto-Stop & Safety Status -->
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:20px;">
+                        <div style="background:#fff7ed; border:1px solid #ffedd5; padding:12px; border-radius:8px;">
+                            <div style="font-size:13px; font-weight:bold; color:#c2410c;">🛑 การหยุดเพราะโควต้า LINE เต็ม</div>
+                            <div style="font-size:12px; color:#9a3412; margin-top:4px;">
+                                หยุดส่งอัตโนมัติแล้ว: <strong>${data.stoppedLimitCount} แคมเปญ</strong>
+                            </div>
+                            <div style="font-size:11px; color:#7c2d12; margin-top:2px;">(ระบบคุ้มครองโควต้า และไม่คิดยอดส่งส่วนเกิน)</div>
+                        </div>
+
+                        <div style="background:#fef2f2; border:1px solid #fee2e2; padding:12px; border-radius:8px;">
+                            <div style="font-size:13px; font-weight:bold; color:#b91c1c;">🚨 เซฟตี้หยุดเพราะ Error 10 ครั้ง</div>
+                            <div style="font-size:12px; color:#991b1b; margin-top:4px;">
+                                หยุดฉุกเฉินแล้ว: <strong>${data.stoppedErrorCount} แคมเปญ</strong>
+                            </div>
+                            <div style="font-size:11px; color:#7f1d1d; margin-top:2px;">(Circuit Breaker คุมความปลอดภัยบัญชี LINE OA)</div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Customer Distribution Bar -->
+                    <div style="margin-bottom:20px;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px;">
+                            <span>สัดส่วนสุขภาพบัญชีลูกค้า (Account Health Ratio)</span>
+                            <span>${data.totalCustomers.toLocaleString()} คนทั้งหมด</span>
+                        </div>
+                        <div style="display:flex; height:18px; border-radius:9px; overflow:hidden; background:#e2e8f0;">
+                            <div style="width:${activePct}%; background:#22c55e;" title="Active: ${data.activeCustomers} คน (${activePct}%)"></div>
+                            <div style="width:${blockedPct}%; background:#ef4444;" title="Blocked: ${data.blockedCustomers} คน (${blockedPct}%)"></div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:11px; color:#64748b; margin-top:4px;">
+                            <span style="color:#16a34a;">🟢 Active (พร้อมรับข่าวสาร): ${data.activeCustomers.toLocaleString()} คน (${activePct}%)</span>
+                            <span style="color:#dc2626;">🔴 Blocked (ส่งไม่ได้แล้ว): ${data.blockedCustomers.toLocaleString()} คน (${blockedPct}%)</span>
+                        </div>
+                    </div>
+
+                    <!-- Top Failure Reasons Table -->
+                    <div style="margin-bottom:20px;">
+                        <h4 style="font-size:14px; margin-bottom:8px; color:#334155;">📉 สรุปสาเหตุการส่งล้มเหลวที่พบมากที่สุด</h4>
+                        <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#f1f5f9; text-align:left;">
+                                    <th style="padding:6px 10px;">สาเหตุที่ล้มเหลว</th>
+                                    <th style="padding:6px 10px; width:140px; text-align:right;">จำนวนครั้ง</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.topReasons.length > 0 ? data.topReasons.map(r => `
+                                    <tr style="border-bottom:1px solid #f1f5f9;">
+                                        <td style="padding:6px 10px;">${r.reason}</td>
+                                        <td style="padding:6px 10px; text-align:right; font-weight:bold; color:#dc2626;">${r.count.toLocaleString()} ครั้ง</td>
+                                    </tr>
+                                `).join('') : '<tr><td colspan="2" style="padding:10px; text-align:center; color:#16a34a;">🎉 ไม่มีรายการส่งล้มเหลว</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch(e) {
+                container.innerHTML = '<div style="text-align:center; color:red; padding:30px;">❌ ไม่สามารถโหลดรายงานเชิงลึกได้</div>';
+            }
+        }
+
+        async function submitCampaign() {
+            const targetIds = Array.from(selectedUsers);
+            if (targetIds.length === 0) {
+                alert('กรุณาเลือกลูกค้าเป้าหมายอย่างน้อย 1 คน');
+                return;
+            }
+
+            const name = document.getElementById('campaignNameInput').value;
+            const messageType = document.getElementById('messageTypeSelect').value;
+            let message = document.getElementById('campaignMessageInput').value;
+            const imageUrl = document.getElementById('campaignImageUrlInput').value;
+            const linkUrl = document.getElementById('campaignLinkUrlInput').value;
+
+            let scheduledAt = null;
+            if (document.getElementById('enableScheduleCheckbox').checked) {
+                const schedVal = document.getElementById('campaignScheduledAtInput').value;
+                if (schedVal) {
+                    scheduledAt = schedVal;
+                } else {
+                    alert('กรุณาระบุวันและเวลาที่ต้องการตั้งเวลาส่งล่วงหน้า');
+                    return;
+                }
+            }
+
+            if (messageType === 'image_only') {
+                if (!imageUrl || imageUrl.trim() === '') {
+                    alert('กรุณาเลือก/แนบรูปภาพจากเครื่อง หรือ ระบุ URL รูปภาพ');
+                    return;
+                }
+                if (!message || message.trim() === '') {
+                    message = '🖼️ [ส่งรูปภาพเดี่ยว]';
+                }
+            } else if (messageType === 'link_only') {
+                if (!linkUrl || linkUrl.trim() === '') {
+                    alert('กรุณาระบุ URL ลิงก์ปลายทาง (Target Link URL)');
+                    return;
+                }
+            } else if (messageType === 'image_link') {
+                if (!imageUrl || imageUrl.trim() === '') {
+                    alert('กรุณาเลือก/แนบรูปภาพจากเครื่อง');
+                    return;
+                }
+                if (!message || message.trim() === '') {
+                    alert('กรุณากรอกข้อความที่จะส่ง');
+                    return;
+                }
+            } else {
+                if (!message || message.trim() === '') {
+                    alert('กรุณากรอกข้อความที่จะส่ง');
+                    return;
+                }
+            }
+
+            try {
+                document.getElementById('btnSubmitCampaign').innerText = '⏳ กำลังบันทึกคิว...';
+                document.getElementById('btnSubmitCampaign').disabled = true;
+
+                const res = await fetch(`${API_BASE}/campaign/add`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        messageType: messageType,
+                        message: message,
+                        imageUrl: imageUrl,
+                        linkUrl: linkUrl,
+                        targetIds: targetIds,
+                        scheduledAt: scheduledAt
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    if (data.status === 'scheduled') {
+                        const sDt = new Date(data.scheduledAt).toLocaleString('th-TH');
+                        alert(`⏰ ตั้งเวลาส่งแคมเปญล่วงหน้าสำเร็จ!\n\nกำหนดส่งเวลา: ${sDt}\nจำนวนผู้รับ: ${data.queuedCount} คน\n\nเมื่อถึงกำหนดเวลา บอทในหน้า LINE OA จะเริ่มดำเนินการส่งให้อัตโนมัติครับ!`);
+                    } else {
+                        alert(`✅ สร้างแคมเปญและบันทึกคิวลง DB สำเร็จจำนวน ${data.queuedCount} รายการ!\n\nขั้นตอนต่อไป: ไปเปิด Tampermonkey Script ในหน้าเว็บ LINE OA เพื่อเริ่มส่งข้อความครับ`);
+                    }
+                    closeModal('campaignModal');
+                    selectedUsers.clear();
+                    renderTable();
+                }
+            } catch (err) {
+                alert('❌ ไม่สามารถสร้างแคมเปญได้');
+            } finally {
+                document.getElementById('btnSubmitCampaign').innerText = '🚀 เริ่มส่งแคมเปญ';
+                document.getElementById('btnSubmitCampaign').disabled = false;
+                updateSelectionUI();
+            }
+        }
+
+        // 6. ระบบประวัติแคมเปญย้อนหลัง (Campaign History View)
+        async function openHistoryModal() {
+            openModal('historyModal');
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">⏳ กำลังดึงประวัติ...</td></tr>';
+
+            try {
+                const res = await fetch(`${API_BASE}/campaigns`);
+                const campaigns = await res.json();
+
+                if (campaigns.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">ยังไม่มีประวัติการส่งแคมเปญ</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = campaigns.map(c => {
+                    const dt = new Date(c.createdAt).toLocaleString('th-TH');
+                    let statusBadge = `<span class="badge badge-pending">${c.status}</span>`;
+                    if (c.status === 'processing') statusBadge = '<span class="badge badge-processing">⚡ กำลังส่ง</span>';
+                    else if (c.status === 'completed') statusBadge = '<span class="badge badge-completed">✅ สำเร็จ</span>';
+                    else if (c.status === 'paused') statusBadge = '<span class="badge" style="background:#fefce8; color:#a16207; border:1px solid #fef08a;">⏸️ หยุดชั่วคราว</span>';
+                    else if (c.status === 'stopped_user') statusBadge = '<span class="badge" style="background:#f3f4f6; color:#4b5563; border:1px solid #d1d5db;">⏹️ ผู้ใช้สั่งหยุด</span>';
+                    else if (c.status === 'scheduled') {
+                        const sDt = c.scheduledAt ? new Date(c.scheduledAt).toLocaleString('th-TH') : '';
+                        statusBadge = `<span class="badge" style="background:#f3e8ff; color:#7e22ce; border:1px solid #d8b4fe;" title="ส่งเวลา: ${sDt}">⏰ ตั้งเวลาล่วงหน้า</span>`;
+                    } else if (c.status === 'stopped_limit') {
+                        statusBadge = '<span class="badge" style="background:#fff7ed; color:#c2410c; border:1px solid #ffedd5;">🛑 หยุด: โควต้าเต็ม</span>';
+                    } else if (c.status === 'stopped_error') {
+                        statusBadge = '<span class="badge" style="background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2;">🚨 หยุด: Error 10 ครั้ง</span>';
+                    } else if (c.status === 'failed') {
+                        statusBadge = '<span class="badge badge-failed">❌ ล้มเหลว</span>';
+                    }
+
+                    let controlBtns = '';
+                    if (c.status === 'processing' || c.status === 'pending' || c.status === 'scheduled') {
+                        controlBtns = `
+                            <button class="action-btn-secondary" style="padding:4px 6px; font-size:11px; margin-right:3px; background:#eab308; color:white; border:none;" onclick='pauseCampaignControl("${c.id}")' title="หยุดส่งชั่วคราว">⏸️</button>
+                            <button class="action-btn-danger" style="padding:4px 6px; font-size:11px; margin-right:3px;" onclick='stopCampaignControl("${c.id}")' title="หยุดทำงานถาวร">⏹️</button>
+                        `;
+                    } else if (c.status === 'paused') {
+                        controlBtns = `
+                            <button class="action-btn" style="padding:4px 6px; font-size:11px; margin-right:3px; background:#16a34a;" onclick='resumeCampaignControl("${c.id}")' title="ทำงานต่อ">▶️</button>
+                            <button class="action-btn-danger" style="padding:4px 6px; font-size:11px; margin-right:3px;" onclick='stopCampaignControl("${c.id}")' title="หยุดทำงานถาวร">⏹️</button>
+                        `;
+                    }
+
+                    return `
+                        <tr>
+                            <td>${dt}</td>
+                            <td><strong>${c.name || 'แคมเปญทั่วไป'}</strong></td>
+                            <td><span class="badge" style="background:#e2e8f0; color:#334155;">${getThaiMessageTypeLabel(c.messageType)}</span></td>
+                            <td>${c.totalTargets} คน</td>
+                            <td><span style="color:#16a34a;">✅ ${c.successCount}</span> / <span style="color:#dc2626;">❌ ${c.failedCount}</span></td>
+                            <td>${statusBadge}</td>
+                            <td>
+                                ${controlBtns}
+                                <button class="action-btn-outline" style="padding:4px 8px; font-size:12px; margin-right:3px;" 
+                                    onclick='openCampaignDetailModal("${c.id}")'>
+                                    🔍 ดูผู้รับ
+                                </button>
+                                <button class="action-btn-outline" style="padding:4px 8px; font-size:12px;" 
+                                    onclick='reusePastCampaign(${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+                                    🔄 ใช้ซ้ำ
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red; padding:20px;">❌ ดึงประวัติไม่สำเร็จ</td></tr>';
+            }
+        }
+
+        async function openCampaignDetailModal(campaignId) {
+            closeModal('historyModal');
+            openModal('campaignDetailModal');
+
+            const titleEl = document.getElementById('detailModalTitle');
+            const summaryEl = document.getElementById('detailCampaignSummary');
+            const tbody = document.getElementById('detailTableBody');
+
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">⏳ กำลังดึงข้อมูลผู้รับ...</td></tr>';
+
+            try {
+                const res = await fetch(`${API_BASE}/campaigns/${campaignId}`);
+                const data = await res.json();
+                const campaign = data.campaign;
+                const jobs = data.jobs || [];
+
+                titleEl.innerText = `🔍 รายละเอียดการส่ง: ${campaign.name || 'แคมเปญส่งข้อความ'}`;
+                const dt = new Date(campaign.createdAt).toLocaleString('th-TH');
+
+                summaryEl.innerHTML = `
+                    <strong>วันที่สร้าง:</strong> ${dt} | 
+                    <strong>ประเภท:</strong> ${campaign.messageType} | 
+                    <strong>เป้าหมาย:</strong> ${campaign.totalTargets} คน | 
+                    <strong>ส่งสำเร็จ:</strong> <span style="color:#16a34a; font-weight:bold;">${campaign.successCount}</span> | 
+                    <strong>ล้มเหลว:</strong> <span style="color:#dc2626; font-weight:bold;">${campaign.failedCount}</span>
+                `;
+
+                if (jobs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">ไม่พบรายการผู้รับ</td></tr>';
+                    return;
+                }
+
+                // แมป lineUserId กับชื่อลูกค้าจาก allCustomers
+                const customerMap = new Map();
+                allCustomers.forEach(c => customerMap.set(c.lineUserId, c));
+
+                tbody.innerHTML = jobs.map((job, idx) => {
+                    const cust = customerMap.get(job.lineUserId);
+                    const cleanName = cust ? cust.cleanedDisplayName : 'ลูกค้าทั่วไป';
+                    const originalName = (cust && cust.displayName) ? cust.displayName : '-';
+
+                    let statusBadge = '<span class="badge badge-pending">⏳ รอส่ง</span>';
+                    if (job.status === 'processing') statusBadge = '<span class="badge badge-processing">⚡ กำลังส่ง</span>';
+                    if (job.status === 'success') statusBadge = '<span class="badge badge-completed">✅ สำเร็จ</span>';
+                    if (job.status === 'failed') {
+                        const isBlockedReason = job.errorReason && (job.errorReason.includes('บล็อก') || job.errorReason.includes('ไม่สามารถส่งข้อความ'));
+                        if (isBlockedReason) {
+                            statusBadge = '<span class="badge" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; font-size:11px;">🚫 บล็อก/ส่งไม่ได้แล้ว</span>';
+                        } else {
+                            statusBadge = '<span class="badge badge-failed">❌ ล้มเหลว</span>';
+                        }
+                    }
+
+                    const sentTime = job.sentAt ? new Date(job.sentAt).toLocaleTimeString('th-TH') : (job.errorReason || '-');
+
+                    return `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td><strong style="color:#15803d;">${cleanName}</strong></td>
+                            <td style="color:#64748b;">${originalName}</td>
+                            <td style="font-family:monospace; color:#64748b;">${job.lineUserId}</td>
+                            <td>${statusBadge}</td>
+                            <td>${sentTime}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (e) {
+                console.error(e);
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red; padding:20px;">❌ ไม่สามารถโหลดรายละเอียดผู้รับได้</td></tr>';
+            }
+        }
+
+        function reusePastCampaign(campaign) {
+            closeModal('historyModal');
+            openCampaignModal({
+                name: campaign.name,
+                messageType: campaign.messageType,
+                message: campaign.message,
+                imageUrl: campaign.imageUrl,
+                linkUrl: campaign.linkUrl
+            });
+        }
+
+        // Modal Helpers
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        // Pagination & Checkbox Systems
+        function changePage(dir) {
+            const totalPages = Math.ceil(filteredCustomers.length / rowsPerPage);
+            currentPage += dir;
+            if (currentPage < 1) currentPage = 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+            renderTable();
+        }
+
+        function updatePaginationUI() {
+            const totalPages = Math.ceil(filteredCustomers.length / rowsPerPage);
+            const start = (currentPage - 1) * rowsPerPage + 1;
+            const end = Math.min(currentPage * rowsPerPage, filteredCustomers.length);
+            
+            document.getElementById('pageInfo').innerText = `แสดง ${filteredCustomers.length > 0 ? start : 0} ถึง ${end} จาก ${filteredCustomers.length.toLocaleString()} รายการ`;
+            document.getElementById('currentPageDisplay').innerText = currentPage;
+            document.getElementById('btnPrev').disabled = currentPage === 1;
+            document.getElementById('btnNext').disabled = currentPage === totalPages || totalPages === 0;
+        }
+
+        function toggleSingleSelect(userId) {
+            if (selectedUsers.has(userId)) selectedUsers.delete(userId);
+            else selectedUsers.add(userId);
+            updateSelectionUI();
+        }
+
+        function toggleSelectAll() {
+            const isChecked = document.getElementById('selectAllCheckbox').checked;
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const currentViewData = filteredCustomers.slice(start, end);
+
+            currentViewData.forEach(cust => {
+                if (!cust.isBlocked) { // ข้ามผู้ใช้ที่บล็อกหรือส่งไม่ได้แล้วอัตโนมัติ
+                    if (isChecked) selectedUsers.add(cust.lineUserId);
+                    else selectedUsers.delete(cust.lineUserId);
+                }
+            });
+            renderTable();
+            updateSelectionUI();
+        }
+
+        function updateSelectAllCheckbox() {
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const currentViewData = filteredCustomers.slice(start, end);
+            const allChecked = currentViewData.length > 0 && currentViewData.every(cust => selectedUsers.has(cust.lineUserId));
+            document.getElementById('selectAllCheckbox').checked = allChecked;
+        }
+
+        function updateSelectionUI() {
+            document.getElementById('selectedCount').innerText = `เลือกแล้ว: ${selectedUsers.size.toLocaleString()} คน`;
+            document.getElementById('btnPrepareCampaign').disabled = selectedUsers.size === 0;
+        }
+
+        window.onload = loadData;
+    </script>
+</body>
+</html>
