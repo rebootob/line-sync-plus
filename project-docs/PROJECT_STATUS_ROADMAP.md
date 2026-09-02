@@ -53,7 +53,7 @@ Key Operational Goals:
 |                      Tampermonkey Userscript (LineSyncApp.js v28.6)              |
 |                             Running in chat.line.biz                              |
 |                                                                                   |
-|  - LINE OA Directory Sync & Dashboard Sync Gate (SYNC-WP001-R2 READY_FOR_REV)     |
+|  - LINE OA Directory Sync & Dashboard Gate Validation (SYNC-WP001-R3 READY_REV)   |
 |  - Multi-OA Context Isolation & Identity Fencing (OA-WP001 / R1 CLOSED / PASS)     |
 |  - Single Worker Multi-Tab Lock (REL-WP001 / R1 / R2 CLOSED / PASS)               |
 |  - Document-Lifetime Tab Identity Lock & Clone Defense (ensureTabIdentity)        |
@@ -93,7 +93,7 @@ Key Operational Goals:
 
 The LineSync Plus safety model operates on strict **fail-closed** principles:
 
-- **Customer Directory Sync Hard Fencing & Metric Integrity (SYNC-WP001-R2 READY_FOR_CHATGPT_REVIEW)**: `POST /api/customers/sync-batch` enforces loopback origin (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`), valid `botId` format (`^U[0-9a-fA-F]{32}$`), `botId === activeBotId`, strict User ID regex (`^U[0-9a-fA-F]{32}$`), and Master Bot PAUSED status. Dashboard `startCustomerSync()` queries `${API_BASE}/bot/status` directly before opening sync tab. Client sync is protected by full-run `seenSyncUserIds` deduplication and Web Lock `linesync_customer_sync_v1`. Fail-closed pagination loop and max-page guards abort as ERROR without reporting PASS summary banner. Opaque pagination cursors are never persisted or logged.
+- **Customer Directory Sync Hard Fencing & Metric Integrity (SYNC-WP001-R3 READY_FOR_CHATGPT_REVIEW)**: `POST /api/customers/sync-batch` enforces loopback origin (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`), valid `botId` format (`^U[0-9a-fA-F]{32}$`), `botId === activeBotId`, strict User ID regex (`^U[0-9a-fA-F]{32}$`), and Master Bot PAUSED status. Dashboard `startCustomerSync()` queries `${API_BASE}/bot/status` directly and strictly validates `typeof statusData.enabled === 'boolean'` before opening sync tab. Client sync is protected by full-run `seenSyncUserIds` deduplication and Web Lock `linesync_customer_sync_v1`. Fail-closed pagination loop and max-page guards abort as ERROR without reporting PASS summary banner. Opaque pagination cursors are never persisted or logged.
 - **Strict OA Identity Fencing (OA-WP001 / OA-WP001-R1 CLOSED / PASS)**: Terminal fallback reporting requires valid `botId` + `lineUserId` + `status: 'processing'`. Physical send guards in worker require valid `expectedBotId` matching current OA. Saved job recovery reads `linesync_job_botid` and calls `clearLocalActiveJobState()` if missing/invalid. Queue processor enforces `selectedJob.botId === activeBotId` and `targetCampaign.botId === activeBotId`. Group endpoints require valid `?botId=...`.
 - **Single Worker Multi-Tab Lock & Clone Defense (REL-WP001 CLOSED / PASS)**: `ensureWorkerLeadership()` enforces that only ONE active worker tab claims jobs or executes DOM mutations within a browser profile/storage partition.
 - **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path (`/${botId}/chat/${expectedUserId}`) and DOM attribute validation before any text insertion or image send click.
@@ -107,7 +107,7 @@ The LineSync Plus safety model operates on strict **fail-closed** principles:
 
 ## 6. Problems Found & Work Packages
 
-Over the course of safety hardening, 15 work packages were identified, implemented, verified, and updated:
+Over the course of safety hardening, 16 work packages were identified, implemented, verified, and updated:
 
 1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard (CLOSED)**
 2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard (CLOSED)**
@@ -121,9 +121,10 @@ Over the course of safety hardening, 15 work packages were identified, implement
 10. **BUG-WP002-R1 — Preserve Active Job When OA Context Is Unknown (CLOSED)**
 11. **REL-WP001 / REL-WP001-R1 / REL-WP001-R2 — Single Worker / Multi-Tab Lock (CLOSED)**
 12. **OA-WP001 / OA-WP001-R1 — OA Context Isolation & Strict OA Identity Fencing (CLOSED / PASS)**
-13. **SYNC-WP001 — LINE OA Customer Directory Sync to DB (NOT CLOSED / LIVE UAT BLOCKED PENDING R2 REVIEW)**
+13. **SYNC-WP001 — LINE OA Customer Directory Sync to DB (NOT CLOSED / LIVE UAT BLOCKED PENDING R3 REVIEW)**
 14. **SYNC-WP001-R1 — Metric Integrity & Fail-Closed Pagination Corrective (READY_FOR_CHATGPT_REVIEW)**
 15. **SYNC-WP001-R2 — Dashboard Master Bot Sync Gate Corrective (READY_FOR_CHATGPT_REVIEW)**
+16. **SYNC-WP001-R3 — Strict Dashboard Bot Status Response Validation (READY_FOR_CHATGPT_REVIEW)**
 
 ---
 
@@ -157,7 +158,7 @@ Over the course of safety hardening, 15 work packages were identified, implement
   - **UAT-04 (Controlled Physical LINE OA Switch)**: PASS (Worker v28.5 aligned physical OA with activeBotId).
   - **UAT-05 (OA #2 Live Send Path)**: PASS (Full send path under OA #2 verified; wrong OA send = 0).
   - **UAT-06 (Cross-OA Queue Isolation)**: PASS (OA #2 worker does not claim OA #1 pending jobs).
-- **SYNC-WP001 / SYNC-WP001-R1 / SYNC-WP001-R2**: **READY_FOR_CHATGPT_REVIEW** (NOT CLOSED — Live UAT blocked pending R2 review)
+- **SYNC-WP001 / SYNC-WP001-R1 / R2 / R3**: **READY_FOR_CHATGPT_REVIEW** (NOT CLOSED — Live UAT blocked pending R3 review)
 
 ---
 
@@ -185,7 +186,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
   - `OPS-WP001-R1` (Runtime Retry + Fail-Closed Corrective): **COMPLETED / CLOSED**
   - `REL-WP001 / REL-WP001-R1 / REL-WP001-R2` (Single Worker / Multi-Tab Lock): **COMPLETED / CLOSED**
   - `OA-WP001 / OA-WP001-R1` (OA Context Isolation & Strict Identity Fencing): **COMPLETED / CLOSED**
-  - `SYNC-WP001 / R1 / R2` (LINE OA Customer Directory Sync & Gate Corrective): **READY_FOR_CHATGPT_REVIEW**
+  - `SYNC-WP001 / R1 / R2 / R3` (LINE OA Customer Directory Sync & Gate Corrective): **READY_FOR_CHATGPT_REVIEW**
   - `REL-WP002` (Job Lease + Heartbeat): **READY / NOT STARTED** (AUTHORIZATION REQUIRED)
   - `REL-WP003`: **NOT STARTED**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
@@ -199,7 +200,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
-   - Dashboard Master Bot Sync Gate Corrective (`SYNC-WP001-R2` READY_FOR_CHATGPT_REVIEW).
+   - Strict Dashboard Bot Status Response Validation (`SYNC-WP001-R3` READY_FOR_CHATGPT_REVIEW).
    - OA Context Isolation & Strict Identity Fencing (`OA-WP001 / OA-WP001-R1` COMPLETED / CLOSED).
    - Single worker multi-tab lock (`REL-WP001 / R1 / R2` COMPLETED / CLOSED).
    - Operational runtime version gate (`OPS-WP001 / R1` COMPLETED / CLOSED).
@@ -220,7 +221,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 14. Recommended Next Work Package Candidate
 
-- **SYNC-WP001-R2**: Dashboard Master Bot Sync Gate Corrective (**READY_FOR_CHATGPT_REVIEW**).
+- **SYNC-WP001-R3**: Strict Dashboard Bot Status Response Validation (**READY_FOR_CHATGPT_REVIEW**).
 
 ---
 
@@ -246,9 +247,9 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-Phase 0 SYNC-WP001-R2 is READY_FOR_CHATGPT_REVIEW.
+Phase 0 SYNC-WP001-R3 is READY_FOR_CHATGPT_REVIEW.
 Worker Version: 28.6 | Runtime Contract: 2 | Required Worker: 28.6
 OA-WP001 is CLOSED / PASS (Accepted on v28.5). REL-WP001 is CLOSED / PASS.
-Next Candidate for Review: `SYNC-WP001-R2 — Dashboard Master Bot Sync Gate Corrective`.
+Next Candidate for Review: `SYNC-WP001-R3 — Strict Dashboard Bot Status Response Validation`.
 Future Candidate: `REL-WP002 — Job Lease + Heartbeat` (READY / NOT STARTED — Project Owner authorization required).
 Do NOT start `REL-WP002` automatically.

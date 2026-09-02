@@ -611,7 +611,11 @@
                 if (!res.ok) throw new Error('Status fetch failed');
                 const statusData = await res.json();
 
-                isMasterBotEnabled = !!statusData.enabled;
+                if (!statusData || typeof statusData.enabled !== 'boolean') {
+                    throw new Error('Invalid Master Bot status response');
+                }
+
+                isMasterBotEnabled = statusData.enabled;
                 if (typeof updateMasterBotBtnUI === 'function') {
                     updateMasterBotBtnUI();
                 }
