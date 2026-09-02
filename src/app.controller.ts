@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, NotFoundException, Res, Req, Headers, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository, LessThan, In } from 'typeorm';
 import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -160,6 +160,130 @@ export class AppController {
         blockReason: cust.blockReason || null,
       };
     });
+  }
+
+  // SYNC-WP001 — LINE OA Customer Directory Sync to DB
+  @Post('customers/sync-batch')
+  async syncCustomerBatch(
+    @Body() body: { botId?: string; records?: { lineUserId?: string; displayName?: string }[] },
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const ip = req.socket?.remoteAddress || '';
+    const isLoopback = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    if (!isLoopback) {
+      res.status(HttpStatus.FORBIDDEN);
+      return { success: false, message: 'Forbidden: Request must originate from local loopback' };
+    }
+
+    if (!body || !body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId parameter' };
+    }
+    const cleanBotId = body.botId.trim();
+
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    const activeBotId = state ? state.activeBotId : null;
+    if (!activeBotId || cleanBotId !== activeBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId (${cleanBotId}) does not match active OA (${activeBotId})` };
+    }
+
+    if (AppController.isBotEnabled) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: 'Master Bot must be paused before running customer synchronization' };
+    }
+
+    if (!body.records || !Array.isArray(body.records)) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing records array parameter' };
+    }
+
+    if (body.records.length > 250) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Batch size exceeds maximum limit of 250' };
+    }
+
+    const receivedCount = body.records.length;
+    let invalidCount = 0;
+
+    const validMap = new Map<string, string>();
+    for (const rec of body.records) {
+      if (!rec || !rec.lineUserId || typeof rec.lineUserId !== 'string' || !rec.lineUserId.trim()) {
+        invalidCount++;
+        continue;
+      }
+      const uid = rec.lineUserId.trim();
+      const name = (rec.displayName && typeof rec.displayName === 'string') ? rec.displayName.trim() : 'ลูกค้า';
+      if (!validMap.has(uid)) {
+        validMap.set(uid, name);
+      }
+    }
+
+    const uniqueLineUserIds = Array.from(validMap.keys());
+    if (uniqueLineUserIds.length === 0) {
+      return {
+        success: true,
+        received: receivedCount,
+        inserted: 0,
+        updated: 0,
+        unchanged: 0,
+        invalid: invalidCount,
+      };
+    }
+
+    const existingCustomers = await this.customerRepository.find({
+      where: {
+        botId: cleanBotId,
+        lineUserId: In(uniqueLineUserIds),
+      },
+    });
+
+    const existingMap = new Map<string, Customer>();
+    for (const cust of existingCustomers) {
+      existingMap.set(cust.lineUserId, cust);
+    }
+
+    const toInsert: Customer[] = [];
+    const toUpdate: Customer[] = [];
+    let unchangedCount = 0;
+
+    for (const [uid, name] of validMap.entries()) {
+      const existing = existingMap.get(uid);
+      if (existing) {
+        if (existing.displayName !== name) {
+          existing.displayName = name;
+          toUpdate.push(existing);
+        } else {
+          unchangedCount++;
+        }
+      } else {
+        const newCust = this.customerRepository.create({
+          botId: cleanBotId,
+          lineUserId: uid,
+          displayName: name,
+          isBlocked: false,
+        }) as unknown as Customer;
+        toInsert.push(newCust);
+      }
+    }
+
+    if (toInsert.length > 0) {
+      await this.customerRepository.save(toInsert);
+    }
+
+    if (toUpdate.length > 0) {
+      await this.customerRepository.save(toUpdate);
+    }
+
+    return {
+      success: true,
+      received: receivedCount,
+      inserted: toInsert.length,
+      updated: toUpdate.length,
+      unchanged: unchangedCount,
+      invalid: invalidCount,
+    };
   }
 
   // 1.1 อัปโหลดรูปภาพจากเครื่องคอมพิวเตอร์ Local บันทึกลงเซิร์ฟเวอร์

@@ -42,6 +42,7 @@ describe('AppController', () => {
       ]),
     }),
     save: jest.fn().mockImplementation(c => Promise.resolve(c)),
+    create: jest.fn().mockImplementation(dto => ({ ...dto })),
   };
 
   const mockGroupRepo = {
@@ -479,11 +480,11 @@ describe('AppController', () => {
       };
     });
 
-    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.5', () => {
+    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.6', () => {
       const res = appController.getRuntimeVersion();
       expect(res).toEqual({
         runtimeContractVersion: 2,
-        requiredWorkerVersion: '28.5',
+        requiredWorkerVersion: '28.6',
       });
     });
 
@@ -496,7 +497,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.5',
+        requiredWorkerVersion: '28.6',
       });
       // Prove version gate executes BEFORE job query/claim logic
       expect(findSpy).not.toHaveBeenCalled();
@@ -511,7 +512,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.5',
+        requiredWorkerVersion: '28.6',
       });
       expect(findSpy).not.toHaveBeenCalled();
     });
@@ -533,10 +534,10 @@ describe('AppController', () => {
       expect(saveCampSpy).not.toHaveBeenCalled();
     });
 
-    it('5. GET /api/campaign/next with EXACT version ("28.5") and valid OA header -> reaches normal job claim logic', async () => {
+    it('5. GET /api/campaign/next with EXACT version ("28.6") and valid OA header -> reaches normal job claim logic', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
 
-      const res = await appController.getNextJob('28.5', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const res = await appController.getNextJob('28.6', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
 
       expect(mockRes.statusCode).toBe(200);
       expect(findSpy).toHaveBeenCalled();
@@ -661,23 +662,23 @@ describe('AppController', () => {
       findSpy.mockClear();
 
       // Missing OA header
-      const resMissingOa = await appController.getNextJob('28.5', undefined, mockRes);
+      const resMissingOa = await appController.getNextJob('28.6', undefined, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMissingOa).toEqual({ status: 'missing_oa_context', message: 'X-LineSync-OA-Context header missing or invalid' });
       expect(findSpy).not.toHaveBeenCalled();
 
       // OA Mismatch (worker sends foreign OA)
-      const resMismatchOa = await appController.getNextJob('28.5', 'U11111111222222223333333344444444', mockRes);
+      const resMismatchOa = await appController.getNextJob('28.6', 'U11111111222222223333333344444444', mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMismatchOa.status).toBe('oa_context_mismatch');
       expect(findSpy).not.toHaveBeenCalled();
     });
 
-    it('6. Tampermonkey script contains version 28.5, controlled OA switch, job OA fencing, and physical send OA guard', () => {
+    it('6. Tampermonkey script contains version 28.6, controlled OA switch, job OA fencing, and physical send OA guard', () => {
       const fs = require('fs');
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
 
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.5'");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.6'");
       expect(scriptContent).toContain('headers[\'X-LineSync-OA-Context\']');
       expect(scriptContent).toContain('checkAndExecuteControlledOaSwitch');
       expect(scriptContent).toContain('verifyCurrentOAContext');
@@ -828,7 +829,7 @@ describe('AppController', () => {
         message: 'Hello'
       } as any);
 
-      const jobRes: any = await appController.getNextJob('28.5', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const jobRes: any = await appController.getNextJob('28.6', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
       expect(jobRes.botId).toBe('U09d6b978fcbfb5275e533ca9b788eb22');
     });
 
@@ -888,6 +889,189 @@ describe('AppController', () => {
       const port = process.env.PORT || 3005;
       expect(uploadRes.success).toBe(true);
       expect(uploadRes.url).toBe(`http://localhost:${port}/api/uploads/${uploadRes.filename}`);
+    });
+  });
+
+  describe('SYNC-WP001 — LINE OA Customer Directory Sync Tests', () => {
+    const validBotId1 = 'U09d6b978fcbfb5275e533ca9b788eb22';
+    const validBotId2 = 'U07f7c8d9e0f1a2b3c4d5e6f7a8b9c0d1';
+
+    let reqMock: any;
+    let resMock: any;
+
+    beforeEach(() => {
+      reqMock = { socket: { remoteAddress: '127.0.0.1' } };
+      resMock = { statusCode: 200, status(code: number) { this.statusCode = code; } };
+      appController.toggleBotStatus({ enabled: false });
+    });
+
+    it('1. sync-batch rejects invalid botId', async () => {
+      const res: any = await appController.syncCustomerBatch({ botId: 'invalid-bot-id', records: [] }, reqMock, resMock);
+      expect(resMock.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('Missing or invalid botId');
+    });
+
+    it('2. sync-batch rejects active OA mismatch', async () => {
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValueOnce({ id: 'global', activeBotId: validBotId1 } as any);
+      const res: any = await appController.syncCustomerBatch({ botId: validBotId2, records: [] }, reqMock, resMock);
+      expect(resMock.statusCode).toBe(409);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('does not match active OA');
+    });
+
+    it('3. sync-batch rejects when Master Bot is running', async () => {
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValueOnce({ id: 'global', activeBotId: validBotId1 } as any);
+      appController.toggleBotStatus({ enabled: true });
+      const res: any = await appController.syncCustomerBatch({ botId: validBotId1, records: [] }, reqMock, resMock);
+      expect(resMock.statusCode).toBe(409);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('Master Bot must be paused');
+    });
+
+    it('4. sync-batch rejects non-loopback request IP', async () => {
+      const remoteReq = { socket: { remoteAddress: '203.0.113.195' } };
+      const res: any = await appController.syncCustomerBatch({ botId: validBotId1, records: [] }, remoteReq as any, resMock);
+      expect(resMock.statusCode).toBe(403);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('Forbidden');
+    });
+
+    it('5. new customer insert uses botId + lineUserId', async () => {
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValueOnce({ id: 'global', activeBotId: validBotId1 } as any);
+      jest.spyOn(mockCustomerRepo, 'find').mockResolvedValueOnce([]);
+      const createSpy = jest.spyOn(mockCustomerRepo, 'create');
+      const saveSpy = jest.spyOn(mockCustomerRepo, 'save').mockResolvedValueOnce([] as any);
+
+      const res: any = await appController.syncCustomerBatch({
+        botId: validBotId1,
+        records: [{ lineUserId: 'U11111111111111111111111111111111', displayName: 'ลูกค้า 1' }]
+      }, reqMock, resMock);
+
+      expect(res.success).toBe(true);
+      expect(res.inserted).toBe(1);
+      expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({
+        botId: validBotId1,
+        lineUserId: 'U11111111111111111111111111111111',
+        displayName: 'ลูกค้า 1'
+      }));
+      expect(saveSpy).toHaveBeenCalled();
+    });
+
+    it('6. existing same-OA customer displayName updates correctly', async () => {
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValueOnce({ id: 'global', activeBotId: validBotId1 } as any);
+      const existingCust = {
+        botId: validBotId1,
+        lineUserId: 'U22222222222222222222222222222222',
+        displayName: 'ชื่อเก่า',
+        isBlocked: false,
+        blockReason: null
+      };
+      jest.spyOn(mockCustomerRepo, 'find').mockResolvedValueOnce([existingCust] as any);
+      const saveSpy = jest.spyOn(mockCustomerRepo, 'save').mockResolvedValueOnce([] as any);
+
+      const res: any = await appController.syncCustomerBatch({
+        botId: validBotId1,
+        records: [{ lineUserId: 'U22222222222222222222222222222222', displayName: 'ชื่อใหม่' }]
+      }, reqMock, resMock);
+
+      expect(res.success).toBe(true);
+      expect(res.updated).toBe(1);
+      expect(res.inserted).toBe(0);
+      expect(existingCust.displayName).toBe('ชื่อใหม่');
+      expect(saveSpy).toHaveBeenCalled();
+    });
+
+    it('7. unchanged customer remains unchanged', async () => {
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValueOnce({ id: 'global', activeBotId: validBotId1 } as any);
+      const existingCust = {
+        botId: validBotId1,
+        lineUserId: 'U33333333333333333333333333333333',
+        displayName: 'ชื่อเดิม',
+        isBlocked: false
+      };
+      jest.spyOn(mockCustomerRepo, 'find').mockResolvedValueOnce([existingCust] as any);
+
+      const res: any = await appController.syncCustomerBatch({
+        botId: validBotId1,
+        records: [{ lineUserId: 'U33333333333333333333333333333333', displayName: 'ชื่อเดิม' }]
+      }, reqMock, resMock);
+
+      expect(res.success).toBe(true);
+      expect(res.unchanged).toBe(1);
+      expect(res.updated).toBe(0);
+      expect(res.inserted).toBe(0);
+    });
+
+    it('8. existing isBlocked and blockReason are preserved', async () => {
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValueOnce({ id: 'global', activeBotId: validBotId1 } as any);
+      const blockedCust = {
+        botId: validBotId1,
+        lineUserId: 'U44444444444444444444444444444444',
+        displayName: 'ชื่อเก่า',
+        isBlocked: true,
+        blockReason: 'บล็อกโดยผู้ใช้'
+      };
+      jest.spyOn(mockCustomerRepo, 'find').mockResolvedValueOnce([blockedCust] as any);
+      jest.spyOn(mockCustomerRepo, 'save').mockResolvedValueOnce([] as any);
+
+      const res: any = await appController.syncCustomerBatch({
+        botId: validBotId1,
+        records: [{ lineUserId: 'U44444444444444444444444444444444', displayName: 'ชื่อใหม่' }]
+      }, reqMock, resMock);
+
+      expect(res.success).toBe(true);
+      expect(blockedCust.isBlocked).toBe(true);
+      expect(blockedCust.blockReason).toBe('บล็อกโดยผู้ใช้');
+    });
+
+    it('9. identical lineUserId under another botId is NOT modified', async () => {
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValueOnce({ id: 'global', activeBotId: validBotId1 } as any);
+      jest.spyOn(mockCustomerRepo, 'find').mockResolvedValueOnce([]);
+      const createSpy = jest.spyOn(mockCustomerRepo, 'create');
+      jest.spyOn(mockCustomerRepo, 'save').mockResolvedValueOnce([] as any);
+
+      const res: any = await appController.syncCustomerBatch({
+        botId: validBotId1,
+        records: [{ lineUserId: 'USAMEUSERID12345678901234567890', displayName: 'ชื่อใหม่ใน OA1' }]
+      }, reqMock, resMock);
+
+      expect(res.success).toBe(true);
+      expect(res.inserted).toBe(1);
+      expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({
+        botId: validBotId1,
+        lineUserId: 'USAMEUSERID12345678901234567890'
+      }));
+    });
+
+    it('10. duplicate lineUserIds within a batch do not create duplicates', async () => {
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValueOnce({ id: 'global', activeBotId: validBotId1 } as any);
+      jest.spyOn(mockCustomerRepo, 'find').mockResolvedValueOnce([]);
+      const createSpy = jest.spyOn(mockCustomerRepo, 'create');
+      createSpy.mockClear();
+      jest.spyOn(mockCustomerRepo, 'save').mockResolvedValueOnce([] as any);
+
+      const res: any = await appController.syncCustomerBatch({
+        botId: validBotId1,
+        records: [
+          { lineUserId: 'UDUP12345678901234567890123456789', displayName: 'ชื่อครั้งแรก' },
+          { lineUserId: 'UDUP12345678901234567890123456789', displayName: 'ชื่อครั้งที่สอง' }
+        ]
+      }, reqMock, resMock);
+
+      expect(res.success).toBe(true);
+      expect(res.received).toBe(2);
+      expect(res.inserted).toBe(1);
+      expect(createSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('11. oversized batch (> 250) is rejected', async () => {
+      const records = Array.from({ length: 251 }, (_, i) => ({ lineUserId: `U${i}`, displayName: `User ${i}` }));
+      const res: any = await appController.syncCustomerBatch({ botId: validBotId1, records }, reqMock, resMock);
+
+      expect(resMock.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('exceeds maximum limit of 250');
     });
   });
 });

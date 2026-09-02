@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.5
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (OA-WP001 OA Isolation & Controlled Switch Active)
+// @version      28.6
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SYNC-WP001 Directory Sync Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.5';
+    const WORKER_VERSION = '28.6';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -1509,6 +1509,235 @@
         }
     }
 
+    // 🔄 SYNC-WP001 — FULL DIRECTORY SYNC ROUTINE
+    async function checkAndExecuteCustomerSync() {
+        if (!window.location.hash.includes('sync-customers')) {
+            return false;
+        }
+
+        console.log("🔄 [SYNC-WP001] Customer sync trigger detected in URL hash (#sync-customers)");
+        try {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch(e) {}
+
+        const physicalBotId = getBotId();
+        if (!isValidChatContextId(physicalBotId)) {
+            console.error(`🛑 [SYNC] Fail-closed: Physical LINE OA context ID (${physicalBotId}) is invalid.`);
+            alert(`🛑 [LineSync] Cannot sync: Physical LINE OA context ID (${physicalBotId}) is invalid.`);
+            return true;
+        }
+
+        let activeBotId = null;
+        try {
+            const oaRes = await fetchAPI('/oa/active');
+            activeBotId = oaRes ? oaRes.activeBotId : null;
+        } catch (e) {
+            console.error("🛑 [SYNC] Fail-closed: Failed to query backend active OA context.", e);
+            alert("🛑 [LineSync] Cannot query backend active OA context. Aborting sync.");
+            return true;
+        }
+
+        if (!activeBotId || physicalBotId !== activeBotId) {
+            console.error(`🛑 [SYNC] Fail-closed OA mismatch: Physical OA (${physicalBotId}) != Backend Active OA (${activeBotId}). Aborting sync.`);
+            alert(`🛑 [LineSync] OA Mismatch: Physical OA (${physicalBotId}) != Active OA (${activeBotId}). Aborting sync.`);
+            return true;
+        }
+
+        let isEnabled = true;
+        try {
+            const statusRes = await fetchAPI('/bot/status');
+            isEnabled = statusRes ? statusRes.enabled : true;
+        } catch (e) {
+            console.error("🛑 [SYNC] Fail-closed: Failed to query Master Bot status.", e);
+            alert("🛑 [LineSync] Cannot query Master Bot status. Aborting sync.");
+            return true;
+        }
+
+        if (isEnabled) {
+            console.error("🛑 [SYNC] Fail-closed: Master Bot is RUNNING. Customer sync requires Master Bot to be PAUSED.");
+            alert("🛑 [LineSync] Master Bot ต้องอยู่ในสถานะ PAUSE ก่อนเริ่มซิงค์รายชื่อลูกค้า");
+            return true;
+        }
+
+        if (!navigator.locks || typeof navigator.locks.request !== 'function') {
+            console.error("🛑 [SYNC] Fail-closed: Web Locks API unavailable.");
+            alert("🛑 [LineSync] Web Locks API unavailable in this browser.");
+            return true;
+        }
+
+        navigator.locks.request('linesync_customer_sync_v1', { ifAvailable: true }, async (lock) => {
+            if (!lock) {
+                console.warn("⚠️ [SYNC] Customer sync already active in another browser tab.");
+                alert("⚠️ [LineSync] Customer sync is already active in another browser tab.");
+                return;
+            }
+
+            await runCustomerSyncProcess(physicalBotId);
+        });
+
+        return true;
+    }
+
+    async function runCustomerSyncProcess(botId) {
+        let banner = document.getElementById('linesync-sync-banner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'linesync-sync-banner';
+            banner.style.cssText = 'position:fixed; top:10px; right:10px; z-index:999999; background:#0f172a; color:#f8fafc; padding:16px 20px; border-radius:12px; font-family:sans-serif; font-size:13px; box-shadow:0 10px 25px rgba(0,0,0,0.5); border:1px solid #334155; min-width:320px;';
+            document.body.appendChild(banner);
+        }
+
+        function updateUI(text, isComplete = false, isError = false) {
+            if (!banner) return;
+            banner.style.borderColor = isError ? '#ef4444' : (isComplete ? '#22c55e' : '#3b82f6');
+            banner.innerHTML = `
+                <div style="font-weight:bold; font-size:14px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between;">
+                    <span>🔄 LineSync Customer Directory Sync</span>
+                    <span style="font-size:11px; background:${isError ? '#7f1d1d' : (isComplete ? '#14532d' : '#1e3a8a')}; padding:2px 6px; border-radius:4px;">${isError ? 'ERROR' : (isComplete ? 'PASS' : 'SYNCING')}</span>
+                </div>
+                <div style="line-height:1.5; color:#cbd5e1;">${text}</div>
+            `;
+        }
+
+        updateUI(`LINE OA Context: <b>${botId.substring(0, 12)}...</b><br>กำลังเริ่มเชื่อมต่อ LINE Contacts API...`);
+
+        let pagesFetched = 0;
+        let contactsSeen = 0;
+        let totalInserted = 0;
+        let totalUpdated = 0;
+        let totalUnchanged = 0;
+        let totalInvalid = 0;
+
+        let nextCursor = null;
+        const seenCursors = new Set();
+        const maxPages = 10000;
+        let batchRecords = [];
+        const BATCH_SIZE = 200;
+
+        try {
+            while (pagesFetched < maxPages) {
+                let url = `https://chat.line.biz/api/v2/bots/${botId}/contacts?query=&sortKey=DISPLAY_NAME&sortOrder=ASC&filterKey=ALL&limit=20`;
+                if (nextCursor) {
+                    url += `&next=${encodeURIComponent(nextCursor)}`;
+                }
+
+                pagesFetched++;
+                updateUI(`LINE OA Context: <b>${botId.substring(0, 12)}...</b><br>
+                          หน้า: ${pagesFetched.toLocaleString()} | พบแล้ว: ${contactsSeen.toLocaleString()} คน<br>
+                          DB -> เพิ่มใหม่: ${totalInserted} | อัปเดต: ${totalUpdated} | ไม่เปลี่ยน: ${totalUnchanged}`);
+
+                const resp = await new Promise((resolve) => {
+                    GM_xmlhttpRequest({
+                        method: 'GET',
+                        url: url,
+                        headers: {
+                            'Accept': 'application/json, text/plain, */*',
+                            'X-LineSync-Worker-Version': WORKER_VERSION
+                        },
+                        withCredentials: true,
+                        onload: function(res) {
+                            if (res.status === 200) {
+                                try {
+                                    resolve(JSON.parse(res.responseText));
+                                } catch(e) { resolve(null); }
+                            } else {
+                                resolve(null);
+                            }
+                        },
+                        onerror: function() { resolve(null); }
+                    });
+                });
+
+                if (!resp) {
+                    console.error(`🛑 [SYNC] LINE Contacts API returned error status on page ${pagesFetched}. Aborting.`);
+                    updateUI(`❌ เกิดข้อผิดพลาดในการดึงข้อมูลจาก LINE Contacts API (หน้า ${pagesFetched})`, false, true);
+                    return;
+                }
+
+                const contacts = resp.contacts || resp.items || resp.data || [];
+                contactsSeen += contacts.length;
+
+                for (const item of contacts) {
+                    const profile = item ? item.profile : null;
+                    const uid = profile ? profile.userId : null;
+                    const name = profile ? profile.name : null;
+
+                    if (uid && typeof uid === 'string' && uid.trim()) {
+                        batchRecords.push({
+                            lineUserId: uid.trim(),
+                            displayName: (name && typeof name === 'string') ? name.trim() : 'ลูกค้า'
+                        });
+                    } else {
+                        totalInvalid++;
+                    }
+                }
+
+                if (batchRecords.length >= BATCH_SIZE) {
+                    const postRes = await postSyncBatch(botId, batchRecords);
+                    if (!postRes || !postRes.success) {
+                        console.error("🛑 [SYNC] Backend batch save failed. Aborting sync.", postRes);
+                        updateUI(`❌ ไม่สามารถบันทึกข้อมูลลงฐานข้อมูลได้: ${postRes ? postRes.message : 'Connection Error'}`, false, true);
+                        return;
+                    }
+                    totalInserted += (postRes.inserted || 0);
+                    totalUpdated += (postRes.updated || 0);
+                    totalUnchanged += (postRes.unchanged || 0);
+                    totalInvalid += (postRes.invalid || 0);
+                    batchRecords = [];
+                }
+
+                const rawNext = resp.next;
+                if (!rawNext || typeof rawNext !== 'string' || !rawNext.trim()) {
+                    console.log("✅ [SYNC] Pagination complete. No further next cursor.");
+                    break;
+                }
+
+                if (seenCursors.has(rawNext)) {
+                    console.warn("⚠️ [SYNC] Pagination loop detected: Repeated cursor observed. Stopping safely.");
+                    break;
+                }
+                seenCursors.add(rawNext);
+                nextCursor = rawNext;
+            }
+
+            if (batchRecords.length > 0) {
+                const postRes = await postSyncBatch(botId, batchRecords);
+                if (!postRes || !postRes.success) {
+                    console.error("🛑 [SYNC] Final backend batch save failed.", postRes);
+                    updateUI(`❌ ไม่สามารถบันทึกข้อมูลส่วนสุดท้ายลงฐานข้อมูลได้: ${postRes ? postRes.message : 'Connection Error'}`, false, true);
+                    return;
+                }
+                totalInserted += (postRes.inserted || 0);
+                totalUpdated += (postRes.updated || 0);
+                totalUnchanged += (postRes.unchanged || 0);
+                totalInvalid += (postRes.invalid || 0);
+                batchRecords = [];
+            }
+
+            updateUI(`
+                <b>✅ ซิงค์รายชื่อลูกค้าสำเร็จ! (PASS)</b><br><br>
+                • LINE OA: <b>${botId.substring(0, 12)}...</b><br>
+                • จำนวนหน้าที่ดึง: <b>${pagesFetched.toLocaleString()}</b><br>
+                • รายชื่อที่พบทั้งหมด: <b>${contactsSeen.toLocaleString()}</b> คน<br>
+                • เพิ่มลูกค้าใหม่ (Insert): <b>${totalInserted.toLocaleString()}</b> คน<br>
+                • อัปเดตชื่อ (Update): <b>${totalUpdated.toLocaleString()}</b> คน<br>
+                • ข้อมูลไม่เปลี่ยนแปลง (Unchanged): <b>${totalUnchanged.toLocaleString()}</b> คน<br>
+                • ข้อมูลไม่ถูกต้อง/ข้าม (Invalid): <b>${totalInvalid.toLocaleString()}</b> คน
+            `, true, false);
+
+        } catch (err) {
+            console.error("❌ [SYNC] Unexpected error during customer directory sync:", err);
+            updateUI(`❌ เกิดข้อผิดพลาดไม่คาดคิด: ${err.message || err}`, false, true);
+        }
+    }
+
+    async function postSyncBatch(botId, records) {
+        return await fetchAPI('/customers/sync-batch', 'POST', {
+            botId: botId,
+            records: records
+        });
+    }
+
     // 🛡️ PAGE-LOAD RECOVERY GUARD & DIAGNOSTIC INITIALIZATION
     window.addEventListener('load', () => {
         emitDiagnostic('BOT_START');
@@ -1516,6 +1745,11 @@
         ensureTabIdentity().catch(() => {});
 
         setTimeout(async () => {
+            const isCustomerSyncTriggered = await checkAndExecuteCustomerSync();
+            if (isCustomerSyncTriggered) {
+                return;
+            }
+
             const savedJobId = sessionStorage.getItem('linesync_jobid');
             const savedJobBotId = sessionStorage.getItem('linesync_job_botid');
             const savedMsg = sessionStorage.getItem('linesync_msg');

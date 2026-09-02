@@ -99,6 +99,9 @@
                     <button id="switchOaBtn" onclick="switchOaContext()" class="action-btn" style="background:#0284c7; padding:4px 10px; font-size:12px; font-weight:bold; border-radius:6px;" title="สลับไปยัง LINE OA ที่เลือก">
                         🔄 เปลี่ยน LINE OA
                     </button>
+                    <button id="btnSyncCustomers" onclick="startCustomerSync()" class="action-btn" style="background:#059669; padding:4px 10px; font-size:12px; font-weight:bold; border-radius:6px;" title="ดึงรายชื่อลูกค้าจาก LINE OA ลงฐานข้อมูล">
+                        🔄 Sync รายชื่อลูกค้า
+                    </button>
                     <span id="activeOaStatusBadge" style="font-size:12px; color:#475569; font-weight:bold; padding:2px 8px; border-radius:4px; background:#e2e8f0;">Active: -</span>
                 </div>
                 <div id="statusBadge" style="font-size: 13px; color: #64748b; margin-top: 4px;">กำลังโหลดข้อมูล...</div>
@@ -597,6 +600,24 @@
             }
         }
 
+        async function startCustomerSync() {
+            if (!currentActiveBotId) {
+                alert('กรุณาเลือก Active LINE OA ก่อนเริ่ม Sync รายชื่อลูกค้าครับ');
+                return;
+            }
+
+            if (isBotEnabled) {
+                alert('กรุณา Pause Master Bot ก่อน Sync รายชื่อลูกค้า');
+                return;
+            }
+
+            const confirmOk = confirm(`คุณต้องการซิงค์รายชื่อลูกค้าของ LINE OA ( ${currentActiveBotId} ) หรือไม่?\n\n- สคริปต์จะเปิดหน้า Contact ของ OA นี้เพื่อดึงรายชื่อลูกค้าลง DB\n- การส่งแคมเปญต้องอยู่ในสถานะ Pause`);
+            if (!confirmOk) return;
+
+            const targetUrl = `https://chat.line.biz/${encodeURIComponent(currentActiveBotId)}/contact#sync-customers`;
+            window.open(targetUrl, '_blank');
+        }
+
         // 1. โหลดข้อมูลเริ่มต้น
         async function loadData() {
             try {
@@ -627,7 +648,7 @@
 
                 filteredCustomers = [...allCustomers]; 
                 
-                document.getElementById('statusBadge').innerText = `ซิงค์ข้อมูลสำเร็จ: ${allCustomers.length.toLocaleString()} เรคคอร์ด | ${currentGroups.length} กลุ่ม (OA: ${currentActiveBotId.substring(0, 8)}...)`;
+                document.getElementById('statusBadge').innerText = `โหลดข้อมูลจาก DB สำเร็จ: ${allCustomers.length.toLocaleString()} เรคคอร์ด | ${currentGroups.length} กลุ่ม (OA: ${currentActiveBotId.substring(0, 8)}...)`;
                 renderTable();
                 renderGroupDropdown();
                 updateFilterSummaryUI();
