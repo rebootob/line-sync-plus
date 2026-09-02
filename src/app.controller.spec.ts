@@ -304,20 +304,22 @@ describe('AppController', () => {
 
   describe('SEC-WP001 — Secret Hygiene & Telegram Token Security Tests', () => {
     let service: TelegramService;
-    let tmpConfigPath: string;
+    let tmpDir: string;
+    let cwdSpy: jest.SpyInstance;
 
     beforeEach(() => {
-      tmpConfigPath = path.join(
-        os.tmpdir(),
-        `test-telegram-config-${Date.now()}-${Math.random().toString(36).substring(2)}.json`,
-      );
-      service = new TelegramService(tmpConfigPath);
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linesync-telegram-test-'));
+      cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+      service = new TelegramService();
     });
 
     afterEach(() => {
+      if (cwdSpy) {
+        cwdSpy.mockRestore();
+      }
       try {
-        if (fs.existsSync(tmpConfigPath)) {
-          fs.unlinkSync(tmpConfigPath);
+        if (tmpDir && fs.existsSync(tmpDir)) {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
         }
       } catch (e) {
         // Ignore cleanup errors
@@ -419,6 +421,16 @@ describe('AppController', () => {
       // Verify fetch was called with Telegram API endpoint containing stored token
       const calledUrl = mockFetch.mock.calls[0][0];
       expect(calledUrl).toContain('api.telegram.org/botSTORED_SECRET_TOKEN/sendMessage');
+    });
+
+    it('8. Nest DI Smoke Test — resolves TelegramService provider cleanly without constructor errors', async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [TelegramService],
+      }).compile();
+
+      const resolvedService = module.get<TelegramService>(TelegramService);
+      expect(resolvedService).toBeDefined();
+      expect(resolvedService).toBeInstanceOf(TelegramService);
     });
   });
 });
