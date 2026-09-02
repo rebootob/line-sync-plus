@@ -86,7 +86,7 @@
             <div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <h2 style="margin: 0; color: #1e293b;">🚀 LineSync Plus - Customer & Broadcast Management</h2>
-                    <span id="runtimeVersionBadge" style="font-size:11px; color:#475569; background:#f1f5f9; padding:2px 8px; border-radius:12px; border:1px solid #cbd5e1;">Runtime Contract: v2 | Required Worker: v28.5</span>
+                    <span id="runtimeVersionBadge" style="font-size:11px; color:#475569; background:#f1f5f9; padding:2px 8px; border-radius:12px; border:1px solid #cbd5e1;">Runtime Contract: v2 | Required Worker: v28.9</span>
                     <button id="masterBotToggleBtn" onclick="toggleMasterBotSwitch()" class="action-btn" style="background:#16a34a; padding:4px 10px; font-size:12px; font-weight:bold; border-radius:20px;" title="สวิตช์เปิด-ปิดการทำงานของบอทภาพรวม ( Master Switch )">
                         🟢 บอททำงานปกติ [กดพักบอท ⏸️]
                     </button>
@@ -103,6 +103,19 @@
                         🔄 Sync รายชื่อลูกค้า
                     </button>
                     <span id="activeOaStatusBadge" style="font-size:12px; color:#475569; font-weight:bold; padding:2px 8px; border-radius:4px; background:#e2e8f0;">Active: -</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                    <div id="accountProtectionBadge" style="display:inline-flex; align-items:center; gap:6px; font-size:11px; color:#1e293b; background:#f0fdf4; padding:2px 8px; border-radius:12px; border:1px solid #86efac;">
+                        <span>🛡️ <b>Account Protection: ON</b></span>
+                        <span style="color:#cbd5e1;">|</span>
+                        <span>10m: <b id="prot10m">0</b>/60</span>
+                        <span style="color:#cbd5e1;">|</span>
+                        <span>1h: <b id="prot1h">0</b>/300</span>
+                        <span style="color:#cbd5e1;">|</span>
+                        <span>Next Send: <b id="protNextSend">now</b></span>
+                        <span style="color:#cbd5e1;">|</span>
+                        <span>Cooling: <b id="protCooling">none</b></span>
+                    </div>
                 </div>
                 <div id="statusBadge" style="font-size: 13px; color: #64748b; margin-top: 4px;">กำลังโหลดข้อมูล...</div>
             </div>

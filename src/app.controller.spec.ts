@@ -480,11 +480,11 @@ describe('AppController', () => {
       };
     });
 
-    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.8', () => {
+    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.9', () => {
       const res = appController.getRuntimeVersion();
       expect(res).toEqual({
         runtimeContractVersion: 2,
-        requiredWorkerVersion: '28.8',
+        requiredWorkerVersion: '28.9',
       });
     });
 
@@ -497,7 +497,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.8',
+        requiredWorkerVersion: '28.9',
       });
       // Prove version gate executes BEFORE job query/claim logic
       expect(findSpy).not.toHaveBeenCalled();
@@ -512,7 +512,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.8',
+        requiredWorkerVersion: '28.9',
       });
       expect(findSpy).not.toHaveBeenCalled();
     });
@@ -534,10 +534,10 @@ describe('AppController', () => {
       expect(saveCampSpy).not.toHaveBeenCalled();
     });
 
-    it('5. GET /api/campaign/next with EXACT version ("28.8") and valid OA header -> reaches normal job claim logic', async () => {
+    it('5. GET /api/campaign/next with EXACT version ("28.9") and valid OA header -> reaches normal job claim logic', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
 
-      const res = await appController.getNextJob('28.8', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const res = await appController.getNextJob('28.9', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
 
       expect(mockRes.statusCode).toBe(200);
       expect(findSpy).toHaveBeenCalled();
@@ -662,23 +662,23 @@ describe('AppController', () => {
       findSpy.mockClear();
 
       // Missing OA header
-      const resMissingOa = await appController.getNextJob('28.8', undefined, mockRes);
+      const resMissingOa = await appController.getNextJob('28.9', undefined, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMissingOa).toEqual({ status: 'missing_oa_context', message: 'X-LineSync-OA-Context header missing or invalid' });
       expect(findSpy).not.toHaveBeenCalled();
 
       // OA Mismatch (worker sends foreign OA)
-      const resMismatchOa = await appController.getNextJob('28.8', 'U11111111222222223333333344444444', mockRes);
+      const resMismatchOa = await appController.getNextJob('28.9', 'U11111111222222223333333344444444', mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMismatchOa.status).toBe('oa_context_mismatch');
       expect(findSpy).not.toHaveBeenCalled();
     });
 
-    it('6. Tampermonkey script contains version 28.8, controlled OA switch, job OA fencing, and physical send OA guard', () => {
+    it('6. Tampermonkey script contains version 28.9, controlled OA switch, job OA fencing, and physical send OA guard', () => {
       const fs = require('fs');
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
 
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.8'");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.9'");
       expect(scriptContent).toContain('headers[\'X-LineSync-OA-Context\']');
       expect(scriptContent).toContain('checkAndExecuteControlledOaSwitch');
       expect(scriptContent).toContain('verifyCurrentOAContext');
@@ -829,7 +829,7 @@ describe('AppController', () => {
         message: 'Hello'
       } as any);
 
-      const jobRes: any = await appController.getNextJob('28.8', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const jobRes: any = await appController.getNextJob('28.9', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
       expect(jobRes.botId).toBe('U09d6b978fcbfb5275e533ca9b788eb22');
     });
 
@@ -1184,15 +1184,214 @@ describe('AppController', () => {
       expect(res.success).toBe(true);
     });
 
-    it('10. Worker = 28.8', () => {
+    it('10. Worker = 28.9', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.8'");
-      expect(scriptContent).toContain("@version      28.8");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.9'");
+      expect(scriptContent).toContain("@version      28.9");
     });
 
-    it('11. Required Worker = 28.8', () => {
+    it('11. Required Worker = 28.9', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.8');
+      expect(versionRes.requiredWorkerVersion).toBe('28.9');
+    });
+  });
+
+  describe('SAFE-WP001 — LINE OA Account Protection & Send Compliance Guard Tests', () => {
+    const fs = require('fs');
+
+    it('1. Worker = 28.9', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.9'");
+      expect(scriptContent).toContain("@version      28.9");
+    });
+
+    it('2. Required Worker = 28.9', () => {
+      const versionRes = appController.getRuntimeVersion();
+      expect(versionRes.requiredWorkerVersion).toBe('28.9');
+    });
+
+    it('3. Rate guard exists immediately before text irreversible send', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('async function sendChatMessage(');
+      expect(scriptContent).toContain('await enforceAccountProtectionGate(expectedBotId, expectedUserId);');
+    });
+
+    it('4. Rate guard exists immediately before image irreversible send', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('async function confirmAndCloseImageModal(');
+      expect(scriptContent).toContain('await enforceAccountProtectionGate(expectedBotId, expectedUserId);');
+    });
+
+    it('5. Per-OA localStorage protection key is scoped by botId', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('linesync_account_protection_v1_${botId}');
+    });
+
+    it('6. Minimum gap = 10000 ms', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('const MIN_SEND_GAP_MS = 10000;');
+    });
+
+    it('7. Rolling 10-minute max = 60', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('const MAX_SEND_ACTIONS_10_MIN = 60;');
+    });
+
+    it('8. Rolling 1-hour max = 300', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('const MAX_SEND_ACTIONS_1_HOUR = 300;');
+    });
+
+    it('9. Waiting does not mark job failed/successful', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('updateUI(`🛡️ Account Protection Active:');
+      expect(scriptContent).not.toContain('finishJob(jobId, userId, false, \'PROTECTION_WAIT\');');
+    });
+
+    it('10. Post-wait send revalidates Worker leadership', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('confirmWorkerLeadershipForSend()');
+      expect(scriptContent).toContain('Leadership check failed post-wait in protection gate!');
+    });
+
+    it('11. Post-wait send revalidates recipient', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('verifyCurrentRecipient(expectedUserId)');
+      expect(scriptContent).toContain('Recipient check failed post-wait in protection gate!');
+    });
+
+    it('12. Post-wait send revalidates OA', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('verifyCurrentOAContext(expectedBotId)');
+      expect(scriptContent).toContain('OA context check failed post-wait in protection gate!');
+    });
+
+    it('13. campaign/add deduplicates targetIds', async () => {
+      const validBotId1 = 'U09d6b978fcbfb5275e533ca9b788eb22';
+      appController.toggleBotStatus({ enabled: false });
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValue({ id: 'global', activeBotId: validBotId1 } as any);
+      jest.spyOn(mockCustomerRepo, 'findOne').mockResolvedValue({ botId: validBotId1, lineUserId: 'U111', isBlocked: false } as any);
+
+      const createCampSpy = jest.spyOn(mockCampaignRepo, 'create');
+      jest.spyOn(mockCampaignRepo, 'save').mockResolvedValue({ id: 'c100' } as any);
+      jest.spyOn(mockCampaignJobRepo, 'create').mockImplementation((d: any) => d);
+      jest.spyOn(mockCampaignJobRepo, 'save').mockResolvedValue([] as any);
+
+      const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
+
+      const res: any = await appController.addCampaign({
+        botId: validBotId1,
+        message: 'Test Dup',
+        targetIds: ['U111', 'U111', 'U111']
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(res.requestedCount).toBe(3);
+      expect(res.queuedCount).toBe(1);
+      expect(res.excludedDuplicateCount).toBe(2);
+      expect(res.excludedBlockedCount).toBe(0);
+      expect(createCampSpy).toHaveBeenCalledWith(expect.objectContaining({ totalTargets: 1 }));
+    });
+
+    it('14. blocked Customer is excluded before CampaignJob creation', async () => {
+      const validBotId1 = 'U09d6b978fcbfb5275e533ca9b788eb22';
+      appController.toggleBotStatus({ enabled: false });
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValue({ id: 'global', activeBotId: validBotId1 } as any);
+      jest.spyOn(mockCustomerRepo, 'findOne')
+        .mockResolvedValueOnce({ botId: validBotId1, lineUserId: 'UACTIVE', isBlocked: false } as any)
+        .mockResolvedValueOnce({ botId: validBotId1, lineUserId: 'UBLOCKED', isBlocked: true } as any);
+
+      jest.spyOn(mockCampaignRepo, 'create');
+      jest.spyOn(mockCampaignRepo, 'save').mockResolvedValue({ id: 'c101' } as any);
+      const createJobSpy = jest.spyOn(mockCampaignJobRepo, 'create').mockImplementation((d: any) => d);
+      createJobSpy.mockClear();
+      jest.spyOn(mockCampaignJobRepo, 'save').mockResolvedValue([] as any);
+
+      const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
+
+      const res: any = await appController.addCampaign({
+        botId: validBotId1,
+        message: 'Test Blocked Filter',
+        targetIds: ['UACTIVE', 'UBLOCKED']
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(res.requestedCount).toBe(2);
+      expect(res.queuedCount).toBe(1);
+      expect(res.excludedBlockedCount).toBe(1);
+      expect(createJobSpy).toHaveBeenCalledTimes(1);
+      expect(createJobSpy).toHaveBeenCalledWith(expect.objectContaining({ lineUserId: 'UACTIVE' }));
+    });
+
+    it('15. Campaign.totalTargets = actual queued count', async () => {
+      const validBotId1 = 'U09d6b978fcbfb5275e533ca9b788eb22';
+      appController.toggleBotStatus({ enabled: false });
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValue({ id: 'global', activeBotId: validBotId1 } as any);
+      jest.spyOn(mockCustomerRepo, 'findOne')
+        .mockResolvedValueOnce({ botId: validBotId1, lineUserId: 'U1', isBlocked: false } as any)
+        .mockResolvedValueOnce({ botId: validBotId1, lineUserId: 'U2', isBlocked: true } as any);
+
+      const createCampSpy = jest.spyOn(mockCampaignRepo, 'create');
+      jest.spyOn(mockCampaignRepo, 'save').mockResolvedValue({ id: 'c102' } as any);
+      jest.spyOn(mockCampaignJobRepo, 'create').mockImplementation((d: any) => d);
+      jest.spyOn(mockCampaignJobRepo, 'save').mockResolvedValue([] as any);
+
+      const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
+
+      await appController.addCampaign({
+        botId: validBotId1,
+        message: 'Test TotalTargets',
+        targetIds: ['U1', 'U2', 'U1']
+      }, mockRes);
+
+      expect(createCampSpy).toHaveBeenCalledWith(expect.objectContaining({ totalTargets: 1 }));
+    });
+
+    it('16. zero valid targets rejects campaign', async () => {
+      const validBotId1 = 'U09d6b978fcbfb5275e533ca9b788eb22';
+      appController.toggleBotStatus({ enabled: false });
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValue({ id: 'global', activeBotId: validBotId1 } as any);
+      jest.spyOn(mockCustomerRepo, 'findOne').mockResolvedValue({ botId: validBotId1, lineUserId: 'UBLOCKED', isBlocked: true } as any);
+
+      const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
+
+      const res: any = await appController.addCampaign({
+        botId: validBotId1,
+        message: 'All Blocked',
+        targetIds: ['UBLOCKED']
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('ไม่พบผู้รับที่สามารถส่งได้');
+    });
+
+    it('17. blocked users do not increment system error counter', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("if (isUserBlocked) {");
+      expect(scriptContent).toContain("console.log(`ℹ️ ผู้ใช้บล็อกแชท/ส่งไม่ได้ (ไม่นับเป็น Error ระบบ): ${userId}`);");
+    });
+
+    it('18. system error backoff is bounded: 30s / 60s / 120s / max 300s', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('function getSystemErrorCooldownMs(');
+      expect(scriptContent).toContain('if (consecutiveErrors === 1) return 30000;');
+      expect(scriptContent).toContain('if (consecutiveErrors === 2) return 60000;');
+      expect(scriptContent).toContain('if (consecutiveErrors === 3) return 120000;');
+      expect(scriptContent).toContain('return 300000;');
+    });
+
+    it('19. 10 consecutive system errors still triggers hard stop', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('if (consecutiveErrorCount >= 10)');
+      expect(scriptContent).toContain("console.error(\"🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! สั่งหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...\");");
+    });
+
+    it('20. existing safety tests remain passing', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('verifyCurrentRecipient');
+      expect(scriptContent).toContain('verifyCurrentOAContext');
+      expect(scriptContent).toContain('confirmWorkerLeadershipForSend');
     });
   });
 });

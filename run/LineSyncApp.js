@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.8
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SYNC-WP001 Directory Sync Active)
+// @version      28.9
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SAFE-WP001 Account Protection Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.8';
+    const WORKER_VERSION = '28.9';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -32,11 +32,119 @@
         'SAME_JOB_RETRY_EXHAUSTED'
     ]);
 
+    const MIN_SEND_GAP_MS = 10000;
+    const MAX_SEND_ACTIONS_10_MIN = 60;
+    const MAX_SEND_ACTIONS_1_HOUR = 300;
+
+    function getProtectionStorageKey(botId) {
+        return `linesync_account_protection_v1_${botId}`;
+    }
+
+    function loadProtectionTimestamps(botId) {
+        try {
+            const raw = localStorage.getItem(getProtectionStorageKey(botId));
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                const now = Date.now();
+                return parsed.filter(ts => typeof ts === 'number' && (now - ts) <= 3600000);
+            }
+        } catch(e) {}
+        return [];
+    }
+
+    function saveProtectionTimestamps(botId, timestamps) {
+        try {
+            const now = Date.now();
+            const bounded = timestamps.filter(ts => typeof ts === 'number' && (now - ts) <= 3600000);
+            localStorage.setItem(getProtectionStorageKey(botId), JSON.stringify(bounded));
+        } catch(e) {}
+    }
+
+    function calculateProtectionWaitMs(botId) {
+        const now = Date.now();
+        const timestamps = loadProtectionTimestamps(botId);
+
+        let waitMs = 0;
+
+        if (timestamps.length > 0) {
+            const lastSendTime = timestamps[timestamps.length - 1];
+            const elapsedSinceLast = now - lastSendTime;
+            if (elapsedSinceLast < MIN_SEND_GAP_MS) {
+                waitMs = Math.max(waitMs, MIN_SEND_GAP_MS - elapsedSinceLast);
+            }
+        }
+
+        const sends10Min = timestamps.filter(ts => (now - ts) <= 600000);
+        if (sends10Min.length >= MAX_SEND_ACTIONS_10_MIN) {
+            const oldest10Min = sends10Min[0];
+            const wait10Min = (oldest10Min + 600000) - now;
+            if (wait10Min > 0) {
+                waitMs = Math.max(waitMs, wait10Min);
+            }
+        }
+
+        const sends1Hour = timestamps.filter(ts => (now - ts) <= 3600000);
+        if (sends1Hour.length >= MAX_SEND_ACTIONS_1_HOUR) {
+            const oldest1Hour = sends1Hour[0];
+            const wait1Hour = (oldest1Hour + 3600000) - now;
+            if (wait1Hour > 0) {
+                waitMs = Math.max(waitMs, wait1Hour);
+            }
+        }
+
+        return waitMs;
+    }
+
+    function recordProtectionSendAction(botId) {
+        const timestamps = loadProtectionTimestamps(botId);
+        timestamps.push(Date.now());
+        saveProtectionTimestamps(botId, timestamps);
+    }
+
+    async function enforceAccountProtectionGate(expectedBotId, expectedUserId) {
+        if (!expectedBotId || !isValidChatContextId(expectedBotId)) return;
+
+        let waitMs = calculateProtectionWaitMs(expectedBotId);
+        while (waitMs > 0) {
+            console.warn(`🛡️ [PROTECTION] Account protection rate limit active for OA ${expectedBotId}. Waiting ${(waitMs / 1000).toFixed(1)}s before send action...`);
+            updateUI(`🛡️ Account Protection Active: รอ ${(waitMs / 1000).toFixed(1)} วินาที ก่อนส่ง...`);
+            await sleep(Math.min(waitMs, 1000));
+            waitMs = calculateProtectionWaitMs(expectedBotId);
+        }
+
+        const isLeaderConfirmed = await confirmWorkerLeadershipForSend();
+        if (!isLeaderConfirmed) {
+            console.error("🛑 [REL] Leadership check failed post-wait in protection gate!");
+            throw new Error('WORKER_LEADERSHIP_LOST');
+        }
+
+        if (expectedUserId && !verifyCurrentRecipient(expectedUserId)) {
+            console.error("🛑 [SAFETY] Recipient check failed post-wait in protection gate!");
+            throw new Error('RECIPIENT_UNVERIFIED');
+        }
+
+        if (!expectedBotId || !isValidChatContextId(expectedBotId) || !verifyCurrentOAContext(expectedBotId)) {
+            console.error("🛑 [OA] OA context check failed post-wait in protection gate!");
+            throw new Error('OA_CONTEXT_MISMATCH');
+        }
+
+        recordProtectionSendAction(expectedBotId);
+    }
+
+    function getSystemErrorCooldownMs(consecutiveErrors) {
+        if (consecutiveErrors <= 0) return 0;
+        if (consecutiveErrors === 1) return 30000;
+        if (consecutiveErrors === 2) return 60000;
+        if (consecutiveErrors === 3) return 120000;
+        return 300000;
+    }
+
     let consecutiveErrorCount = parseInt(sessionStorage.getItem('linesync_consecutive_errors') || '0', 10);
     let isExecutingJob = false;
     let isFlushingSpool = false;
 
-    console.log(`🤖 LineSync Plus Bot v${WORKER_VERSION}: พร้อมทำงาน (OPS-WP001 Active)...`);
+    console.log(`🤖 LineSync Plus Bot v${WORKER_VERSION}: พร้อมทำงาน (SAFE-WP001 Active)...`);
 
     // 🛡️ Strict LINE Chat OA Context ID Validator (^U + 32 hex chars)
     function isValidChatContextId(value) {
@@ -835,6 +943,8 @@
             throw new Error('WORKER_LEADERSHIP_LOST');
         }
 
+        await enforceAccountProtectionGate(expectedBotId, expectedUserId);
+
         emitDiagnostic('IMAGE_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
         console.log("🚀 [DEBUG] 2. พบป๊อปอัปแล้ว! สั่งกดปุ่ม [ส่ง] รูปภาพเพียง 1 ครั้งเท่านั้น (Single Fire)...");
@@ -877,6 +987,8 @@
             console.error("🛑 [OA] Zero-tolerance text send guard: Expected job botId missing, invalid, or unverified immediately before text send!");
             throw new Error('OA_CONTEXT_MISMATCH');
         }
+
+        await enforceAccountProtectionGate(expectedBotId, expectedUserId);
 
         const allButtons = deepQuerySelectorAll('button, input[type="submit"], [role="button"], div, span');
         const chatSendBtns = allButtons.filter(el => {
@@ -1077,6 +1189,15 @@
         if (checkQuotaLimitExceeded()) {
             console.error("🛑 [CRITICAL] ตรวจพบการเตือนโควต้า LINE OA เต็ม! หยุดคิวงาน...");
             safeClearSessionStorage();
+            return;
+        }
+
+        const errorCooldownUntil = parseInt(sessionStorage.getItem('linesync_error_cooldown_until') || '0', 10);
+        if (errorCooldownUntil > Date.now()) {
+            const remainingMs = errorCooldownUntil - Date.now();
+            console.warn(`⏳ [SAFETY] Cooldown ระบบหลังเกิด Error (${consecutiveErrorCount}/10): พักรอ ${(remainingMs / 1000).toFixed(1)} วินาที...`);
+            updateUI(`⏳ Cooldown หลังพบ Error (${(remainingMs / 1000).toFixed(1)}s)`);
+            setTimeout(processQueue, Math.min(remainingMs, CHECK_INTERVAL));
             return;
         }
 
@@ -1426,6 +1547,7 @@
                 emitDiagnostic('JOB_SUCCESS', { jobId: jobId, userId: userId, botId: expectedJobBotId });
                 consecutiveErrorCount = 0;
                 sessionStorage.setItem('linesync_consecutive_errors', '0');
+                sessionStorage.removeItem('linesync_error_cooldown_until');
                 await fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId });
             } else {
                 emitDiagnostic('JOB_FAIL', { jobId: jobId, userId: userId, botId: expectedJobBotId, reason: reason });
@@ -1437,7 +1559,9 @@
                 } else {
                     consecutiveErrorCount++;
                     sessionStorage.setItem('linesync_consecutive_errors', String(consecutiveErrorCount));
-                    console.warn(`⚠️ เกิด Error สะสมติดต่อกันแล้ว ${consecutiveErrorCount}/10 รายการ (${reason})`);
+                    const cooldownMs = getSystemErrorCooldownMs(consecutiveErrorCount);
+                    sessionStorage.setItem('linesync_error_cooldown_until', String(Date.now() + cooldownMs));
+                    console.warn(`⚠️ เกิด Error สะสมติดต่อกันแล้ว ${consecutiveErrorCount}/10 รายการ (${reason}). คูลดาวน์ระบบ ${cooldownMs / 1000}s`);
                 }
 
                 await fetchAPI('/campaign/fail', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, reason: reason, isBlocked: isBlocked });

@@ -519,13 +519,37 @@ export class AppController {
       return { success: false, message: 'ไม่มีรายชื่อเป้าหมาย' };
     }
 
-    // Verify every targetId belongs to cleanBotId in customers
-    for (const userId of body.targetIds) {
+    const requestedCount = body.targetIds.length;
+    const uniqueTargetIds = Array.from(new Set(body.targetIds));
+    const excludedDuplicateCount = requestedCount - uniqueTargetIds.length;
+
+    let excludedBlockedCount = 0;
+    const validTargetIds: string[] = [];
+
+    // Verify every targetId belongs to cleanBotId in customers and exclude blocked customers
+    for (const userId of uniqueTargetIds) {
       const customer = await this.customerRepository.findOne({ where: { botId: cleanBotId, lineUserId: userId } });
       if (!customer) {
         res.status(HttpStatus.BAD_REQUEST);
         return { success: false, message: `Target ID ${userId} does not belong to OA ${cleanBotId}` };
       }
+      if (customer.isBlocked === true) {
+        excludedBlockedCount++;
+      } else {
+        validTargetIds.push(userId);
+      }
+    }
+
+    if (validTargetIds.length === 0) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return {
+        success: false,
+        message: 'ไม่พบผู้รับที่สามารถส่งได้ (ผู้รับทั้งหมดถูกบล็อกหรือซ้ำ)',
+        requestedCount,
+        queuedCount: 0,
+        excludedDuplicateCount,
+        excludedBlockedCount,
+      };
     }
 
     const messageType = body.messageType || 'text';
@@ -552,7 +576,7 @@ export class AppController {
       message: body.message,
       imageUrl: body.imageUrl || null,
       linkUrl: body.linkUrl || null,
-      totalTargets: body.targetIds.length,
+      totalTargets: validTargetIds.length,
       successCount: 0,
       failedCount: 0,
       status: initialStatus,
@@ -561,7 +585,7 @@ export class AppController {
     const savedCampaign = await this.campaignRepository.save(campaign);
 
     // สร้าง Record คิวงานรายบุคคลใน DB พร้อม botId
-    const jobs = body.targetIds.map(userId =>
+    const jobs = validTargetIds.map(userId =>
       this.campaignJobRepository.create({
         botId: cleanBotId,
         campaignId: savedCampaign.id,
@@ -576,7 +600,10 @@ export class AppController {
     return {
       success: true,
       campaignId: savedCampaign.id,
+      requestedCount,
       queuedCount: jobs.length,
+      excludedDuplicateCount,
+      excludedBlockedCount,
       status: initialStatus,
       scheduledAt: scheduledDate,
     };
