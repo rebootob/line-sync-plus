@@ -1,40 +1,37 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard
+ACTIVE_WORK_PACKAGE: BUG-WP001-UATLOG — Persistent Browser Safety Diagnostic Logging
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: ChatGPT / Control Plane
-TASK_TYPE: BUG_FIX_CORRECTIVE_SAFETY
+TASK_TYPE: OBSERVABILITY_LOGGING
 ```
 
 ---
 
-## 📋 Completed Work Package Summary: BUG-WP001-R1
+## 📋 Completed Work Package Summary: BUG-WP001-UATLOG
 
-### Implemented Corrections:
-1. **Full Lifecycle Execution Lock (`isExecutingJob`)**:
-   - Lock remains active across the entire job lifecycle (navigation verification -> input discovery -> image/text preparation -> final recipient verification -> send/recovery -> finishJob).
-   - Lock is released ONLY inside `finishJob` upon reaching terminal state (Success or Final Failure), or during same-job navigation retry.
-2. **Same-Job Safe Recovery (`handleSafeRecovery`)**:
-   - Directly retries the **SAME** `jobData` without calling `processQueue()` or fetching a new customer from backend.
-   - Preserves `linesync_jobid`, `linesync_uid`, `linesync_msg`, etc. in `sessionStorage` during bounded retries (max 2 retries per job).
-   - Marks the SAME job as failed via `finishJob` only if retries are exceeded or non-retryable.
-3. **Page-Load 404 Recovery Guard**:
-   - On page load, if 404/error page occurs or recipient verification fails while a job is active in `sessionStorage`, `savedJobData` is reconstructed and passed into `handleSafeRecovery(savedJobData)`.
-4. **Preserved OA Account Context (`getBotId` / `getOAContextUrl`)**:
-   - Extracts and persists current LINE OA `botId` from URL path / manager path.
-   - All recovery navigations return to `https://chat.line.biz/${botId}/chat/${userId}` or `https://chat.line.biz/${botId}/`, preventing cross-account switching.
-5. **Zero-Tolerance Image Send Guard (`confirmAndCloseImageModal(expectedUserId)`)**:
-   - Recipient verification checked during modal waiting loop and immediately before clicking the confirm image button.
-   - Throws `RECIPIENT_UNVERIFIED` and cancels click if verification fails.
-6. **Zero-Tolerance Text Send Guard (`sendChatMessage(chatInput, expectedUserId)`)**:
-   - Recipient verification checked immediately before clicking Send button or dispatching Enter key fallback.
-   - Throws `RECIPIENT_UNVERIFIED` and cancels send action if verification fails.
-7. **Userscript Version**: Updated `run/LineSyncApp.js` to v28.1.
+### Implemented Observability Features:
+1. **Backend Diagnostic Endpoint (`POST /api/diagnostics/browser-event`)**:
+   - Added endpoint in `src/app.controller.ts`.
+   - Appends sanitized JSON objects line-by-line to `uat-logs/browser-BUG-WP001-UAT.log`.
+   - Automatic `uat-logs` directory creation.
+   - Non-blocking error handling to ensure diagnostic failure never impacts bot execution.
+2. **Browser Diagnostic Emitter (`emitDiagnostic`)**:
+   - Added fire-and-forget helper in `run/LineSyncApp.js`.
+   - Non-blocking (no `await`, no exceptions thrown into bot logic).
+   - Generates stable `tabSessionId` stored in `sessionStorage`.
+3. **Logged Events**:
+   - `BOT_START`, `JOB_RECEIVED`, `NAVIGATE_TARGET`, `PAGE_LOAD_ACTIVE_JOB`, `RECIPIENT_VERIFY_OK`, `RECIPIENT_VERIFY_FAIL`, `NAVIGATION_404`, `SEND_BLOCKED`, `SAME_JOB_RECOVERY_START`, `SAME_JOB_RETRY`, `SAME_JOB_RETRY_EXHAUSTED`, `TEXT_PRE_SEND_VERIFIED`, `IMAGE_PRE_SEND_VERIFIED`, `JOB_SUCCESS`, `JOB_FAIL`.
+4. **Sanitization & Redaction Rules**:
+   - Logged fields ONLY: `serverTimestamp`, `clientTimestamp`, `event`, `scriptVersion`, `tabSessionId`, `jobId`, `expectedUserId`, `botId`, `currentPath` (pathname only), `retryCount`, `reason`.
+   - Strictly forbidden & excluded: Message text/body, imageUrl, linkUrl, tokens, passwords, cookies, headers, full storage objects.
+5. **Safety Invariant Maintained**:
+   - Observational only. BUG-WP001-R1 safety guards and sending behavior remain 100% unchanged.
 
 ---
 
 ## ⛔ Execution Policy
 
-- **Package Completion**: BUG-WP001-R1 completed, validated (`node --check` PASS, `npm run build` PASS, `npm test` PASS).
+- **Package Completion**: BUG-WP001-UATLOG completed, validated (`node --check` PASS, `npm test` PASS, `npm run build` PASS).
 - **Next Step**: Await review and authorization from ChatGPT / Control Plane.

@@ -5,6 +5,8 @@
 
 # Logs
 logs
+uat-logs/*
+!uat-logs/.gitkeep
 *.log
 npm-debug.log*
 pnpm-debug.log*

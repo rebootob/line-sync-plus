@@ -2,7 +2,7 @@
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
 // @version      28.1
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP001-R1 Execution Lock, Same-Job Recovery & Zero-Tolerance Send Guards)
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP001-UATLOG Persistent Browser Safety Diagnostic Logging)
 // @match        https://chat.line.biz/*
 // @match        https://manager.line.biz/*
 // @grant        GM_xmlhttpRequest
@@ -19,7 +19,39 @@
     let consecutiveErrorCount = parseInt(sessionStorage.getItem('linesync_consecutive_errors') || '0', 10);
     let isExecutingJob = false;
 
-    console.log("🤖 LineSync Plus Bot v28.1: พร้อมทำงาน (BUG-WP001-R1 Safety System Active)...");
+    console.log("🤖 LineSync Plus Bot v28.1: พร้อมทำงาน (BUG-WP001-UATLOG Active)...");
+
+    function getTabSessionId() {
+        let id = sessionStorage.getItem('linesync_tab_session_id');
+        if (!id) {
+            id = 'ts_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+            sessionStorage.setItem('linesync_tab_session_id', id);
+        }
+        return id;
+    }
+
+    // 🛡️ Observability Emitter (Fire-and-Forget, Non-Blocking, Never Throws)
+    function emitDiagnostic(eventName, context = {}) {
+        try {
+            const jobId = context.jobId || sessionStorage.getItem('linesync_jobid') || '';
+            const payload = {
+                clientTimestamp: new Date().toISOString(),
+                event: eventName,
+                scriptVersion: '28.1',
+                tabSessionId: getTabSessionId(),
+                jobId: jobId,
+                expectedUserId: context.expectedUserId || context.userId || sessionStorage.getItem('linesync_uid') || '',
+                botId: context.botId || getBotId() || '',
+                currentPath: window.location.pathname,
+                retryCount: typeof context.retryCount === 'number' ? context.retryCount : (parseInt(sessionStorage.getItem(`linesync_retry_${jobId}`) || '0', 10) || 0),
+                reason: context.reason || ''
+            };
+
+            fetchAPI('/diagnostics/browser-event', 'POST', payload).catch(() => {});
+        } catch (e) {
+            // Safety invariant: logging failure must never affect bot execution
+        }
+    }
 
     function fetchAPI(endpoint, method = 'GET', data = null) {
         return new Promise((resolve, reject) => {
@@ -98,26 +130,31 @@
     // 🛡️ 1. Explicit 404 & LINE Error Page Detector
     function checkIfErrorPage() {
         const path = window.location.pathname.toLowerCase();
-        if (path.includes('/error') || path.includes('/404') || path.includes('/not-found')) {
-            return true;
+        let isError = path.includes('/error') || path.includes('/404') || path.includes('/not-found');
+
+        if (!isError) {
+            const errorBanners = deepQuerySelectorAll('h1, h2, h3, p, div, alert, ui-alert, section').find(el => {
+                try {
+                    const txt = String(el.textContent || el.innerText || '').trim();
+                    if (txt.length > 200) return false;
+                    return txt.includes('404') ||
+                           txt.includes('Page Not Found') ||
+                           txt.includes('Page not found') ||
+                           txt.includes('ไม่พบหน้า') ||
+                           txt.includes('เกิดข้อผิดพลาดในการโหลด') ||
+                           txt.includes('An error occurred') ||
+                           txt.includes('This page is not available') ||
+                           txt.includes('ไม่สามารถโหลดข้อมูลได้');
+                } catch (e) { return false; }
+            });
+            isError = !!errorBanners;
         }
 
-        const errorBanners = deepQuerySelectorAll('h1, h2, h3, p, div, alert, ui-alert, section').find(el => {
-            try {
-                const txt = String(el.textContent || el.innerText || '').trim();
-                if (txt.length > 200) return false;
-                return txt.includes('404') ||
-                       txt.includes('Page Not Found') ||
-                       txt.includes('Page not found') ||
-                       txt.includes('ไม่พบหน้า') ||
-                       txt.includes('เกิดข้อผิดพลาดในการโหลด') ||
-                       txt.includes('An error occurred') ||
-                       txt.includes('This page is not available') ||
-                       txt.includes('ไม่สามารถโหลดข้อมูลได้');
-            } catch (e) { return false; }
-        });
+        if (isError) {
+            emitDiagnostic('NAVIGATION_404', { reason: 'Error page detected' });
+        }
 
-        return !!errorBanners;
+        return isError;
     }
 
     // 🛡️ 2. Exact Recipient Verification Guard
@@ -134,6 +171,7 @@
 
         if (!urlMatchesRecipient) {
             console.warn(`🛡️ [SAFETY] URL path does not match expected recipient: Expected ${expectedUserId}, got URL: ${pathname}`);
+            emitDiagnostic('RECIPIENT_VERIFY_FAIL', { expectedUserId: expectedUserId, reason: 'URL path mismatch' });
             return false;
         }
 
@@ -143,10 +181,12 @@
             const dataUid = el.getAttribute('data-user-id') || el.getAttribute('data-chat-id') || '';
             if (dataUid && dataUid.toLowerCase() !== expectedUserId.toLowerCase()) {
                 console.warn(`🛡️ [SAFETY] DOM element data-user-id mismatch: Expected ${expectedUserId}, found ${dataUid}`);
+                emitDiagnostic('RECIPIENT_VERIFY_FAIL', { expectedUserId: expectedUserId, reason: `DOM mismatch found ${dataUid}` });
                 return false;
             }
         }
 
+        emitDiagnostic('RECIPIENT_VERIFY_OK', { expectedUserId: expectedUserId });
         return true;
     }
 
@@ -172,30 +212,38 @@
 
     // สแกนตรวจสอบว่าผู้ใช้บล็อก/แชทถูกปิดไม่สามารถส่งข้อความได้หรือไม่
     function checkIfChatDisabledOrBlocked(chatInput) {
+        let isBlocked = false;
         if (chatInput) {
-            if (chatInput.disabled || chatInput.readOnly) return true;
+            if (chatInput.disabled || chatInput.readOnly) isBlocked = true;
             const ph = String(chatInput.placeholder || '').toLowerCase();
             if (ph.includes('ไม่สามารถส่งข้อความ') || ph.includes('cannot send') || ph.includes('blocked') || ph.includes('บล็อก')) {
-                return true;
+                isBlocked = true;
             }
         }
 
-        const allEls = deepQuerySelectorAll('p, div, span, alert, ui-alert, section');
-        const blockedBanner = allEls.find(el => {
-            try {
-                const txt = String(el.textContent || el.innerText || '').trim();
-                if (txt.length > 200) return false;
-                return txt.includes('ไม่สามารถส่งข้อความได้') || 
-                       txt.includes('ไม่สามารถส่งข้อความในห้องแชทนี้ได้') || 
-                       txt.includes('ผู้ใช้บล็อกอยู่') || 
-                       txt.includes('Cannot send message') || 
-                       txt.includes('User blocked') ||
-                       txt.includes('บัญชีนี้ถูกระงับ') ||
-                       txt.includes('ไม่สามารถตอบกลับ');
-            } catch(e) { return false; }
-        });
+        if (!isBlocked) {
+            const allEls = deepQuerySelectorAll('p, div, span, alert, ui-alert, section');
+            const blockedBanner = allEls.find(el => {
+                try {
+                    const txt = String(el.textContent || el.innerText || '').trim();
+                    if (txt.length > 200) return false;
+                    return txt.includes('ไม่สามารถส่งข้อความได้') || 
+                           txt.includes('ไม่สามารถส่งข้อความในห้องแชทนี้ได้') || 
+                           txt.includes('ผู้ใช้บล็อกอยู่') || 
+                           txt.includes('Cannot send message') || 
+                           txt.includes('User blocked') ||
+                           txt.includes('บัญชีนี้ถูกระงับ') ||
+                           txt.includes('ไม่สามารถตอบกลับ');
+                } catch(e) { return false; }
+            });
+            isBlocked = !!blockedBanner;
+        }
 
-        return !!blockedBanner;
+        if (isBlocked) {
+            emitDiagnostic('SEND_BLOCKED', { reason: 'User blocked or chat disabled' });
+        }
+
+        return isBlocked;
     }
 
     // 🛡️ ZERO-TOLERANCE IMAGE SEND GUARD: Confirm & Send image with strict expectedUserId check
@@ -235,6 +283,8 @@
             console.error("🛑 [SAFETY] Zero-tolerance image send guard: Recipient unverified immediately before clicking image Send button!");
             throw new Error('RECIPIENT_UNVERIFIED');
         }
+
+        emitDiagnostic('IMAGE_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
         console.log("🚀 [DEBUG] 2. พบป๊อปอัปแล้ว! สั่งกดปุ่ม [ส่ง] รูปภาพเพียง 1 ครั้งเท่านั้น (Single Fire)...");
 
@@ -285,6 +335,8 @@
                 throw new Error('RECIPIENT_UNVERIFIED');
             }
 
+            emitDiagnostic('TEXT_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
+
             console.log("✅ เจอและสั่งคลิกปุ่มส่งสีเขียวที่มุมล่างขวาช่องพิมพ์สำเร็จ!");
             const opts = { bubbles: true, cancelable: true, composed: true, view: window };
             try { sendBtn.focus(); } catch(e){}
@@ -299,6 +351,8 @@
                 console.error("🛑 [SAFETY] Zero-tolerance text send guard: Recipient unverified right before Enter key fallback!");
                 throw new Error('RECIPIENT_UNVERIFIED');
             }
+
+            emitDiagnostic('TEXT_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
             const enterOpts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true, shiftKey: false };
             try { chatInput.dispatchEvent(new KeyboardEvent('keydown', enterOpts)); } catch(e){}
@@ -358,6 +412,8 @@
     async function handleSafeRecovery(jobData, reason = 'RECIPIENT_UNVERIFIED', isBlocked = false) {
         console.warn(`🛡️ [SAME-JOB RECOVERY] Triggered recovery for Job ID: ${jobData.jobId}, User ID: ${jobData.userId}, Reason: ${reason}`);
 
+        emitDiagnostic('SAME_JOB_RECOVERY_START', { jobId: jobData.jobId, userId: jobData.userId, reason: reason });
+
         const retryKey = `linesync_retry_${jobData.jobId}`;
         let retryCount = parseInt(sessionStorage.getItem(retryKey) || '0', 10);
 
@@ -366,7 +422,8 @@
             sessionStorage.setItem(retryKey, String(retryCount));
             console.log(`🔄 [SAME-JOB RECOVERY] Attempting bounded retry ${retryCount}/${MAX_RETRIES} for SAME Job ID: ${jobData.jobId}, User ID: ${jobData.userId}...`);
 
-            // Retain EXACT SAME job data in sessionStorage so recovery reloads/retries the same target
+            emitDiagnostic('SAME_JOB_RETRY', { jobId: jobData.jobId, userId: jobData.userId, retryCount: retryCount, reason: reason });
+
             sessionStorage.setItem('linesync_jobid', jobData.jobId || '');
             sessionStorage.setItem('linesync_uid', jobData.userId || '');
             sessionStorage.setItem('linesync_msg', jobData.message || '');
@@ -374,7 +431,6 @@
             sessionStorage.setItem('linesync_img', jobData.imageUrl || '');
             sessionStorage.setItem('linesync_link', jobData.linkUrl || '');
 
-            // Release execution lock to allow retry attempt
             isExecutingJob = false;
 
             const targetUrl = getOAContextUrl(jobData.userId);
@@ -387,6 +443,9 @@
             }
         } else {
             console.error(`❌ [SAME-JOB RECOVERY] Bounded retries exceeded (${retryCount}/${MAX_RETRIES}) or non-retryable error. Failing SAME job ${jobData.jobId} with reason: ${reason}`);
+
+            emitDiagnostic('SAME_JOB_RETRY_EXHAUSTED', { jobId: jobData.jobId, userId: jobData.userId, retryCount: retryCount, reason: reason });
+
             sessionStorage.removeItem(retryKey);
             await finishJob(jobData.jobId, jobData.userId, false, reason, isBlocked);
         }
@@ -419,6 +478,8 @@
             if (job && job.status === 'processing') {
                 console.log("📥 ได้คิวส่งหา User ID:", job.userId, "ประเภท:", job.messageType);
 
+                emitDiagnostic('JOB_RECEIVED', { jobId: job.jobId, userId: job.userId });
+
                 sessionStorage.setItem('linesync_jobid', job.jobId || '');
                 sessionStorage.setItem('linesync_msg', job.message || '');
                 sessionStorage.setItem('linesync_uid', job.userId);
@@ -429,6 +490,9 @@
                 const targetUrl = getOAContextUrl(job.userId);
                 if (window.location.href !== targetUrl) {
                     console.log("🔀 สลับไปยังหน้าแชต LINE OA ของผู้รับ:", targetUrl);
+
+                    emitDiagnostic('NAVIGATE_TARGET', { jobId: job.jobId, userId: job.userId });
+
                     window.location.href = targetUrl;
                     return;
                 }
@@ -660,10 +724,13 @@
             sessionStorage.removeItem(`linesync_retry_${jobId}`);
 
             if (success) {
+                emitDiagnostic('JOB_SUCCESS', { jobId: jobId, userId: userId });
                 consecutiveErrorCount = 0;
                 sessionStorage.setItem('linesync_consecutive_errors', '0');
                 await fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId });
             } else {
+                emitDiagnostic('JOB_FAIL', { jobId: jobId, userId: userId, reason: reason });
+
                 const isUserBlocked = isBlocked || (reason && (reason.includes('บล็อก') || reason.includes('ไม่สามารถส่งข้อความ')));
 
                 if (isUserBlocked) {
@@ -707,8 +774,10 @@
         }
     }
 
-    // 🛡️ PAGE-LOAD RECOVERY GUARD
+    // 🛡️ PAGE-LOAD RECOVERY GUARD & DIAGNOSTIC INITIALIZATION
     window.addEventListener('load', () => {
+        emitDiagnostic('BOT_START');
+
         setTimeout(() => {
             const savedJobId = sessionStorage.getItem('linesync_jobid');
             const savedMsg = sessionStorage.getItem('linesync_msg');
@@ -727,6 +796,8 @@
             } : null;
 
             if (savedJobData) {
+                emitDiagnostic('PAGE_LOAD_ACTIVE_JOB', { jobId: savedJobData.jobId, userId: savedJobData.userId });
+
                 if (checkIfErrorPage()) {
                     console.warn("🛑 [SAFETY] โหลดหน้าเจอ 404 / Error Page พร้อมมีคิวค้าง -> ส่งเข้า Same-Job Safe Recovery...");
                     handleSafeRecovery(savedJobData, 'NAVIGATION_404');

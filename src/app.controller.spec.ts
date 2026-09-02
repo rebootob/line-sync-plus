@@ -86,4 +86,19 @@ describe('AppController', () => {
       ]);
     });
   });
+
+  describe('logBrowserEvent', () => {
+    it('should successfully log browser diagnostic event to uat-logs file', async () => {
+      const result = await appController.logBrowserEvent({
+        event: 'JOB_RECEIVED',
+        jobId: 'job_test_1',
+        expectedUserId: 'U12345',
+        currentPath: '/bot1/chat/U12345?query=secret#hash',
+        retryCount: 0,
+      });
+
+      expect(result).toEqual({ success: true });
+    });
+  });
 });
+

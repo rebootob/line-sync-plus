@@ -731,4 +731,35 @@ export class AppController {
       jobs,
     };
   }
+
+  // 13. Endpoint สำหรับบันทึก Browser Diagnostic Safety Logs (BUG-WP001-UATLOG)
+  @Post('diagnostics/browser-event')
+  async logBrowserEvent(@Body() body: any) {
+    try {
+      const allowed = {
+        serverTimestamp: new Date().toISOString(),
+        clientTimestamp: String(body?.clientTimestamp || new Date().toISOString()),
+        event: String(body?.event || 'UNKNOWN'),
+        scriptVersion: String(body?.scriptVersion || ''),
+        tabSessionId: String(body?.tabSessionId || ''),
+        jobId: String(body?.jobId || ''),
+        expectedUserId: String(body?.expectedUserId || ''),
+        botId: String(body?.botId || ''),
+        currentPath: String(body?.currentPath || '').split('?')[0].split('#')[0],
+        retryCount: typeof body?.retryCount === 'number' ? body.retryCount : (parseInt(body?.retryCount, 10) || 0),
+        reason: String(body?.reason || ''),
+      };
+
+      const logDir = path.join(process.cwd(), 'uat-logs');
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+      const logFilePath = path.join(logDir, 'browser-BUG-WP001-UAT.log');
+      fs.appendFileSync(logFilePath, JSON.stringify(allowed) + '\n', 'utf8');
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
 }
+
