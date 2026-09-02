@@ -2,7 +2,7 @@
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
 // @version      28.2
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP002 Strict OA Context Validation & 404 Loop Guard)
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP002-R1 Preserve Active Job When OA Context Unavailable)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -29,7 +29,7 @@
     let isExecutingJob = false;
     let isFlushingSpool = false;
 
-    console.log("🤖 LineSync Plus Bot v28.2: พร้อมทำงาน (BUG-WP002 Active)...");
+    console.log("🤖 LineSync Plus Bot v28.2: พร้อมทำงาน (BUG-WP002-R1 Active)...");
 
     // 🛡️ Strict LINE Chat OA Context ID Validator (^U + 32 hex chars)
     function isValidChatContextId(value) {
@@ -545,11 +545,31 @@
         });
     }
 
-    // 🛡️ SAME-JOB SAFE RECOVERY: Retries the EXACT SAME jobData up to MAX_RETRIES using ONLY validated OA context
+    // 🛡️ SAME-JOB SAFE RECOVERY: Retries the EXACT SAME jobData up to MAX_RETRIES using ONLY validated OA context (BUG-WP002-R1)
     async function handleSafeRecovery(jobData, reason = 'RECIPIENT_UNVERIFIED', isBlocked = false) {
         console.warn(`🛡️ [SAME-JOB RECOVERY] Triggered recovery for Job ID: ${jobData.jobId}, User ID: ${jobData.userId}, Reason: ${reason}`);
 
         emitDiagnostic('SAME_JOB_RECOVERY_START', { jobId: jobData.jobId, userId: jobData.userId, reason: reason });
+
+        // 1. Check if valid target OA context URL exists BEFORE incrementing retryCount or consuming retries
+        const targetUrl = getOAContextUrl(jobData.userId);
+
+        if (!targetUrl) {
+            console.warn(`🛑 [SAFETY] Same-job recovery waiting for valid OA context: Target URL unavailable for Job ID: ${jobData.jobId}. Preserving active job state and failing closed.`);
+            emitDiagnostic('SAME_JOB_RECOVERY_START', { jobId: jobData.jobId, userId: jobData.userId, reason: 'Missing valid OA context' });
+
+            // Preserve SAME job session parameters intact
+            sessionStorage.setItem('linesync_jobid', jobData.jobId || '');
+            sessionStorage.setItem('linesync_uid', jobData.userId || '');
+            sessionStorage.setItem('linesync_msg', jobData.message || '');
+            sessionStorage.setItem('linesync_type', jobData.messageType || 'text');
+            sessionStorage.setItem('linesync_img', jobData.imageUrl || '');
+            sessionStorage.setItem('linesync_link', jobData.linkUrl || '');
+
+            // DO NOT call finishJob, DO NOT call /campaign/fail, DO NOT increment retryCount, DO NOT fetch another job, DO NOT navigate
+            isExecutingJob = false;
+            return;
+        }
 
         const retryKey = `linesync_retry_${jobData.jobId}`;
         let retryCount = parseInt(sessionStorage.getItem(retryKey) || '0', 10);
@@ -569,14 +589,6 @@
             sessionStorage.setItem('linesync_link', jobData.linkUrl || '');
 
             isExecutingJob = false;
-
-            const targetUrl = getOAContextUrl(jobData.userId);
-            if (!targetUrl) {
-                console.error(`🛑 [SAFETY] Same-job recovery failed closed: Cannot construct valid target URL (Invalid OA context). Failing job ${jobData.jobId}.`);
-                sessionStorage.removeItem(retryKey);
-                await finishJob(jobData.jobId, jobData.userId, false, 'INVALID_OA_CONTEXT', isBlocked);
-                return;
-            }
 
             if (window.location.href !== targetUrl) {
                 console.log(`🌐 [SAME-JOB RECOVERY] Navigating to SAME user chat URL: ${targetUrl}`);
@@ -650,8 +662,8 @@
 
                 const targetUrl = getOAContextUrl(job.userId);
                 if (!targetUrl) {
-                    console.error("🛑 [SAFETY] Cannot construct recipient URL: Invalid OA context. Failing job.");
-                    await finishJob(job.jobId, job.userId, false, 'INVALID_OA_CONTEXT');
+                    console.warn("🛑 [SAFETY] Cannot construct recipient URL: Invalid OA context. Handing off to safe recovery...");
+                    await handleSafeRecovery(job, 'INVALID_OA_CONTEXT');
                     return;
                 }
 
