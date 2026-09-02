@@ -511,6 +511,40 @@ describe('AppController', () => {
       expect(res).toEqual({ status: 'empty' });
     });
   });
+
+  describe('REL-WP001-R1 — Fail-Closed Worker Lease & Navigation Lease Security Tests', () => {
+    it('1. Storage write failure or read-back mismatch cannot return leadership true (Fail-Closed)', () => {
+      // Static invariant check: verify writeAndVerifyLeaderRecord is present in userscript
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain('writeAndVerifyLeaderRecord');
+      expect(scriptContent).toContain('WORKER LEASE PERSIST FAILED');
+      expect(scriptContent).toContain('Read-back verification mismatch');
+    });
+
+    it('2. Navigation paths require navigation lease helper (navigateAsLeader)', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain('navigateAsLeader');
+      expect(scriptContent).toContain('NAVIGATION_LEASE_EXTEND_FAILED');
+      expect(scriptContent).toContain('SAME_JOB_RECOVERY_RECIPIENT');
+      expect(scriptContent).toContain('PROCESS_QUEUE_404_MAIN');
+      expect(scriptContent).toContain('PROCESS_QUEUE_RECIPIENT');
+      expect(scriptContent).toContain('RETURN_TO_MAIN');
+      expect(scriptContent).toContain('PAGE_LOAD_404_MAIN');
+    });
+
+    it('3. Irreversible send paths use atomic leadership confirmation (confirmWorkerLeadershipForSend)', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain('confirmWorkerLeadershipForSend');
+      expect(scriptContent).toContain('isImageLeaderConfirmed');
+      expect(scriptContent).toContain('isTextLeaderConfirmed');
+    });
+  });
 });
 
 

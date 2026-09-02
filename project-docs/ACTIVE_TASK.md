@@ -1,42 +1,47 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: REL-WP001 — Single Worker / Multi-Tab Lock
+ACTIVE_WORK_PACKAGE: REL-WP001-R1 — Fail-Closed Lease Persistence + Complete Navigation Hold
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: ChatGPT / Control Plane
-TASK_TYPE: RELIABILITY_HARDENING
+TASK_TYPE: RELIABILITY_CORRECTIVE
 ```
 
 ---
 
-## 📋 Completed Work Package Summary: REL-WP001
+## 📋 Corrective Work Package Summary: REL-WP001-R1
 
-### Implemented Single-Worker Multi-Tab Lock Controls:
-1. **Worker Version Upgrade**:
-   - `run/LineSyncApp.js`: `@version 28.4`, `WORKER_VERSION = '28.4'`.
-   - `src/runtime-version.ts`: `REQUIRED_WORKER_VERSION = '28.4'`.
-   - `index.html`: `v28.4` runtime version fallback badge.
-   - `src/app.controller.spec.ts`: Version tests updated to 28.4 (All 33 tests passed).
-2. **Leader Election & Coordination (Web Locks API + localStorage)**:
-   - Atomic election mutex via `navigator.locks.request('linesync_worker_election_v1', { mode: 'exclusive' }, ...)`.
-   - Shared leader lease record stored in `localStorage` under `linesync_worker_leader_v1`:
-     `{ ownerTabSessionId, leaseId, workerVersion, acquiredAt, expiresAt }`.
-   - Bounded lease duration: `WORKER_LEASE_MS = 20000` (20s), renewed every `WORKER_RENEW_INTERVAL_MS = 4000` (4s).
-   - Same-tab navigation continuity: Lease extended with `NAVIGATION_LEASE_MS = 45000` (45s) before bot-controlled navigations.
-   - Fail-closed unsupported lock rule: If `navigator.locks` is unavailable, tab becomes STANDBY and logs `[REL] WORKER LOCK UNSUPPORTED`.
-3. **Queue Gate & Post-Claim Verification**:
-   - `processQueue()` requires `ensureWorkerLeadership()` PASS before fetching `/campaign/next`. Non-leader tabs remain STANDBY and retry election after 4s without fetching jobs.
-   - Re-verifies `hasValidWorkerLeadership()` immediately after `/campaign/next` returns a processing job. If lost, invokes `handleLeadershipLost('LOST_AFTER_CLAIM')` without sending or failing the job.
-4. **Pre-Send Fencing Integrity**:
-   - Re-verifies `hasValidWorkerLeadership()` before `executeChatBot()`, before chat input focus, before image attachment, before image send click (`confirmAndCloseImageModal`), before text insertion, and before text send click/Enter fallback (`sendChatMessage`).
-   - If leadership check fails, throws `WORKER_LEADERSHIP_LOST` and routes to `handleLeadershipLost()`.
-5. **Leadership Loss Handler (`handleLeadershipLost`)**:
-   - Relinquishes local active-job session fields in `sessionStorage` (`linesync_jobid`, `linesync_uid`, `linesync_msg`, `linesync_type`, `linesync_img`, `linesync_link`).
-   - Does NOT send, finish/fail job, stop campaign, increment `retryCount` or `consecutiveErrorCount`, or navigate. Leaves backend job in processing state for existing stale-job recovery.
-6. **Terminal Report Preservation**:
-   - Gating is NOT applied after physical message send completes, allowing `finishJob(..., true)` to complete terminal success reporting without duplication.
-7. **Scope Boundary**:
-   - REL-WP001 protects multi-tab execution within the SAME `chat.line.biz` browser profile/storage partition (`localStorage`). Cross-profile or cross-machine protection belongs to later reliability work packages (REL-WP002/003).
+### Implemented Controls & Corrective Hardening:
+
+1. **Fail-Closed Lease Persistence (`writeAndVerifyLeaderRecord`)**:
+   - `writeAndVerifyLeaderRecord(record)` attempts `localStorage.setItem(WORKER_LEADER_KEY, ...)`, reads raw record back immediately, parses safely, and verifies:
+     - `ownerTabSessionId === record.ownerTabSessionId`
+     - `leaseId === record.leaseId`
+     - `workerVersion === record.workerVersion`
+     - `expiresAt === record.expiresAt`
+   - If any step fails (localStorage exception, JSON parse error, read-back mismatch, or missing record), sets `isCurrentTabLeader = false`, logs `[REL] WORKER LEASE PERSIST FAILED`, and returns `false`.
+   - Never swallows storage-write failure or reports false leadership. Applied across initial leader acquisition, same-tab renewal, and navigation lease extension.
+
+2. **Complete Navigation Lease Coverage (`navigateAsLeader`)**:
+   - Centralized navigation helper `navigateAsLeader(targetUrl, reason)` validates leadership, extends navigation lease (`NAVIGATION_LEASE_MS = 45000`), verifies read-back persistence under `WORKER_ELECTION_LOCK`, and only then executes `window.location.href = targetUrl`.
+   - If lease extension fails, navigation is BLOCKED (`handleLeadershipLost('NAVIGATION_LEASE_EXTEND_FAILED')`), failing closed.
+   - All 5 bot-controlled full-page navigation paths in `run/LineSyncApp.js` route through `navigateAsLeader`:
+     1. Normal recipient navigation (`processQueue`)
+     2. SAME-JOB RECOVERY recipient navigation (`handleSafeRecovery`)
+     3. Queue 404/error recovery to OA main (`processQueue`)
+     4. Return-to-OA-main after job completion (`closeUserChatAndReturnToMain`)
+     5. Page-load 404/error recovery to OA main (`window.load` listener)
+
+3. **Atomic Pre-Send Leadership Confirmation (`confirmWorkerLeadershipForSend`)**:
+   - Immediately before irreversible physical sends, `confirmWorkerLeadershipForSend()` executes under Web Locks election mutex (`WORKER_ELECTION_LOCK`), verifies ownership, renews lease, and read-back verifies persistence.
+   - Used immediately before:
+     - Image Send click (`confirmAndCloseImageModal`)
+     - Text Send button click / Enter key fallback (`sendChatMessage`)
+   - Returns `false` -> throws `WORKER_LEADERSHIP_LOST` and routes to `handleLeadershipLost()`.
+   - Does NOT gate `finishJob(true)` after a physical message send has already completed.
+
+4. **Regression Protection & Test Suite**:
+   - Added 3 focused static/unit tests in `src/app.controller.spec.ts` under `REL-WP001-R1`. All 36 Jest tests passing cleanly.
 
 ---
 
@@ -53,7 +58,8 @@ TASK_TYPE: RELIABILITY_HARDENING
 
 ## ⛔ Execution Policy
 
-- **REL-WP001 Status**: `READY_FOR_CHATGPT_REVIEW` (Do NOT mark CLOSED yet).
+- **REL-WP001-R1 Status**: `READY_FOR_CHATGPT_REVIEW`
+- **REL-WP001 Status**: `READY_FOR_CHATGPT_REVIEW` (NOT CLOSED)
 - **Next Work Packages**:
   - `REL-WP002`: `NOT STARTED`
   - `REL-WP003`: `NOT STARTED`

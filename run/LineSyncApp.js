@@ -58,7 +58,7 @@
     let isCurrentTabLeader = false;
     let isLeadershipWarningShown = false;
 
-    // 🛡️ REL-WP001 SINGLE WORKER LOCK SUBSYSTEM
+    // 🛡️ REL-WP001 / REL-WP001-R1 SINGLE WORKER LOCK SUBSYSTEM
     function readWorkerLeaderRecord() {
         try {
             const raw = localStorage.getItem(WORKER_LEADER_KEY);
@@ -73,6 +73,46 @@
             return rec;
         } catch (e) {
             return null;
+        }
+    }
+
+    function writeAndVerifyLeaderRecord(record) {
+        if (!record || typeof record !== 'object' || !record.ownerTabSessionId || !record.leaseId) {
+            isCurrentTabLeader = false;
+            return false;
+        }
+
+        try {
+            const jsonStr = JSON.stringify(record);
+            localStorage.setItem(WORKER_LEADER_KEY, jsonStr);
+
+            const rawBack = localStorage.getItem(WORKER_LEADER_KEY);
+            if (!rawBack) {
+                console.warn("🛑 [REL] WORKER LEASE PERSIST FAILED: Read-back record missing after localStorage.setItem.");
+                isCurrentTabLeader = false;
+                return false;
+            }
+
+            const parsed = JSON.parse(rawBack);
+            if (
+                parsed &&
+                parsed.ownerTabSessionId === record.ownerTabSessionId &&
+                parsed.leaseId === record.leaseId &&
+                parsed.workerVersion === record.workerVersion &&
+                parsed.expiresAt === record.expiresAt
+            ) {
+                isCurrentTabLeader = true;
+                isLeadershipWarningShown = false;
+                return true;
+            } else {
+                console.warn("🛑 [REL] WORKER LEASE PERSIST FAILED: Read-back verification mismatch.");
+                isCurrentTabLeader = false;
+                return false;
+            }
+        } catch (e) {
+            console.warn("🛑 [REL] WORKER LEASE PERSIST FAILED: localStorage write exception.", e);
+            isCurrentTabLeader = false;
+            return false;
         }
     }
 
@@ -102,12 +142,8 @@
                 if (existingRec) {
                     if (existingRec.ownerTabSessionId === myTabId && currentTabLeaseId && existingRec.leaseId === currentTabLeaseId) {
                         existingRec.expiresAt = now + overrideLeaseMs;
-                        try {
-                            localStorage.setItem(WORKER_LEADER_KEY, JSON.stringify(existingRec));
-                        } catch (e) {}
-                        isCurrentTabLeader = true;
-                        isLeadershipWarningShown = false;
-                        resolve(true);
+                        const verified = writeAndVerifyLeaderRecord(existingRec);
+                        resolve(verified);
                         return;
                     } else {
                         isCurrentTabLeader = false;
@@ -133,14 +169,12 @@
                         acquiredAt: now,
                         expiresAt: now + overrideLeaseMs
                     };
-                    try {
-                        localStorage.setItem(WORKER_LEADER_KEY, JSON.stringify(newRecord));
-                    } catch (e) {}
 
-                    isCurrentTabLeader = true;
-                    isLeadershipWarningShown = false;
-                    console.log(`[REL] ${isTakeover ? 'WORKER LEADER TAKEOVER' : 'WORKER LEADER ACQUIRED'}: Tab ${myTabId} elected active worker (Lease: ${newLeaseId})`);
-                    resolve(true);
+                    const verified = writeAndVerifyLeaderRecord(newRecord);
+                    if (verified) {
+                        console.log(`[REL] ${isTakeover ? 'WORKER LEADER TAKEOVER' : 'WORKER LEADER ACQUIRED'}: Tab ${myTabId} elected active worker (Lease: ${newLeaseId})`);
+                    }
+                    resolve(verified);
                     return;
                 }
             }).catch(() => {
@@ -150,9 +184,63 @@
         });
     }
 
-    async function extendLeadershipForNavigation() {
-        if (!hasValidWorkerLeadership()) return false;
-        return await ensureWorkerLeadership(NAVIGATION_LEASE_MS);
+    async function confirmWorkerLeadershipForSend() {
+        if (!hasValidWorkerLeadership()) {
+            isCurrentTabLeader = false;
+            return false;
+        }
+
+        if (!navigator.locks || typeof navigator.locks.request !== 'function') {
+            isCurrentTabLeader = false;
+            return false;
+        }
+
+        return new Promise((resolve) => {
+            navigator.locks.request(WORKER_ELECTION_LOCK, { mode: 'exclusive' }, async () => {
+                const now = Date.now();
+                const myTabId = getTabSessionId();
+                const existingRec = readWorkerLeaderRecord();
+
+                if (existingRec && existingRec.ownerTabSessionId === myTabId && currentTabLeaseId && existingRec.leaseId === currentTabLeaseId) {
+                    existingRec.expiresAt = now + WORKER_LEASE_MS;
+                    const verified = writeAndVerifyLeaderRecord(existingRec);
+                    resolve(verified);
+                    return;
+                } else {
+                    isCurrentTabLeader = false;
+                    resolve(false);
+                    return;
+                }
+            }).catch(() => {
+                isCurrentTabLeader = false;
+                resolve(false);
+            });
+        });
+    }
+
+    async function navigateAsLeader(targetUrl, reason = 'BOT_NAVIGATION') {
+        if (!targetUrl || typeof targetUrl !== 'string') {
+            console.warn(`🛑 [REL] Navigation blocked (${reason}): Invalid target URL.`);
+            return false;
+        }
+
+        if (!hasValidWorkerLeadership()) {
+            console.warn(`🛑 [REL] Navigation blocked (${reason}): Tab ${getTabSessionId()} does not hold valid worker leadership.`);
+            handleLeadershipLost(`NAVIGATION_BLOCKED_${reason}`);
+            return false;
+        }
+
+        console.log(`🌐 [REL] Extending navigation lease (${NAVIGATION_LEASE_MS}ms) for ${reason}...`);
+        const extended = await ensureWorkerLeadership(NAVIGATION_LEASE_MS);
+        if (!extended) {
+            console.error(`🛑 [REL] Navigation blocked (${reason}): Failed to extend navigation lease.`);
+            handleLeadershipLost(`NAVIGATION_LEASE_EXTEND_FAILED_${reason}`);
+            return false;
+        }
+
+        console.log(`🌐 [REL] Navigation lease verified. Navigating to: ${targetUrl}`);
+        window.location.href = targetUrl;
+        return true;
     }
 
     function handleLeadershipLost(reason = 'UNKNOWN') {
@@ -589,7 +677,8 @@
             throw new Error('RECIPIENT_UNVERIFIED');
         }
 
-        if (!hasValidWorkerLeadership()) {
+        const isImageLeaderConfirmed = await confirmWorkerLeadershipForSend();
+        if (!isImageLeaderConfirmed) {
             console.error("🛑 [REL] Leadership check failed immediately before clicking image Send button!");
             throw new Error('WORKER_LEADERSHIP_LOST');
         }
@@ -618,10 +707,11 @@
     }
 
     // 🛡️ ZERO-TOLERANCE TEXT SEND GUARD: Send chat text message with strict expectedUserId check
-    function sendChatMessage(chatInput, expectedUserId) {
+    async function sendChatMessage(chatInput, expectedUserId) {
         console.log("🚀 [DEBUG] สั่งส่งข้อความในช่องแชท...");
 
-        if (!hasValidWorkerLeadership()) {
+        const isTextLeaderConfirmed = await confirmWorkerLeadershipForSend();
+        if (!isTextLeaderConfirmed) {
             console.error("🛑 [REL] Leadership check failed immediately before text send!");
             throw new Error('WORKER_LEADERSHIP_LOST');
         }
@@ -770,7 +860,7 @@
 
             if (window.location.href !== targetUrl) {
                 console.log(`🌐 [SAME-JOB RECOVERY] Navigating to SAME user chat URL: ${targetUrl}`);
-                window.location.href = targetUrl;
+                await navigateAsLeader(targetUrl, 'SAME_JOB_RECOVERY_RECIPIENT');
             } else {
                 console.log("🌐 [SAME-JOB RECOVERY] Already on target URL. Retrying execution directly...");
                 setTimeout(() => executeChatBot(jobData), 2000);
@@ -804,7 +894,7 @@
             const mainUrl = getOAContextUrl(null);
             if (mainUrl && window.location.href !== mainUrl) {
                 console.log(`🌐 [RECOVERY] Navigating to known valid OA chat main URL: ${mainUrl}`);
-                window.location.href = mainUrl;
+                await navigateAsLeader(mainUrl, 'PROCESS_QUEUE_404_MAIN');
                 return;
             } else {
                 console.warn("🛑 [SAFETY] Cannot recover from 404 automatically: No valid trusted OA context ID. Failing closed.");
@@ -868,11 +958,7 @@
 
                     emitDiagnostic('NAVIGATE_TARGET', { jobId: job.jobId, userId: job.userId });
 
-                    if (hasValidWorkerLeadership()) {
-                        await extendLeadershipForNavigation();
-                    }
-
-                    window.location.href = targetUrl;
+                    await navigateAsLeader(targetUrl, 'PROCESS_QUEUE_RECIPIENT');
                     return;
                 }
 
@@ -890,7 +976,7 @@
         }
     }
 
-    function closeUserChatAndReturnToMain() {
+    async function closeUserChatAndReturnToMain() {
         console.log("🔙 ปิดหน้าต่างผู้ใช้และกลับสู่หน้าแชทหลักของ OA...");
 
         const closeBtns = deepQuerySelectorAll('button, a, [role="button"]').filter(el => {
@@ -908,7 +994,7 @@
             const targetMainUrl = getOAContextUrl(null);
             if (targetMainUrl && window.location.href !== targetMainUrl) {
                 console.log(`🌐 เปลี่ยนเส้นทางกลับหน้าแชทหลัก: ${targetMainUrl}`);
-                window.location.href = targetMainUrl;
+                await navigateAsLeader(targetMainUrl, 'RETURN_TO_MAIN');
             }
         }
     }
@@ -1084,7 +1170,7 @@
 
                         await sleep(1200);
 
-                        sendChatMessage(chatInput, jobData.userId);
+                        await sendChatMessage(chatInput, jobData.userId);
 
                         await sleep(3000);
                         console.log("✅ ส่งแคมเปญสำเร็จ 100%!");
@@ -1216,7 +1302,7 @@
         emitDiagnostic('BOT_START');
         flushPendingDiagnostics().catch(() => {});
 
-        setTimeout(() => {
+        setTimeout(async () => {
             const savedJobId = sessionStorage.getItem('linesync_jobid');
             const savedMsg = sessionStorage.getItem('linesync_msg');
             const savedUid = sessionStorage.getItem('linesync_uid');
@@ -1242,7 +1328,7 @@
                     const mainUrl = getOAContextUrl(null);
                     if (mainUrl && window.location.href !== mainUrl) {
                         console.log(`🌐 [RECOVERY] Navigating to known valid OA chat main URL: ${mainUrl}`);
-                        window.location.href = mainUrl;
+                        await navigateAsLeader(mainUrl, 'PAGE_LOAD_404_MAIN');
                         return;
                     } else {
                         console.warn("🛑 [SAFETY] Cannot recover from 404 automatically: No valid trusted OA context ID. Failing closed.");

@@ -32,21 +32,16 @@ Key Operational Goals:
                                          |
                                          | REST API (HTTP)
                                          v
-+-----------------------------------------------------------------------------------+
-|                                NestJS Backend Server                              |
-|                              Port 3005 (TypeScript)                               |
-|                                                                                   |
-|  - AppController (Endpoints: /customers, /campaign, /diagnostics/browser-event)   |
-|  - TelegramService (HTML Summary Broadcast Reports)                               |
-|  - TypeORM Entities (Customer, CustomerGroup, CustomerGroupMember, CampaignJob)   |
-+----------------------------------------+------------------------------------------+
-                                         |
-                                         | PostgreSQL Connection (Port 5433)
-                                         v
-+-----------------------------------------------------------------------------------+
-|                               PostgreSQL Database                                 |
-|                                 line_sync_db                                      |
-+-----------------------------------------------------------------------------------+
++------------------+  HTTP   +------------------+ TypeORM  +--------------------+
+| Tampermonkey     |<------->| NestJS Backend   |<-------->| PostgreSQL DB      |
+| (LineSyncApp.js) |         | (AppController)  |          | (line_sync_db)     |
++------------------+         +--------+---------+          +--------------------+
+  Runs inside                         |
+  chat.line.biz                       | Telegram API
+                                      v
+                             +------------------+
+                             | Telegram Bot API |
+                             +------------------+
 
                                          ^
                                          | REST API / Diagnostics
@@ -57,7 +52,9 @@ Key Operational Goals:
 |                      Tampermonkey Userscript (LineSyncApp.js v28.4)              |
 |                             Running in chat.line.biz                              |
 |                                                                                   |
-|  - Single Worker Multi-Tab Lock (Web Locks API + localStorage lease v1)           |
+|  - Fail-Closed Lease Persistence (writeAndVerifyLeaderRecord)                     |
+|  - Complete Navigation Hold (navigateAsLeader: NAVIGATION_LEASE_MS = 45000)       |
+|  - Atomic Pre-Send Fencing (confirmWorkerLeadershipForSend under Web Locks)       |
 |  - Fail-Closed Runtime Version Gate (X-LineSync-Worker-Version: 28.4)             |
 |  - Strict OA Context Validator (isValidChatContextId)                             |
 |  - Full-Lifecycle Execution Lock (isExecutingJob)                                 |
@@ -89,11 +86,11 @@ Key Operational Goals:
 
 The LineSync Plus safety model operates on strict **fail-closed** principles to eliminate risks of context loss or misdirection:
 
-- **Single Worker Multi-Tab Lock (REL-WP001)**: `ensureWorkerLeadership()` enforces that only ONE active worker tab claims jobs or executes DOM mutations within a browser profile/storage partition. Non-leader tabs remain STANDBY.
+- **Single Worker Multi-Tab Lock (REL-WP001 / REL-WP001-R1)**: `ensureWorkerLeadership()` enforces that only ONE active worker tab claims jobs or executes DOM mutations within a browser profile/storage partition. `writeAndVerifyLeaderRecord()` guarantees fail-closed storage persistence, `navigateAsLeader()` enforces complete navigation holds across all full-page reloads, and `confirmWorkerLeadershipForSend()` provides atomic pre-send mutex confirmation.
 - **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path (`/${botId}/chat/${expectedUserId}`) and DOM attribute validation before any text insertion or image send click.
 - **Fail-Closed Runtime Version Gate (OPS-WP001 / OPS-WP001-R1)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.4'` before querying or claiming any job. Client retries compatibility check via `setTimeout(..., CHECK_INTERVAL)` without fetching jobs while incompatible.
-- **Full-Lifecycle Execution Lock**: `isExecutingJob` remains active across the entire job lifecycle (navigation verification -> input discovery -> payload preparation -> recipient re-verification -> send -> terminal job report) preventing re-entrant duplicate sends.
-- **Circuit Breaker**: Halts campaign execution automatically if 10 consecutive system errors occur (`sessionStorage.setItem('linesync_consecutive_errors', ...)`).
+- **Full-Lifecycle Execution Lock**: `isExecutingJob` remains active across the entire job lifecycle.
+- **Circuit Breaker**: Halts campaign execution automatically if 10 consecutive system errors occur.
 - **Quota Limit Protection**: Detects LINE OA quota limit alerts on-screen and immediately stops campaign processing without recording system errors.
 - **Blocked User Handling**: Detects blocked chat inputs and records non-error skip statuses without incrementing system error counts.
 
@@ -103,36 +100,16 @@ The LineSync Plus safety model operates on strict **fail-closed** principles to 
 
 Over the course of safety hardening, 10 corrective work packages were identified, implemented, verified, and **CLOSED**:
 
-1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard (CLOSED)**:
-   - *Problem*: Navigation and context loss on LINE OA caused risks of sending messages to incorrect chat rooms.
-   - *Fix*: Created explicit error page detection (`checkIfErrorPage`) and strict recipient verification (`verifyCurrentRecipient`).
-2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard (CLOSED)**:
-   - *Problem*: Re-entrancy race conditions and loss of active job parameters across page reloads.
-   - *Fix*: Extended `isExecutingJob` lock across full job lifecycle, implemented `handleSafeRecovery` preserving job state in `sessionStorage` up to 2 bounded retries, and added zero-tolerance pre-send checks.
-3. **BUG-WP001-UATLOG — Persistent Browser Safety Diagnostic Logging (CLOSED)**:
-   - *Problem*: Lack of persistence for browser safety events during UAT endurance testing.
-   - *Fix*: Added backend diagnostic endpoint `POST /api/diagnostics/browser-event` logging to `uat-logs/browser-BUG-WP001-UAT.log`.
-4. **BUG-WP001-UATLOG-R1 — Low-Noise / Local-Only Diagnostic Logging (CLOSED)**:
-   - *Problem*: High-frequency log spamming on every verification tick and unhardened backend input.
-   - *Fix*: Restricted logging to lifecycle checkpoints, enforced event allowlist, and added loopback IP protection.
-5. **BUG-WP001-UATLOG-R2 — Trusted Loopback Enforcement / Clean Test Evidence (CLOSED)**:
-   - *Problem*: Potential IP header spoofing via `x-forwarded-for` and test log pollution.
-   - *Fix*: Bound IP check strictly to direct socket `remoteAddress` (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`), ignoring forwarded headers, and spied on file writes in Jest tests.
-6. **BUG-WP001-UATLOG-R3 — Navigation-Safe Diagnostic Persistence (CLOSED)**:
-   - *Problem*: Pre-navigation diagnostic events were dropped during browser page unload.
-   - *Fix*: Created synchronous `sessionStorage` diagnostic spooling (`linesync_pending_diagnostics`) with page-load flush.
-7. **BUG-WP001-UATLOG-R4 — Atomic Spool Flush / No Lost Concurrent Events (CLOSED)**:
-   - *Problem*: Race conditions during flush snapshot overwrote newly appended events.
-   - *Fix*: Implemented atomic merge-safe removal via `_sqId` and created `safeClearSessionStorage` to protect spool state across emergency stops.
-8. **BUG-WP001-UATLOG-R5 — Confirmed-Write Spool Removal (CLOSED)**:
-   - *Problem*: Events were removed from spool on HTTP 2xx even if backend returned `{ success: false }`.
-   - *Fix*: Required `result && result.success === true` before removing items from spool, preserving event ordering on network failures.
-9. **BUG-WP002 — OA Context Poisoning / Invalid BotId 404 Loop (CLOSED)**:
-   - *Problem*: Unvalidated short IDs (`798hcuca`) and manager portal paths (`manager.line.biz`) poisoned `linesync_botid` in `sessionStorage`, leading to 404 redirect loops.
-   - *Fix*: Created validator `isValidChatContextId` (`^U[0-9a-fA-F]{32}$`), removed manager execution, refactored `getBotId` and `getOAContextUrl` to fail closed (`null`), and added processQueue context gate.
-10. **BUG-WP002-R1 — Preserve Active Job When OA Context Is Unknown (CLOSED)**:
-    - *Problem*: `handleSafeRecovery` prematurely called `finishJob` and failed active campaign jobs on the backend when browser context was temporarily lost.
-    - *Fix*: Refactored `handleSafeRecovery` to check `targetUrl` before consuming retries or calling `finishJob`. If missing, active job state is preserved in `sessionStorage`, `retryCount` is NOT incremented, and execution fails closed until manual valid navigation.
+1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard (CLOSED)**
+2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard (CLOSED)**
+3. **BUG-WP001-UATLOG — Persistent Browser Safety Diagnostic Logging (CLOSED)**
+4. **BUG-WP001-UATLOG-R1 — Low-Noise / Local-Only Diagnostic Logging (CLOSED)**
+5. **BUG-WP001-UATLOG-R2 — Trusted Loopback Enforcement / Clean Test Evidence (CLOSED)**
+6. **BUG-WP001-UATLOG-R3 — Navigation-Safe Diagnostic Persistence (CLOSED)**
+7. **BUG-WP001-UATLOG-R4 — Atomic Spool Flush / No Lost Concurrent Events (CLOSED)**
+8. **BUG-WP001-UATLOG-R5 — Confirmed-Write Spool Removal (CLOSED)**
+9. **BUG-WP002 — OA Context Poisoning / Invalid BotId 404 Loop (CLOSED)**
+10. **BUG-WP002-R1 — Preserve Active Job When OA Context Is Unknown (CLOSED)**
 
 ---
 
@@ -141,7 +118,7 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - Browser page reloads cancel in-flight HTTP requests unless spooled synchronously in `sessionStorage`.
 - Direct socket peer validation (`req.socket.remoteAddress`) is required to prevent proxy header spoofing on local UAT diagnostic endpoints.
 - LINE OA context IDs strictly adhere to `^U[0-9a-fA-F]{32}$`; short IDs or manager account strings must never be treated as valid chat contexts.
-- Multi-tab browser coordination requires `navigator.locks` election mutex combined with durable `localStorage` lease records to maintain ownership across same-tab navigations.
+- Multi-tab browser coordination requires `navigator.locks` election mutex combined with durable `localStorage` lease records (`writeAndVerifyLeaderRecord`) to maintain ownership across same-tab navigations (`navigateAsLeader`).
 
 ---
 
@@ -153,7 +130,7 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - **BUG-WP002**: **CLOSED**
 - **SEC-WP001**: **CLOSED**
 - **OPS-WP001 / OPS-WP001-R1**: **CLOSED**
-- **REL-WP001**: **READY_FOR_CHATGPT_REVIEW**
+- **REL-WP001 / REL-WP001-R1**: **READY_FOR_CHATGPT_REVIEW**
 - **83-recipient baseline UAT**: 83 targets / 80 success / 3 blocked / no observed 404
 - **UAT-1100 Campaign Evidence (LineSyncApp v28.2)**:
   - Target = 1,100, Processed = 473, Success = 69, Blocked = 402, 404 = 2 (safe retry exhaust), zero misdeliveries.
@@ -170,7 +147,7 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - **SEC-WP001 Status**: Untracked secret `telegram-config.json` from Git. Compromised token revoked and rotated via `@BotFather` by Project Owner. Live Telegram test after rotation = **PASS**.
 
 ### Multi-Part Message Residual Risk (REL-WP003)
-- For multi-part messages (`image_link`), if a browser process crashes after physical image send completes but before text send/finishJob completes, a future worker could re-send the image part without idempotency ledger protection. This is documented as residual risk for REL-WP003.
+- For multi-part messages (`image_link`), if a browser process crashes after physical image send completes but before text send/finishJob completes, a future worker could re-send the image part without idempotency ledger protection. Documented as residual risk for REL-WP003.
 
 ---
 
@@ -188,6 +165,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
   - `OPS-WP001` (Runtime Version Gate): **COMPLETED / CLOSED**
   - `OPS-WP001-R1` (Runtime Retry + Fail-Closed Corrective): **COMPLETED / CLOSED**
   - `REL-WP001` (Single Worker / Multi-Tab Lock): **READY_FOR_CHATGPT_REVIEW**
+  - `REL-WP001-R1` (Fail-Closed Lease Persistence + Complete Navigation Hold): **READY_FOR_CHATGPT_REVIEW**
   - `REL-WP002`: **NOT STARTED**
   - `REL-WP003`: **NOT STARTED**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
@@ -201,7 +179,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
-   - Single worker multi-tab lock (`REL-WP001` READY_FOR_CHATGPT_REVIEW).
+   - Single worker multi-tab lock (`REL-WP001` & `REL-WP001-R1` READY_FOR_CHATGPT_REVIEW).
    - Operational runtime version gate (`OPS-WP001` & `OPS-WP001-R1` COMPLETED / CLOSED).
    - Secret hygiene & test isolation (`SEC-WP001` COMPLETED / CLOSED).
    - Fail-closed recipient verification & OA context validation (Completed in WP001/WP002).
@@ -214,14 +192,14 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 13. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 -> v28.4 (REL-WP001).
-- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, fail-closed runtime version gates, and single-worker multi-tab election locks.
+- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 -> v28.4 (REL-WP001 / REL-WP001-R1).
+- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, fail-closed runtime version gates, single-worker multi-tab election locks with read-back persistence verification, complete navigation holds, and atomic pre-send mutex confirmation.
 
 ---
 
 ## 14. Recommended Next Work Packages
 
-- **REL-WP001**: Single-Worker Execution Lock / Multi-Tab Defense (**READY_FOR_CHATGPT_REVIEW**).
+- **REL-WP001 / REL-WP001-R1**: Single-Worker Execution Lock / Multi-Tab Defense (**READY_FOR_CHATGPT_REVIEW**).
 - **REL-WP002**: Backend Worker Lease & Heartbeat (**NOT STARTED**).
 - **WP-UI-LOGS**: Implement browser diagnostic log viewer tab in single-page dashboard.
 
@@ -234,7 +212,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 - **Zero Incompatible Worker Claims**: 0 campaign jobs claimed by outdated browser workers.
 - **Zero Poisoning Loops**: 0 infinite 404 redirect loops on invalid bot IDs.
 - **100% Spool Integrity**: 0 lost navigation diagnostic events during page transitions.
-- **100% Test Pass Rate**: All Jest unit tests (33/33) passing cleanly.
+- **100% Test Pass Rate**: All Jest unit tests (36/36) passing cleanly.
 
 ---
 
@@ -249,5 +227,5 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-The project is currently at Phase 0 (Security & Reliability Foundation) with REL-WP001 implemented and READY_FOR_CHATGPT_REVIEW.
-Next Action: Await ChatGPT Control Plane review of REL-WP001 implementation.
+The project is currently at Phase 0 (Security & Reliability Foundation) with REL-WP001 and REL-WP001-R1 implemented and READY_FOR_CHATGPT_REVIEW.
+Next Action: Await ChatGPT Control Plane review of REL-WP001 / REL-WP001-R1 implementation.

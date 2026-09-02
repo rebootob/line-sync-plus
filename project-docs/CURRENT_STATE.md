@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post REL-WP001 Single Worker Multi-Tab Lock Implementation)
+**Last Updated**: 2026-09-02 (Post REL-WP001-R1 Fail-Closed Worker Lease & Navigation Hold Corrective)
 
 ---
 
@@ -28,14 +28,13 @@
 
 ---
 
-## 🔒 Single Worker Multi-Tab Lock (REL-WP001 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔒 Single Worker Multi-Tab Lock (REL-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Worker Version**: `28.4` (`run/LineSyncApp.js` v28.4).
 - **Backend Required Version**: `28.4` (`src/runtime-version.ts`).
-- **Leader Election Mutex**: `navigator.locks.request('linesync_worker_election_v1', { mode: 'exclusive' }, ...)`.
-- **Durable Leader Lease**: `localStorage.getItem('linesync_worker_leader_v1')` storing `{ ownerTabSessionId, leaseId, workerVersion, acquiredAt, expiresAt }`.
-- **Lease Timings**: 20s initial lease (`WORKER_LEASE_MS`), 4s renewal interval (`WORKER_RENEW_INTERVAL_MS`), 45s navigation hold (`NAVIGATION_LEASE_MS`).
-- **Pre-Send Fencing Integrity**: Leadership verified at 6 pre-send checkpoints before physical mutations. Leadership loss routes to `handleLeadershipLost()`.
+- **Fail-Closed Lease Persistence**: `writeAndVerifyLeaderRecord()` reads back raw `localStorage` record after every write and verifies exact equality of `ownerTabSessionId`, `leaseId`, `workerVersion`, and `expiresAt`. Fails closed if write/read/parse fails.
+- **Complete Navigation Hold**: `navigateAsLeader()` extends navigation lease (`NAVIGATION_LEASE_MS = 45000`) and verifies read-back persistence before executing `window.location.href = targetUrl`.
+- **Atomic Pre-Send Fencing**: `confirmWorkerLeadershipForSend()` executes under Web Locks election mutex (`WORKER_ELECTION_LOCK`) immediately before irreversible image send clicks or text send button / Enter fallback clicks.
 - **Dashboard Operator Visibility**: Displays `Runtime Contract: v1 | Required Worker: v28.4` badge in dashboard header.
 
 ---
@@ -53,7 +52,8 @@
 - Interactive dashboard UI with toolbar search, status/name filters, quick selection shortcuts, schedule management, deep analytics, secure Telegram setting modal, and runtime version contract indicator (`v28.4`).
 
 ### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.4)
-- Multi-tab single worker leader lock (`ensureWorkerLeadership()`, `hasValidWorkerLeadership()`).
+- Multi-tab single worker leader lock with fail-closed lease persistence (`writeAndVerifyLeaderRecord`).
+- Complete navigation hold (`navigateAsLeader`) and atomic pre-send fencing (`confirmWorkerLeadershipForSend`).
 - Fail-closed runtime version handshake with retry loop (`checkRuntimeCompatibility()`, `resumeSavedActiveJob()`).
 - Strict OA context validation (`isValidChatContextId` testing `/^U[0-9a-fA-F]{32}$/`).
 - Fail-closed context navigation (`getOAContextUrl` returns `null` when context is missing/invalid).
@@ -61,14 +61,15 @@
 - Quota limit auto-stop detection (`checkQuotaLimitExceeded`).
 - Circuit Breaker safety: Emergency stop when encountering 10 consecutive non-blocked errors.
 - Blocked user exclusion: `isBlocked = true` users do not increment the consecutive error counter.
-- **Exact Recipient Verification Guard (`verifyCurrentRecipient`)**: Verifies recipient prior to execution and send click.
-- **Confirmed-Write Diagnostic Spooling (`enqueueSpool`, `flushPendingDiagnostics`)**: Navigation-safe diagnostic event persistence.
+- Exact Recipient Verification Guard (`verifyCurrentRecipient`).
+- Confirmed-Write Diagnostic Spooling (`enqueueSpool`, `flushPendingDiagnostics`).
 
 ---
 
 ## 🚀 Active / Next Work Packages
 
-- **Active Work Package**: `REL-WP001 — Single Worker / Multi-Tab Lock` (`READY_FOR_CHATGPT_REVIEW`)
+- **Active Work Package**: `REL-WP001-R1 — Fail-Closed Lease Persistence + Complete Navigation Hold` (`READY_FOR_CHATGPT_REVIEW`)
+- **Parent Work Package**: `REL-WP001 — Single Worker / Multi-Tab Lock` (`READY_FOR_CHATGPT_REVIEW`, NOT CLOSED)
 - **Next Work Packages**:
   - `REL-WP002`: `NOT STARTED`
   - `REL-WP003`: `NOT STARTED`

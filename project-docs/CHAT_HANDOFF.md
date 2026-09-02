@@ -4,8 +4,8 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* LAST_REVIEWED_IMPLEMENTATION_BASELINE: a57ac6a042c37d7acdf86c0e0da25e76597bf5ca (docs: close OPS-WP001 after live runtime gate UAT)
-* Working Tree: Clean (REL-WP001 implementation completed)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 0753a4cb0a2c9ca90bcb12ca986c61e4ea7ef450 (reliability: add single-worker multi-tab leader lock)
+* Working Tree: Clean (REL-WP001-R1 implementation completed)
 
 ## Project Purpose
 
@@ -19,23 +19,19 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
 - **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
-## Work Package Status: REL-WP001 — Single Worker / Multi-Tab Lock
+## Work Package Status: REL-WP001-R1 — Fail-Closed Lease Persistence + Complete Navigation Hold
 
-* **Status**: `READY_FOR_CHATGPT_REVIEW`
+* **Status**: `READY_FOR_CHATGPT_REVIEW` (REL-WP001: `READY_FOR_CHATGPT_REVIEW`, NOT CLOSED)
 * **Key Implementation Details**:
-  1. Worker version upgraded to `28.4` (`run/LineSyncApp.js`, `src/runtime-version.ts`, `index.html`, `src/app.controller.spec.ts`).
-  2. Multi-tab leader election using `navigator.locks.request('linesync_worker_election_v1', ...)` as exclusive election mutex.
-  3. Shared durable leader lease record in `localStorage` under `linesync_worker_leader_v1`:
-     `{ ownerTabSessionId, leaseId, workerVersion, acquiredAt, expiresAt }`.
-  4. Lease duration: `WORKER_LEASE_MS = 20000` (20s), renewed every 4s (`WORKER_RENEW_INTERVAL_MS = 4000`).
-  5. Same-tab navigation continuity: `extendLeadershipForNavigation()` extends lease by 45s (`NAVIGATION_LEASE_MS = 45000`) before bot-controlled navigations.
-  6. Non-leader tabs remain STANDBY, retry election periodically, and NEVER fetch `/campaign/next`.
-  7. Pre-send fencing re-verifies leadership at 6 key checkpoints. Leadership loss routes to `handleLeadershipLost()`, clearing local active job session fields without calling `finishJob(false)` or incrementing counters.
-  8. All 33 Jest unit tests passing cleanly; `node --check run/LineSyncApp.js` PASS; Nest build PASS.
+  1. `writeAndVerifyLeaderRecord(record)` verifies `localStorage.setItem` by reading back and parsing stored JSON. Fails closed if write, read, parse, or field verification fails.
+  2. `navigateAsLeader(targetUrl, reason)` extends navigation lease (`NAVIGATION_LEASE_MS = 45000`) and verifies read-back persistence before executing `window.location.href = targetUrl`. If extension fails, navigation is blocked.
+  3. All 5 bot-controlled navigation sites in `LineSyncApp.js` route through `navigateAsLeader`.
+  4. `confirmWorkerLeadershipForSend()` executes under Web Locks election mutex (`WORKER_ELECTION_LOCK`) immediately before physical image or text send clicks.
+  5. 36/36 Jest unit tests passing cleanly; `node --check run/LineSyncApp.js` PASS; Nest build PASS.
 
 ## Scope Boundary
-REL-WP001 protects multi-tab execution within the SAME `chat.line.biz` browser profile/storage partition (`localStorage`). Cross-profile or cross-machine protection is NOT claimed and belongs to future work packages (REL-WP002/003).
+REL-WP001 / REL-WP001-R1 protects multi-tab execution within the SAME `chat.line.biz` browser profile/storage partition (`localStorage`). Cross-profile or cross-machine protection is NOT claimed and belongs to future work packages (REL-WP002/003).
 
 ## Exact Recommended Next Step
 
-Await ChatGPT / Project Owner review of REL-WP001 implementation on GitHub repository `rebootob/line-sync-plus`.
+Await ChatGPT / Project Owner review of REL-WP001-R1 implementation on GitHub repository `rebootob/line-sync-plus`.
