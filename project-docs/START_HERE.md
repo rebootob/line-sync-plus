@@ -11,7 +11,7 @@ Welcome to **LineSync Plus**. This document provides an onboarding overview, rep
 It consists of:
 1. **Backend REST API**: Built with NestJS, TypeORM, and PostgreSQL. Handles contact database storage, group tag mappings, campaign queue dispatch, local scheduled campaign execution, and Telegram completion reporting.
 2. **Dashboard UI**: Single-page web dashboard (`index.html`) offering customer contact tables, real-time filtering, group management, multi-type campaign creation, scheduled campaign management, deep analytics, and Telegram setting UI.
-3. **Client Automation**: Tampermonkey userscript (`run/LineSyncApp.js` v27.0) running directly in the browser on `https://chat.line.biz/*` to send messages, attach images, detect quotas, enforce Circuit Breaker safety, exclude blocked users from error counters, and auto-return to the main chat list view.
+3. **Client Automation**: Tampermonkey userscript (`run/LineSyncApp.js` v28.2) running directly in the browser on `https://chat.line.biz/*` to send messages, attach images, detect quotas, enforce Circuit Breaker safety, exclude blocked users from error counters, and auto-return to the main chat list view.
 
 ---
 
@@ -31,9 +31,10 @@ It consists of:
 For AI context switching and project management, start reading in this order:
 
 1. **[`project-docs/START_HERE.md`](START_HERE.md)** (This document): Overview and quick start guide.
-2. **[`project-docs/CURRENT_STATE.md`](CURRENT_STATE.md)**: Detailed breakdown of working features, architecture, and known issues.
-3. **[`project-docs/ACTIVE_TASK.md`](ACTIVE_TASK.md)**: Active work package tracking and task status (`ACTIVE_WORK_PACKAGE = NONE`).
-4. **[`project-docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)**: Structured handoff summary for Control Plane / ChatGPT evaluation.
+2. **[`project-docs/PROJECT_STATUS_ROADMAP.md`](PROJECT_STATUS_ROADMAP.md)**: Incident history, work package iterations, stability metrics, and development roadmap.
+3. **[`project-docs/CURRENT_STATE.md`](CURRENT_STATE.md)**: Detailed breakdown of working features, architecture, and known issues.
+4. **[`project-docs/ACTIVE_TASK.md`](ACTIVE_TASK.md)**: Active work package tracking and task status (`ACTIVE_WORK_PACKAGE = NONE`).
+5. **[`project-docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)**: Structured handoff summary for Control Plane / ChatGPT evaluation.
 
 ---
 
