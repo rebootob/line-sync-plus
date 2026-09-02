@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.12
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SAFE-WP001-R3 Active Telemetry Heartbeat)
+// @version      28.13
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (REL-WP002 Durable Job Lease Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.12';
+    const WORKER_VERSION = '28.13';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -559,8 +559,90 @@
         return true;
     }
 
+    const JOB_HEARTBEAT_INTERVAL_MS = 10000;
+    let activeJobHeartbeatTimer = null;
+
+    function stopActiveJobHeartbeat() {
+        if (activeJobHeartbeatTimer) {
+            clearInterval(activeJobHeartbeatTimer);
+            activeJobHeartbeatTimer = null;
+        }
+    }
+
+    async function sendJobHeartbeat(jobId, botId, leaseToken) {
+        if (!jobId || !botId || !leaseToken) return false;
+        try {
+            const res = await fetchAPI('/campaign/heartbeat', 'POST', {
+                jobId: jobId,
+                botId: botId,
+                leaseToken: leaseToken
+            });
+
+            if (res && res.success === true && typeof res.leaseExpiresAt === 'number') {
+                try {
+                    sessionStorage.setItem('linesync_job_lease_expires_at', String(res.leaseExpiresAt));
+                } catch (e) {}
+                return true;
+            } else {
+                console.warn(`🛑 [REL] Job lease heartbeat rejected by backend for job ${jobId}:`, res);
+                handleJobLeaseLost('EXPLICIT_LEASE_LOST');
+                return false;
+            }
+        } catch (err) {
+            console.warn(`⚠️ [REL] Heartbeat network error for job ${jobId}:`, err);
+            const rawExpires = sessionStorage.getItem('linesync_job_lease_expires_at');
+            const knownExpiresAt = rawExpires ? parseInt(rawExpires, 10) : 0;
+
+            if (knownExpiresAt > 0 && Date.now() >= knownExpiresAt) {
+                console.error(`🛑 [REL] Known job lease expired during network failure for job ${jobId}. Failing closed.`);
+                handleJobLeaseLost('LEASE_EXPIRED_ON_NETWORK_ERROR');
+                return false;
+            }
+            return false;
+        }
+    }
+
+    function startActiveJobHeartbeat(jobId, botId, leaseToken) {
+        stopActiveJobHeartbeat();
+        if (!jobId || !botId || !leaseToken) return;
+
+        activeJobHeartbeatTimer = setInterval(() => {
+            const currentJobId = sessionStorage.getItem('linesync_jobid');
+            const currentBotId = sessionStorage.getItem('linesync_job_botid') || getBotId();
+            const currentLeaseToken = sessionStorage.getItem('linesync_job_lease_token');
+
+            if (currentJobId === jobId && currentLeaseToken === leaseToken && currentBotId) {
+                sendJobHeartbeat(jobId, currentBotId, leaseToken).catch(() => {});
+            } else {
+                stopActiveJobHeartbeat();
+            }
+        }, JOB_HEARTBEAT_INTERVAL_MS);
+    }
+
+    async function renewJobLeaseOrThrow(jobId, botId, leaseToken) {
+        if (!jobId || !botId || !leaseToken) {
+            console.error("🛑 [REL] Missing parameters in renewJobLeaseOrThrow. Failing closed.");
+            throw new Error('JOB_LEASE_LOST');
+        }
+
+        const isRenewed = await sendJobHeartbeat(jobId, botId, leaseToken);
+        if (!isRenewed) {
+            console.error(`🛑 [REL] Authoritative pre-send lease renewal failed for job ${jobId}. Aborting physical send.`);
+            throw new Error('JOB_LEASE_LOST');
+        }
+    }
+
+    function handleJobLeaseLost(reason = 'UNKNOWN') {
+        console.error(`🛑 [REL] JOB LEASE LOST (${reason}): Relinquishing local active job execution.`);
+        stopActiveJobHeartbeat();
+        isExecutingJob = false;
+        clearLocalActiveJobState();
+        emitDiagnostic('JOB_LEASE_LOST', { reason: reason });
+    }
+
     // 🛡️ Helper: Clear local active job session storage fields
     function clearLocalActiveJobState() {
+        stopActiveJobHeartbeat();
         try {
             sessionStorage.removeItem('linesync_jobid');
             sessionStorage.removeItem('linesync_uid');
@@ -569,6 +651,8 @@
             sessionStorage.removeItem('linesync_img');
             sessionStorage.removeItem('linesync_link');
             sessionStorage.removeItem('linesync_job_botid');
+            sessionStorage.removeItem('linesync_job_lease_token');
+            sessionStorage.removeItem('linesync_job_lease_expires_at');
         } catch (e) {}
     }
 
@@ -725,7 +809,8 @@
         return new Promise((resolve, reject) => {
             const headers = {
                 'Content-Type': 'application/json',
-                'X-LineSync-Worker-Version': WORKER_VERSION
+                'X-LineSync-Worker-Version': WORKER_VERSION,
+                'X-LineSync-Worker-Instance': getTabSessionId()
             };
 
             const currentBot = getBotId();
@@ -1083,6 +1168,10 @@
 
         verifyProtectionReservation(expectedBotId, reservation);
 
+        const currentJobId = sessionStorage.getItem('linesync_jobid');
+        const currentLeaseToken = sessionStorage.getItem('linesync_job_lease_token');
+        await renewJobLeaseOrThrow(currentJobId, expectedBotId, currentLeaseToken);
+
         const opts = { bubbles: true, cancelable: true, composed: true, view: window };
         try { target.focus(); } catch(e){}
         try { target.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch(e){}
@@ -1151,6 +1240,10 @@
 
             verifyProtectionReservation(expectedBotId, reservation);
 
+            const currentJobId = sessionStorage.getItem('linesync_jobid');
+            const currentLeaseToken = sessionStorage.getItem('linesync_job_lease_token');
+            await renewJobLeaseOrThrow(currentJobId, expectedBotId, currentLeaseToken);
+
             emitDiagnostic('TEXT_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
             console.log("✅ เจอและสั่งคลิกปุ่มส่งสีเขียวที่มุมล่างขวาช่องพิมพ์สำเร็จ!");
@@ -1180,6 +1273,10 @@
             }
 
             verifyProtectionReservation(expectedBotId, reservation);
+
+            const currentJobId = sessionStorage.getItem('linesync_jobid');
+            const currentLeaseToken = sessionStorage.getItem('linesync_job_lease_token');
+            await renewJobLeaseOrThrow(currentJobId, expectedBotId, currentLeaseToken);
 
             emitDiagnostic('TEXT_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
@@ -1403,6 +1500,10 @@
                 sessionStorage.setItem('linesync_img', job.imageUrl || '');
                 sessionStorage.setItem('linesync_link', job.linkUrl || '');
                 sessionStorage.setItem('linesync_job_botid', job.botId || '');
+                sessionStorage.setItem('linesync_job_lease_token', job.leaseToken || '');
+                sessionStorage.setItem('linesync_job_lease_expires_at', String(job.leaseExpiresAt || 0));
+
+                startActiveJobHeartbeat(job.jobId, job.botId, job.leaseToken);
 
                 const targetUrl = getOAContextUrl(job.userId);
                 if (!targetUrl) {
@@ -1497,6 +1598,8 @@
             console.error("🛑 [CRITICAL] ตรวจพบการเตือนโควต้า LINE OA เต็ม! สั่งหยุดส่งแคมเปญทันที...");
             await fetchAPI('/campaign/stop', 'POST', {
                 jobId: jobData.jobId,
+                botId: expectedJobBotId,
+                leaseToken: sessionStorage.getItem('linesync_job_lease_token') || '',
                 reason: '🛑 สั่งหยุดแคมเปญทันทีเนื่องจากโควต้าข้อความ LINE OA เต็ม (Quota Exceeded Limit)',
                 limitReached: true
             });
@@ -1697,10 +1800,12 @@
     }
 
     async function finishJob(jobId, userId, success, reason = '', isBlocked = false, botId = '') {
+        let isFinalizedOnBackend = false;
         try {
             sessionStorage.removeItem(`linesync_retry_${jobId}`);
 
             const expectedJobBotId = botId || sessionStorage.getItem('linesync_job_botid') || '';
+            const leaseToken = sessionStorage.getItem('linesync_job_lease_token') || '';
 
             if (success) {
                 emitDiagnostic('JOB_SUCCESS', { jobId: jobId, userId: userId, botId: expectedJobBotId });
@@ -1708,7 +1813,12 @@
                 sessionStorage.setItem('linesync_consecutive_errors', '0');
                 sessionStorage.removeItem('linesync_error_cooldown_until');
                 publishAccountProtectionTelemetry(expectedJobBotId, 0).catch(() => {});
-                await fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId });
+                const res = await fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, leaseToken: leaseToken });
+                if (res && res.status === 'lease_lost') {
+                    handleJobLeaseLost('SUCCESS_LEASE_LOST');
+                    return;
+                }
+                isFinalizedOnBackend = true;
             } else {
                 emitDiagnostic('JOB_FAIL', { jobId: jobId, userId: userId, botId: expectedJobBotId, reason: reason });
 
@@ -1726,12 +1836,19 @@
                     console.warn(`⚠️ เกิด Error สะสมติดต่อกันแล้ว ${consecutiveErrorCount}/10 รายการ (${reason}). คูลดาวน์ระบบ ${cooldownMs / 1000}s`);
                 }
 
-                await fetchAPI('/campaign/fail', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, reason: reason, isBlocked: isBlocked });
+                const res = await fetchAPI('/campaign/fail', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, leaseToken: leaseToken, reason: reason, isBlocked: isBlocked });
+                if (res && res.status === 'lease_lost') {
+                    handleJobLeaseLost('FAIL_LEASE_LOST');
+                    return;
+                }
+                isFinalizedOnBackend = true;
 
                 if (consecutiveErrorCount >= 10) {
                     console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! สั่งหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
                     await fetchAPI('/campaign/stop', 'POST', {
                         jobId: jobId,
+                        botId: expectedJobBotId,
+                        leaseToken: leaseToken,
                         reason: '🚨 สคริปต์หยุดทำงานอัตโนมัติเนื่องจากพบ Error ติดต่อกันเกิน 10 รายการ',
                         errorOverflow: true
                     });
@@ -1742,18 +1859,26 @@
                 }
             }
         } catch(e) {
-            console.error("❌ ส่งรายงานไม่สำเร็จ");
+            console.error("❌ ส่งรายงานไม่สำเร็จ:", e);
+            const rawExpires = sessionStorage.getItem('linesync_job_lease_expires_at');
+            const knownExpiresAt = rawExpires ? parseInt(rawExpires, 10) : 0;
+            if (knownExpiresAt > 0 && Date.now() < knownExpiresAt) {
+                console.warn("⚠️ Network failure during finalization acknowledgement. Retrying finalization while lease remains valid...");
+                return;
+            }
+            handleJobLeaseLost('FINALIZATION_NETWORK_ERROR_EXPIRED');
+            return;
         } finally {
-            clearLocalActiveJobState();
-
-            isExecutingJob = false;
-
-            closeUserChatAndReturnToMain();
-            setTimeout(processQueue, 3500);
+            if (isFinalizedOnBackend) {
+                clearLocalActiveJobState();
+                isExecutingJob = false;
+                closeUserChatAndReturnToMain();
+                setTimeout(processQueue, 3500);
+            }
         }
     }
 
-    // 🛡️ SAVED ACTIVE JOB RECOVERY WITH FAIL-CLOSED RUNTIME RETRY & LEADER LOCK (REL-WP001)
+    // 🛡️ SAVED ACTIVE JOB RECOVERY WITH FAIL-CLOSED RUNTIME RETRY & LEADER LOCK (REL-WP001 / REL-WP002)
     async function resumeSavedActiveJob(savedJobData) {
         if (!savedJobData) return;
 
@@ -1776,6 +1901,26 @@
             setTimeout(() => resumeSavedActiveJob(savedJobData), CHECK_INTERVAL);
             return;
         }
+
+        // REL-WP002 Lease Validation on Page Load / Resume
+        const savedLeaseToken = sessionStorage.getItem('linesync_job_lease_token');
+        const savedLeaseExpires = sessionStorage.getItem('linesync_job_lease_expires_at');
+        const knownExpiresAt = savedLeaseExpires ? parseInt(savedLeaseExpires, 10) : 0;
+
+        if (!savedLeaseToken || knownExpiresAt <= 0 || Date.now() >= knownExpiresAt) {
+            console.warn("🛑 [REL] Page-load saved job lease is missing or expired. Relinquishing active job state.");
+            handleJobLeaseLost('SAVED_LEASE_EXPIRED_ON_LOAD');
+            return;
+        }
+
+        const isRenewed = await sendJobHeartbeat(savedJobData.jobId, savedJobData.botId, savedLeaseToken);
+        if (!isRenewed) {
+            console.warn("🛑 [REL] Page-load saved job lease renewal rejected by backend. Relinquishing active job state.");
+            handleJobLeaseLost('SAVED_LEASE_RENEWAL_FAILED_ON_LOAD');
+            return;
+        }
+
+        startActiveJobHeartbeat(savedJobData.jobId, savedJobData.botId, savedLeaseToken);
 
         emitDiagnostic('PAGE_LOAD_ACTIVE_JOB', { jobId: savedJobData.jobId, userId: savedJobData.userId, botId: savedJobData.botId });
 

@@ -1,17 +1,18 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: NONE
-STATUS: SAFE-WP001 CLOSED / PASS
+ACTIVE_WORK_PACKAGE: REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
-NEXT_CANDIDATE: REL-WP002 — Job Lease + Heartbeat
-NEXT_CANDIDATE_STATUS: READY / NOT STARTED / AUTHORIZATION REQUIRED
+NEXT_CANDIDATE: REL-WP003
+NEXT_CANDIDATE_STATUS: NOT STARTED
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
+- **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `READY_FOR_CHATGPT_REVIEW`
 - **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `CLOSED / PASS`
   - **SAFE-WP001-R1**: `CLOSED / PASS`
   - **SAFE-WP001-R2**: `CLOSED / PASS`
@@ -19,14 +20,12 @@ NEXT_CANDIDATE_STATUS: READY / NOT STARTED / AUTHORIZATION REQUIRED
 - **SYNC-WP001 — LINE OA Customer Directory Sync**: `CLOSED / PASS` (Accepted on Worker v28.8)
 - **OA-WP001 — OA Context Isolation & Strict Identity Fencing**: `CLOSED / PASS` (Accepted on Worker v28.5)
 - **REL-WP001 — Single Worker Multi-Tab Lock**: `CLOSED / PASS`
-- **REL-WP002 — Job Lease + Heartbeat**: `READY / NOT STARTED / AUTHORIZATION REQUIRED`
 - **REL-WP003**: `NOT STARTED`
 
 ### Version Contracts
-- **Worker Version**: `28.12`
+- **Worker Version**: `28.13`
 - **Runtime Contract Version**: `2`
-- **Required Worker Version**: `28.12`
-- **Implementation Baseline**: `fed96f1ce97c552066b7de1b7e2d6dd1c83d6591`
+- **Required Worker Version**: `28.13`
 
 ---
 

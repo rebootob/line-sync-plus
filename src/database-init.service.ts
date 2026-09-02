@@ -128,6 +128,23 @@ export class DatabaseInitService implements OnModuleInit {
         ALTER TABLE campaign_jobs ADD COLUMN IF NOT EXISTS "botId" character varying(64);
       `);
 
+      // 🛡️ REL-WP002 Safe Additive Job Lease Migration
+      await this.dataSource.query(`
+        ALTER TABLE campaign_jobs ADD COLUMN IF NOT EXISTS "leaseToken" character varying(64);
+      `);
+
+      await this.dataSource.query(`
+        ALTER TABLE campaign_jobs ADD COLUMN IF NOT EXISTS "leaseOwner" character varying(128);
+      `);
+
+      await this.dataSource.query(`
+        ALTER TABLE campaign_jobs ADD COLUMN IF NOT EXISTS "leaseExpiresAt" TIMESTAMP WITHOUT TIME ZONE;
+      `);
+
+      await this.dataSource.query(`
+        ALTER TABLE campaign_jobs ADD COLUMN IF NOT EXISTS "leaseHeartbeatAt" TIMESTAMP WITHOUT TIME ZONE;
+      `);
+
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS oa_runtime_state (
           "id" character varying(64) NOT NULL DEFAULT 'global',
@@ -149,6 +166,7 @@ export class DatabaseInitService implements OnModuleInit {
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_customer_group_members_botId_groupId" ON customer_group_members ("botId", "groupId");`);
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaigns_botId" ON campaigns ("botId");`);
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_jobs_botId_status" ON campaign_jobs ("botId", "status");`);
+        await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "idx_campaign_jobs_bot_status_lease" ON campaign_jobs ("botId", "status", "leaseExpiresAt");`);
       } catch (e) {}
 
       this.logger.log('✅ Database schema verified/initialized successfully.');

@@ -23,6 +23,18 @@ export class CampaignJob {
   @Column({ type: 'timestamp without time zone', nullable: true })
   sentAt: Date | null;
 
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  leaseToken: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  leaseOwner: string | null;
+
+  @Column({ type: 'timestamp without time zone', nullable: true })
+  leaseExpiresAt: Date | null;
+
+  @Column({ type: 'timestamp without time zone', nullable: true })
+  leaseHeartbeatAt: Date | null;
+
   @CreateDateColumn({ type: 'timestamp without time zone' })
   createdAt: Date;
 
