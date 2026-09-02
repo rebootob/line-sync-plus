@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post SAFE-WP001-R2 Implementation)
+**Last Updated**: 2026-09-03 (Post SAFE-WP001-R3 Implementation)
 
 ---
 
@@ -28,21 +28,24 @@
 
 ---
 
-## 🛡️ Account Protection & Send Compliance Guard (SAFE-WP001 STATUS: NOT CLOSED / R2 READY_FOR_CHATGPT_REVIEW)
+## 🛡️ Account Protection & Send Compliance Guard (SAFE-WP001 STATUS: NOT CLOSED / R3 READY_FOR_CHATGPT_REVIEW)
 
-- **Worker Version**: `28.11` (`run/LineSyncApp.js` v28.11).
-- **Backend Required Version**: `28.11` (`src/runtime-version.ts`).
+- **Worker Version**: `28.12` (`run/LineSyncApp.js` v28.12).
+- **Backend Required Version**: `28.12` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
-- **Baseline**: `3bca4d5d215556eb5ee9425d49093556203d2488`.
+- **Baseline**: `07ac293a08d2c412890d3d20dde486e65e4177b7`.
+- **Active Worker Telemetry Heartbeat (SAFE-WP001-R3)**:
+  - `processQueue()` polling loop publishes telemetry heartbeat (`publishAccountProtectionTelemetry(validBotId, 0)`) on ~4s cadence after verifying leadership, runtime compatibility, and OA alignment.
+  - Heartbeat is strictly observational (no reservation creation, timestamp mutations, or job claims).
+  - Standby / non-leader workers do not publish heartbeats.
 - **Strict Protection State Schema**:
-  - `loadProtectionTimestamps` throws `ACCOUNT_PROTECTION_STATE_UNAVAILABLE` on reading malformed storage or non-finite timestamp array members (no silent member dropping). Returns sorted ascending array.
+  - `loadProtectionTimestamps` throws `ACCOUNT_PROTECTION_STATE_UNAVAILABLE` on reading malformed storage or non-finite timestamp array members.
 - **Exact Read-Back Timestamp Reservation**:
   - `recordProtectionSendAction` enforces exact array length, order, and value read-back verification before returning reservation object `{ botId, reservedAt }`.
 - **Final Reservation Revalidation**:
   - `verifyProtectionReservation` verifies that `reservation.reservedAt` matches the newest reservation in storage immediately before pointer/click/keydown events on image send, text button, and Enter key fallback.
 - **Truthful Telemetry & Loopback Write Trust**:
   - `POST /api/account-protection/telemetry` enforces loopback IP, matching `X-LineSync-Worker-Version`, matching `X-LineSync-OA-Context`, header/body `botId` alignment, and strict numeric schema.
-  - Post-reservation telemetry calculates real `nextSendAt`. Dashboard displays `"unknown"` when telemetry is unavailable or stale (> 30s).
 - **Internal Protection Defaults**:
   - `MIN_SEND_GAP_MS = 10000` (10s gap)
   - `MAX_SEND_ACTIONS_10_MIN = 60` (rolling 10m limit)
@@ -75,12 +78,12 @@
 1. **Database & Entities (`PostgreSQL` / `TypeORM`)**: Composite primary key `(botId, lineUserId)` on `Customer`. Nullable `botId` on `CampaignJob`, `Campaign`, `CustomerGroup`.
 2. **NestJS REST API (`src/app.controller.ts`)**: Telemetry REST endpoints with strict loopback/version/OA/schema validation, target hygiene on `POST /api/campaign/add`, batch sync `POST /api/customers/sync-batch`.
 3. **Web Dashboard (`index.html`)**: Truthful Account Protection telemetry indicator (`accountProtectionBadge`), Master Bot switch gate.
-4. **Client Automation Userscript (`run/LineSyncApp.js` v28.11)**: Centralized fail-closed protection gate (`enforceAccountProtectionGate`), exact read-back timestamp reservation, telemetry publishing, adaptive system-error backoff.
+4. **Client Automation Userscript (`run/LineSyncApp.js` v28.12)**: Centralized fail-closed protection gate (`enforceAccountProtectionGate`), active worker telemetry heartbeat in `processQueue()`, exact read-back timestamp reservation, adaptive system-error backoff.
 
 ---
 
 ## 🚀 Work Packages Overview
 
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001` (`CLOSED / PASS`).
-- **Active Work Package**: `SAFE-WP001-R2` (`READY_FOR_CHATGPT_REVIEW`).
+- **Active Work Package**: `SAFE-WP001-R3` (`READY_FOR_CHATGPT_REVIEW`).
 - **Next Candidate**: `REL-WP002 — Job Lease + Heartbeat` (`READY / NOT STARTED / AUTHORIZATION REQUIRED`).

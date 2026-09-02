@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.11
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SAFE-WP001-R2 Reservation Integrity Active)
+// @version      28.12
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SAFE-WP001-R3 Active Telemetry Heartbeat)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.11';
+    const WORKER_VERSION = '28.12';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -1374,6 +1374,9 @@
             setTimeout(processQueue, CHECK_INTERVAL);
             return;
         }
+
+        // 🛡️ SAFE-WP001-R3 ACTIVE WORKER TELEMETRY HEARTBEAT
+        publishAccountProtectionTelemetry(validBotId, 0).catch(() => {});
 
         try {
             const job = await fetchAPI('/campaign/next');

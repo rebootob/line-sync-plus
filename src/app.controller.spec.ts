@@ -480,11 +480,11 @@ describe('AppController', () => {
       };
     });
 
-    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.11', () => {
+    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.12', () => {
       const res = appController.getRuntimeVersion();
       expect(res).toEqual({
         runtimeContractVersion: 2,
-        requiredWorkerVersion: '28.11',
+        requiredWorkerVersion: '28.12',
       });
     });
 
@@ -497,7 +497,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.11',
+        requiredWorkerVersion: '28.12',
       });
       // Prove version gate executes BEFORE job query/claim logic
       expect(findSpy).not.toHaveBeenCalled();
@@ -512,7 +512,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.11',
+        requiredWorkerVersion: '28.12',
       });
       expect(findSpy).not.toHaveBeenCalled();
     });
@@ -534,10 +534,10 @@ describe('AppController', () => {
       expect(saveCampSpy).not.toHaveBeenCalled();
     });
 
-    it('5. GET /api/campaign/next with EXACT version ("28.11") and valid OA header -> reaches normal job claim logic', async () => {
+    it('5. GET /api/campaign/next with EXACT version ("28.12") and valid OA header -> reaches normal job claim logic', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
 
-      const res = await appController.getNextJob('28.11', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const res = await appController.getNextJob('28.12', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
 
       expect(mockRes.statusCode).toBe(200);
       expect(findSpy).toHaveBeenCalled();
@@ -662,23 +662,23 @@ describe('AppController', () => {
       findSpy.mockClear();
 
       // Missing OA header
-      const resMissingOa = await appController.getNextJob('28.11', undefined, mockRes);
+      const resMissingOa = await appController.getNextJob('28.12', undefined, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMissingOa).toEqual({ status: 'missing_oa_context', message: 'X-LineSync-OA-Context header missing or invalid' });
       expect(findSpy).not.toHaveBeenCalled();
 
       // OA Mismatch (worker sends foreign OA)
-      const resMismatchOa = await appController.getNextJob('28.11', 'U11111111222222223333333344444444', mockRes);
+      const resMismatchOa = await appController.getNextJob('28.12', 'U11111111222222223333333344444444', mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMismatchOa.status).toBe('oa_context_mismatch');
       expect(findSpy).not.toHaveBeenCalled();
     });
 
-    it('6. Tampermonkey script contains version 28.11, controlled OA switch, job OA fencing, and physical send OA guard', () => {
+    it('6. Tampermonkey script contains version 28.12, controlled OA switch, job OA fencing, and physical send OA guard', () => {
       const fs = require('fs');
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
 
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.11'");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.12'");
       expect(scriptContent).toContain('headers[\'X-LineSync-OA-Context\']');
       expect(scriptContent).toContain('checkAndExecuteControlledOaSwitch');
       expect(scriptContent).toContain('verifyCurrentOAContext');
@@ -829,7 +829,7 @@ describe('AppController', () => {
         message: 'Hello'
       } as any);
 
-      const jobRes: any = await appController.getNextJob('28.11', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const jobRes: any = await appController.getNextJob('28.12', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
       expect(jobRes.botId).toBe('U09d6b978fcbfb5275e533ca9b788eb22');
     });
 
@@ -1184,30 +1184,30 @@ describe('AppController', () => {
       expect(res.success).toBe(true);
     });
 
-    it('10. Worker = 28.11', () => {
+    it('10. Worker = 28.12', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.11'");
-      expect(scriptContent).toContain("@version      28.11");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.12'");
+      expect(scriptContent).toContain("@version      28.12");
     });
 
-    it('11. Required Worker = 28.11', () => {
+    it('11. Required Worker = 28.12', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.11');
+      expect(versionRes.requiredWorkerVersion).toBe('28.12');
     });
   });
 
   describe('SAFE-WP001 — LINE OA Account Protection & Send Compliance Guard Tests', () => {
     const fs = require('fs');
 
-    it('1. Worker = 28.11', () => {
+    it('1. Worker = 28.12', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.11'");
-      expect(scriptContent).toContain("@version      28.11");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.12'");
+      expect(scriptContent).toContain("@version      28.12");
     });
 
-    it('2. Required Worker = 28.11', () => {
+    it('2. Required Worker = 28.12', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.11');
+      expect(versionRes.requiredWorkerVersion).toBe('28.12');
     });
 
     it('3. Rate guard exists immediately before text irreversible send', () => {
@@ -1419,7 +1419,7 @@ describe('AppController', () => {
         const MIN_SEND_GAP_MS = 10000;
         const MAX_SEND_ACTIONS_10_MIN = 60;
         const MAX_SEND_ACTIONS_1_HOUR = 300;
-        const WORKER_VERSION = '28.11';
+        const WORKER_VERSION = '28.12';
         async function fetchAPI() {}
         function sessionStorageItem() { return '0'; }
         const sessionStorage = { getItem: () => '0' };
@@ -1493,7 +1493,7 @@ describe('AppController', () => {
         const MIN_SEND_GAP_MS = 10000;
         const MAX_SEND_ACTIONS_10_MIN = 60;
         const MAX_SEND_ACTIONS_1_HOUR = 300;
-        const WORKER_VERSION = '28.11';
+        const WORKER_VERSION = '28.12';
         async function fetchAPI() {}
         const sessionStorage = { getItem: () => '0' };
         function isValidChatContextId(b) { return typeof b === 'string' && /^U[0-9a-fA-F]{32}$/.test(b); }
@@ -1609,7 +1609,7 @@ describe('AppController', () => {
       const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
 
       const res: any = await appController.recordAccountProtectionTelemetry(
-        '28.11',
+        '28.12',
         testBotId,
         mockReq,
         { botId: testBotId, sendActions10m: 0, sendActions1h: 0, nextSendAt: 0, errorCooldownUntil: 0 },
@@ -1642,7 +1642,7 @@ describe('AppController', () => {
       const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
 
       const res: any = await appController.recordAccountProtectionTelemetry(
-        '28.11',
+        '28.12',
         'U11111111222222223333333344444444',
         mockReq,
         { botId: testBotId, sendActions10m: 0, sendActions1h: 0, nextSendAt: 0, errorCooldownUntil: 0 },
@@ -1658,7 +1658,7 @@ describe('AppController', () => {
       const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
 
       await appController.recordAccountProtectionTelemetry(
-        '28.11',
+        '28.12',
         testBotId,
         mockReq,
         { botId: testBotId, sendActions10m: 1, sendActions1h: 1, nextSendAt: 0, errorCooldownUntil: 0 },
@@ -1675,10 +1675,134 @@ describe('AppController', () => {
 
     it('21. existing SAFE / OA / REL / SYNC tests remain passing', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.11'");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.12'");
       expect(scriptContent).toContain("verifyCurrentRecipient");
       expect(scriptContent).toContain("verifyCurrentOAContext");
       expect(scriptContent).toContain("confirmWorkerLeadershipForSend");
+    });
+  });
+
+  describe('SAFE-WP001-R3 — Active Worker Telemetry Heartbeat Tests', () => {
+    const fs = require('fs');
+
+    it('1. Worker version = 28.12', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.12'");
+      expect(scriptContent).toContain("@version      28.12");
+    });
+
+    it('2. Required Worker = 28.12', () => {
+      const versionRes = appController.getRuntimeVersion();
+      expect(versionRes.requiredWorkerVersion).toBe('28.12');
+    });
+
+    it('3. processQueue publishes telemetry after leadership passes', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const processQueueIndex = scriptContent.indexOf('async function processQueue');
+      const leaderIndex = scriptContent.indexOf('const isLeader = await ensureWorkerLeadership();', processQueueIndex);
+      const heartbeatIndex = scriptContent.indexOf('publishAccountProtectionTelemetry(validBotId, 0).catch(() => {});', leaderIndex);
+
+      expect(processQueueIndex).toBeGreaterThan(-1);
+      expect(leaderIndex).toBeGreaterThan(-1);
+      expect(heartbeatIndex).toBeGreaterThan(-1);
+      expect(leaderIndex).toBeLessThan(heartbeatIndex);
+    });
+
+    it('4. heartbeat occurs only after runtime compatibility passes', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const processQueueIndex = scriptContent.indexOf('async function processQueue');
+      const compatIndex = scriptContent.indexOf('const isCompatible = await checkRuntimeCompatibility();', processQueueIndex);
+      const heartbeatIndex = scriptContent.indexOf('publishAccountProtectionTelemetry(validBotId, 0).catch(() => {});', compatIndex);
+
+      expect(compatIndex).toBeGreaterThan(-1);
+      expect(heartbeatIndex).toBeGreaterThan(-1);
+      expect(compatIndex).toBeLessThan(heartbeatIndex);
+    });
+
+    it('5. heartbeat occurs only after OA alignment passes', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const processQueueIndex = scriptContent.indexOf('async function processQueue');
+      const alignIndex = scriptContent.indexOf('const isOaAligned = await checkAndExecuteControlledOaSwitch();', processQueueIndex);
+      const heartbeatIndex = scriptContent.indexOf('publishAccountProtectionTelemetry(validBotId, 0).catch(() => {});', alignIndex);
+
+      expect(alignIndex).toBeGreaterThan(-1);
+      expect(heartbeatIndex).toBeGreaterThan(-1);
+      expect(alignIndex).toBeLessThan(heartbeatIndex);
+    });
+
+    it('6. standby worker does not heartbeat', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const processQueueIndex = scriptContent.indexOf('async function processQueue');
+      const isLeaderCheck = scriptContent.indexOf('if (!isLeader) {', processQueueIndex);
+      const heartbeatIndex = scriptContent.indexOf('publishAccountProtectionTelemetry(validBotId, 0).catch(() => {});', isLeaderCheck);
+
+      expect(isLeaderCheck).toBeGreaterThan(-1);
+      expect(heartbeatIndex).toBeGreaterThan(-1);
+      expect(isLeaderCheck).toBeLessThan(heartbeatIndex);
+    });
+
+    it('7. heartbeat does not call recordProtectionSendAction', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const pubIndex = scriptContent.indexOf('async function publishAccountProtectionTelemetry');
+      const pubEndIndex = scriptContent.indexOf('function calculateProtectionWaitMs', pubIndex);
+      const pubSnippet = scriptContent.slice(pubIndex, pubEndIndex);
+
+      expect(pubSnippet).not.toContain('recordProtectionSendAction');
+    });
+
+    it('8. heartbeat does not mutate protection timestamps', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const pubIndex = scriptContent.indexOf('async function publishAccountProtectionTelemetry');
+      const pubEndIndex = scriptContent.indexOf('function calculateProtectionWaitMs', pubIndex);
+      const pubSnippet = scriptContent.slice(pubIndex, pubEndIndex);
+
+      expect(pubSnippet).not.toContain('setItem');
+      expect(pubSnippet).not.toContain('push(');
+    });
+
+    it('9. heartbeat does not claim/send by itself', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const processQueueIndex = scriptContent.indexOf('async function processQueue');
+      const heartbeatIndex = scriptContent.indexOf('publishAccountProtectionTelemetry(validBotId, 0).catch(() => {});', processQueueIndex);
+      const claimIndex = scriptContent.indexOf('const job = await fetchAPI(\'/campaign/next\');', heartbeatIndex);
+
+      expect(heartbeatIndex).toBeGreaterThan(-1);
+      expect(claimIndex).toBeGreaterThan(-1);
+      expect(heartbeatIndex).toBeLessThan(claimIndex);
+    });
+
+    it('10. stale backend telemetry still returns available:false', async () => {
+      const mockReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
+      const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
+      const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+
+      await appController.recordAccountProtectionTelemetry(
+        '28.12',
+        testBotId,
+        mockReq,
+        { botId: testBotId, sendActions10m: 1, sendActions1h: 1, nextSendAt: 0, errorCooldownUntil: 0 },
+        mockRes
+      );
+
+      // Backdate workerSeenAt to exceed 30s stale window
+      (AppController as any).accountProtectionTelemetry[testBotId].workerSeenAt = Date.now() - 31000;
+
+      const status: any = await appController.getAccountProtectionStatus(testBotId, mockRes);
+      expect(status.available).toBe(false);
+      expect(status.message).toContain('telemetry unavailable or stale');
+    });
+
+    it('11. all SAFE-WP001/R1/R2 tests remain passing', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('MIN_SEND_GAP_MS = 10000');
+      expect(scriptContent).toContain('MAX_SEND_ACTIONS_10_MIN = 60');
+      expect(scriptContent).toContain('MAX_SEND_ACTIONS_1_HOUR = 300');
+      expect(scriptContent).toContain('verifyProtectionReservation');
+    });
+
+    it('12. all existing project tests remain passing', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.12'");
     });
   });
 });
