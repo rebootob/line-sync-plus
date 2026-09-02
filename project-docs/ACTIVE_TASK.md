@@ -1,37 +1,39 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: BUG-WP001-UATLOG-R1 — Low-Noise / Local-Only Diagnostic Logging
+ACTIVE_WORK_PACKAGE: BUG-WP001-UATLOG-R2 — Trusted Loopback Enforcement / Clean Test Evidence
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: ChatGPT / Control Plane
-TASK_TYPE: OBSERVABILITY_CORRECTIVE
+TASK_TYPE: OBSERVABILITY_CORRECTIVE_SECURITY
 ```
 
 ---
 
-## 📋 Completed Work Package Summary: BUG-WP001-UATLOG-R1
+## 📋 Completed Work Package Summary: BUG-WP001-UATLOG-R2
 
-### Implemented Corrective Features:
-1. **High-Frequency Success Logging Noise Removed (`RECIPIENT_VERIFY_OK`)**:
-   - Removed `RECIPIENT_VERIFY_OK` emission from inside the inner `verifyCurrentRecipient()` polling loop.
-   - `RECIPIENT_VERIFY_FAIL` is retained inside `verifyCurrentRecipient()` for immediate failure detection.
-   - `RECIPIENT_VERIFY_OK` is emitted ONCE at meaningful lifecycle checkpoints (e.g. initial pre-execution verification in `executeChatBot`).
-2. **`NAVIGATION_404` Deduplication**:
-   - Removed `NAVIGATION_404` emission from inside inner `checkIfErrorPage()` checks.
-   - Emitted strictly at actual transition/recovery points (in `handleSafeRecovery` and 404 page-load handlers).
-3. **Local-Only Endpoint Restriction**:
-   - `POST /api/diagnostics/browser-event` enforces local loopback IP validation (`127.0.0.1`, `::1`, `localhost`).
-   - Non-local remote requests are rejected with `{ success: false, message: 'Forbidden: Local requests only' }`.
-4. **Backend Input Hardening & Field Bounding**:
-   - Approved `ALLOWED_EVENTS` allowlist set (`BOT_START`, `JOB_RECEIVED`, `NAVIGATE_TARGET`, `PAGE_LOAD_ACTIVE_JOB`, `RECIPIENT_VERIFY_OK`, `RECIPIENT_VERIFY_FAIL`, `NAVIGATION_404`, `SEND_BLOCKED`, `SAME_JOB_RECOVERY_START`, `SAME_JOB_RETRY`, `SAME_JOB_RETRY_EXHAUSTED`, `TEXT_PRE_SEND_VERIFIED`, `IMAGE_PRE_SEND_VERIFIED`, `JOB_SUCCESS`, `JOB_FAIL`). Unapproved event names default to `'UNKNOWN'`.
-   - String field lengths strictly bounded (`event`: 50, `scriptVersion`: 20, `tabSessionId`: 50, `jobId`: 100, `expectedUserId`: 100, `botId`: 100, `currentPath`: 200, `reason`: 200).
-   - Extra/arbitrary/sensitive fields (`message`, `imageUrl`, `linkUrl`, `password`, `token`, etc.) are completely excluded.
-5. **Enhanced Unit Test Coverage (`src/app.controller.spec.ts`)**:
-   - Tested local-only request handling, remote request rejection, event allowlist enforcement, query/hash removal, and forbidden field exclusion (4 tests passed).
+### Implemented Corrections:
+1. **Direct Socket Loopback Enforcement (No Header Trust)**:
+   - Restricted `POST /api/diagnostics/browser-event` to direct socket peer IP (`req.socket?.remoteAddress` / `req.connection?.remoteAddress`).
+   - Completely ignores `x-forwarded-for` to prevent header spoofing attacks.
+   - Accepts ONLY `127.0.0.1`, `::1`, or `::ffff:127.0.0.1`. Missing, empty, or non-loopback addresses are rejected without writing to log.
+2. **Strict Event Allowlist (No `UNKNOWN` Writing)**:
+   - Requests with unapproved event names are rejected without writing (`{ success: false, message: 'Invalid or unapproved event' }`).
+3. **Test File Isolation**:
+   - Spied on `fs.appendFileSync` in `src/app.controller.spec.ts` to intercept test logs.
+   - Running `npm test` leaves `uat-logs/browser-BUG-WP001-UAT.log` completely untouched.
+4. **Comprehensive Unit Test Suite (9 Tests Passed)**:
+   - Verified `127.0.0.1`, `::1`, `::ffff:127.0.0.1` accepted.
+   - Verified remote IP `203.0.113.195` rejected and non-written.
+   - Verified remote IP with spoofed `x-forwarded-for: 127.0.0.1` header STILL rejected and non-written.
+   - Verified unapproved event names rejected and non-written.
+   - Verified query string/hash stripping and forbidden/extra field redaction.
+   - Verified real UAT log file isolation.
+5. **No Logic Changes**:
+   - Bot send, navigation, retries, timers, recipient safety, and campaign logic remain 100% unchanged.
 
 ---
 
 ## ⛔ Execution Policy
 
-- **Package Completion**: BUG-WP001-UATLOG-R1 completed, validated (`node --check` PASS, `npm test` PASS [4 passed], `npm run build` PASS).
+- **Package Completion**: BUG-WP001-UATLOG-R2 completed, validated (`npm test` PASS [9 passed], `npm run build` PASS, `node --check` PASS).
 - **Next Step**: Await review and authorization from ChatGPT / Control Plane.

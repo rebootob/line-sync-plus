@@ -89,92 +89,104 @@ describe('AppController', () => {
 
   describe('logBrowserEvent', () => {
     const fs = require('fs');
-    const path = require('path');
-    const logFilePath = path.join(process.cwd(), 'uat-logs', 'browser-BUG-WP001-UAT.log');
+    let appendSpy: jest.SpyInstance;
+    let writtenLines: string[] = [];
 
-    it('should successfully log allowed browser diagnostic event from local request', async () => {
-      const mockReq: any = {
-        headers: {},
-        socket: { remoteAddress: '127.0.0.1' },
+    beforeEach(() => {
+      writtenLines = [];
+      jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+      appendSpy = jest.spyOn(fs, 'appendFileSync').mockImplementation((filePath, data) => {
+        writtenLines.push(String(data));
+      });
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('1. should accept loopback address 127.0.0.1', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const result = await appController.logBrowserEvent({ event: 'JOB_RECEIVED' }, mockReq);
+      expect(result).toEqual({ success: true });
+      expect(writtenLines.length).toBe(1);
+    });
+
+    it('2. should accept loopback address ::1', async () => {
+      const mockReq: any = { socket: { remoteAddress: '::1' } };
+      const result = await appController.logBrowserEvent({ event: 'BOT_START' }, mockReq);
+      expect(result).toEqual({ success: true });
+      expect(writtenLines.length).toBe(1);
+    });
+
+    it('3. should accept loopback address ::ffff:127.0.0.1', async () => {
+      const mockReq: any = { socket: { remoteAddress: '::ffff:127.0.0.1' } };
+      const result = await appController.logBrowserEvent({ event: 'JOB_SUCCESS' }, mockReq);
+      expect(result).toEqual({ success: true });
+      expect(writtenLines.length).toBe(1);
+    });
+
+    it('4. should reject remote IP (203.0.113.195) without writing to log', async () => {
+      const mockRemoteReq: any = { socket: { remoteAddress: '203.0.113.195' } };
+      const result = await appController.logBrowserEvent({ event: 'JOB_RECEIVED' }, mockRemoteReq);
+      expect(result).toEqual({ success: false, message: 'Forbidden: Local requests only' });
+      expect(writtenLines.length).toBe(0);
+    });
+
+    it('5. should reject remote IP even if spoofed x-forwarded-for header is sent', async () => {
+      const mockSpoofedReq: any = {
+        headers: { 'x-forwarded-for': '127.0.0.1' },
+        socket: { remoteAddress: '203.0.113.195' },
       };
+      const result = await appController.logBrowserEvent({ event: 'JOB_RECEIVED' }, mockSpoofedReq);
+      expect(result).toEqual({ success: false, message: 'Forbidden: Local requests only' });
+      expect(writtenLines.length).toBe(0);
+    });
 
+    it('6. should reject unapproved event names without writing to log', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const result = await appController.logBrowserEvent({ event: 'MALICIOUS_UNAPPROVED_EVENT' }, mockReq);
+      expect(result).toEqual({ success: false, message: 'Invalid or unapproved event' });
+      expect(writtenLines.length).toBe(0);
+    });
+
+    it('7. & 8. should sanitize allowed event, strip query/hash, and exclude forbidden/extra fields', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
       const result = await appController.logBrowserEvent(
         {
-          event: 'JOB_RECEIVED',
+          event: 'TEXT_PRE_SEND_VERIFIED',
           jobId: 'job_test_1',
           expectedUserId: 'U12345',
           currentPath: '/bot1/chat/U12345?query=secret#hash',
           retryCount: 0,
-          // Forbidden / arbitrary fields
-          message: 'SECRET_MESSAGE_TEXT',
+          // Forbidden and extra fields
+          message: 'SECRET_MESSAGE_BODY',
           imageUrl: 'https://secret.url/img.png',
           linkUrl: 'https://secret.url/link',
-          arbitraryExtraField: 'HACK',
+          arbitraryExtraField: 'ATTACK_DATA',
         },
         mockReq,
       );
 
       expect(result).toEqual({ success: true });
+      expect(writtenLines.length).toBe(1);
 
-      // Read last line written to log file
-      const content = fs.readFileSync(logFilePath, 'utf8');
-      const lines = content.trim().split('\n').filter(Boolean);
-      const lastLineJson = JSON.parse(lines[lines.length - 1]);
-
-      // 1. Allowed event logged
-      expect(lastLineJson.event).toBe('JOB_RECEIVED');
-      // 2. Query and hash stripped from currentPath
-      expect(lastLineJson.currentPath).toBe('/bot1/chat/U12345');
-      // 3. Forbidden fields NOT present
-      expect(lastLineJson.message).toBeUndefined();
-      expect(lastLineJson.imageUrl).toBeUndefined();
-      expect(lastLineJson.linkUrl).toBeUndefined();
-      // 4. Extra arbitrary fields NOT present
-      expect(lastLineJson.arbitraryExtraField).toBeUndefined();
+      const parsed = JSON.parse(writtenLines[0]);
+      expect(parsed.event).toBe('TEXT_PRE_SEND_VERIFIED');
+      expect(parsed.currentPath).toBe('/bot1/chat/U12345');
+      expect(parsed.message).toBeUndefined();
+      expect(parsed.imageUrl).toBeUndefined();
+      expect(parsed.linkUrl).toBeUndefined();
+      expect(parsed.arbitraryExtraField).toBeUndefined();
     });
 
-    it('should reject non-local remote requests', async () => {
-      const mockRemoteReq: any = {
-        headers: { 'x-forwarded-for': '203.0.113.195' },
-        socket: { remoteAddress: '203.0.113.195' },
-      };
-
-      const result = await appController.logBrowserEvent(
-        {
-          event: 'JOB_RECEIVED',
-          jobId: 'job_remote_hack',
-        },
-        mockRemoteReq,
-      );
-
-      expect(result).toEqual({
-        success: false,
-        message: 'Forbidden: Local requests only',
-      });
-    });
-
-    it('should replace unapproved event names with UNKNOWN', async () => {
-      const mockReq: any = {
-        headers: {},
-        socket: { remoteAddress: '::1' },
-      };
-
-      const result = await appController.logBrowserEvent(
-        {
-          event: 'MALICIOUS_UNAPPROVED_EVENT',
-          jobId: 'job_test_2',
-        },
-        mockReq,
-      );
-
-      expect(result).toEqual({ success: true });
-
-      const content = fs.readFileSync(logFilePath, 'utf8');
-      const lines = content.trim().split('\n').filter(Boolean);
-      const lastLineJson = JSON.parse(lines[lines.length - 1]);
-      expect(lastLineJson.event).toBe('UNKNOWN');
+    it('9. should leave real UAT log untouched due to test mock isolation', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      await appController.logBrowserEvent({ event: 'JOB_SUCCESS' }, mockReq);
+      expect(appendSpy).toHaveBeenCalled();
+      expect(writtenLines.length).toBe(1);
     });
   });
 });
+
 
 

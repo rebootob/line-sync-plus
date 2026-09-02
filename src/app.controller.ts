@@ -732,23 +732,21 @@ export class AppController {
     };
   }
 
-  // 13. Endpoint สำหรับบันทึก Browser Diagnostic Safety Logs (BUG-WP001-UATLOG-R1)
+  // 13. Endpoint สำหรับบันทึก Browser Diagnostic Safety Logs (BUG-WP001-UATLOG-R2)
   @Post('diagnostics/browser-event')
   async logBrowserEvent(@Body() body: any, @Req() req?: Request) {
     try {
-      // 1. Local-only request restriction
-      if (req) {
-        const ipHeader = (req.headers && req.headers['x-forwarded-for']) as string;
-        const rawIp = ipHeader ? ipHeader.split(',')[0].trim() : (req.socket?.remoteAddress || (req as any).ip || '');
-        const cleanIp = rawIp.replace(/^::ffff:/, '');
-        const isLocal = cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp === 'localhost' || cleanIp === '';
+      // 1. Direct socket peer address check (Do NOT trust x-forwarded-for header)
+      const remoteAddress = (req?.socket?.remoteAddress || (req as any)?.connection?.remoteAddress || '').trim();
+      const isLoopback = remoteAddress === '127.0.0.1' || 
+                         remoteAddress === '::1' || 
+                         remoteAddress === '::ffff:127.0.0.1';
 
-        if (!isLocal) {
-          return { success: false, message: 'Forbidden: Local requests only' };
-        }
+      if (!isLoopback) {
+        return { success: false, message: 'Forbidden: Local requests only' };
       }
 
-      // 2. Event allowlist enforcement
+      // 2. Strict event allowlist (Reject unapproved events without writing)
       const ALLOWED_EVENTS = new Set([
         'BOT_START',
         'JOB_RECEIVED',
@@ -773,7 +771,9 @@ export class AppController {
       };
 
       const rawEvent = sanitizeStr(body?.event, 50);
-      const event = ALLOWED_EVENTS.has(rawEvent) ? rawEvent : 'UNKNOWN';
+      if (!ALLOWED_EVENTS.has(rawEvent)) {
+        return { success: false, message: 'Invalid or unapproved event' };
+      }
 
       const rawPath = sanitizeStr(body?.currentPath, 200);
       const cleanPath = rawPath.split('?')[0].split('#')[0];
@@ -787,7 +787,7 @@ export class AppController {
       const allowed = {
         serverTimestamp: new Date().toISOString(),
         clientTimestamp: sanitizeStr(body?.clientTimestamp, 40) || new Date().toISOString(),
-        event: event,
+        event: rawEvent,
         scriptVersion: sanitizeStr(body?.scriptVersion, 20),
         tabSessionId: sanitizeStr(body?.tabSessionId, 50),
         jobId: sanitizeStr(body?.jobId, 100),
