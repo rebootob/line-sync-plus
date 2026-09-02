@@ -4,7 +4,7 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: Initial BUG-WP001-UATLOG-R1 commit pending
+* HEAD: 9f2e07e (fix(observability): implement low-noise and local-only diagnostic logging BUG-WP001-UATLOG-R1)
 * Working Tree: Clean (BUG-WP001-UATLOG-R1 implementation completed)
 
 ## Project Purpose
