@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post OPS-WP001-R1 Runtime Gate Corrective Implementation)
+**Last Updated**: 2026-09-02 (Post OPS-WP001 Runtime Version Gate Final Closure)
 
 ---
 
@@ -28,13 +28,14 @@
 
 ---
 
-## 🛑 Runtime Version Gate (OPS-WP001 / OPS-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🛑 Runtime Version Gate (OPS-WP001 & OPS-WP001-R1 STATUS: CLOSED / PASS)
 
 - **Backend Runtime Contract**: Declared in `src/runtime-version.ts` (`RUNTIME_CONTRACT_VERSION = 1`, `REQUIRED_WORKER_VERSION = '28.3'`).
 - **Endpoint**: `GET /api/runtime/version` returns safe version contract info.
 - **Fail-Closed Queue Gate**: `GET /api/campaign/next` checks `X-LineSync-Worker-Version` header before any DB query or job claim. Returns HTTP 409 Conflict if header is missing or incompatible.
 - **Client Automation Worker v28.3**: `run/LineSyncApp.js` v28.3 sends `X-LineSync-Worker-Version: 28.3` header on all API calls and performs `checkRuntimeCompatibility()` before processing queue or resuming active jobs on page load.
 - **Strict Fail-Closed Retry Control**: Incompatible `processQueue()` or page-load active job recovery schedules compatibility retry via `setTimeout(..., CHECK_INTERVAL)` without fetching `/campaign/next` or altering job state. `fetchAPI()` only resolves HTTP 2xx responses.
+- **Live UAT Evidence**: Passed UAT-01 (Matched Version), UAT-02 (Incompatible Worker Rejection), and UAT-03 (Backend Offline / Auto Recovery without manual page reloads).
 - **Dashboard Operator Visibility**: Displays `Runtime Contract: v1 | Required Worker: v28.3` badge in dashboard header.
 
 ---
@@ -66,10 +67,10 @@
 
 ## 🚀 Active / Next Work Packages
 
-- **Active Work Packages**:
-  - `OPS-WP001`: `READY_FOR_CHATGPT_REVIEW`
-  - `OPS-WP001-R1`: `READY_FOR_CHATGPT_REVIEW`
+- **Completed Work Packages**:
+  - `OPS-WP001`: `CLOSED / PASS`
+  - `OPS-WP001-R1`: `CLOSED / PASS`
 - **Next Work Packages**:
-  - `REL-WP001`: `NOT STARTED`
+  - `REL-WP001 — Single Worker / Multi-Tab Lock`: `READY / NOT STARTED`
   - `REL-WP002`: `NOT STARTED`
   - `REL-WP003`: `NOT STARTED`

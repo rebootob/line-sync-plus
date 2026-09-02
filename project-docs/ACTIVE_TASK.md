@@ -1,46 +1,44 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: OPS-WP001-R1 — Runtime Retry + Strict Fail-Closed Corrective
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: REL-WP001 — Single Worker / Multi-Tab Lock
+STATUS: READY_NOT_STARTED
 AUTHORIZED_BY: ChatGPT / Control Plane
-TASK_TYPE: OPERATIONAL_HARDENING_CORRECTIVE
+TASK_TYPE: RELIABILITY_HARDENING
 ```
 
 ---
 
-## 📋 Completed Work Package Summary: OPS-WP001-R1
+## 📋 Completed Work Package Summary: OPS-WP001 & OPS-WP001-R1 (CLOSED / PASS)
 
-### Corrective Details & Strict Fail-Closed Verification:
-1. **ProcessQueue Retry Control (Blocker 1 Resolved)**:
-   - In `processQueue()`, when `checkRuntimeCompatibility()` returns `false`, execution calls `setTimeout(processQueue, CHECK_INTERVAL)` and returns safely.
-   - Does NOT call `/campaign/next` while incompatible.
-   - Does NOT claim any job or mutate status.
-   - Retries compatibility check later after `CHECK_INTERVAL` (4000ms) without creating tight/duplicate loops.
-2. **Saved Active Job Safe Retry (Blocker 2 Resolved)**:
-   - Created `resumeSavedActiveJob(savedJobData)` helper function.
-   - When a saved active job exists on page load and `checkRuntimeCompatibility()` fails:
-     - Active job session data in `sessionStorage` (`linesync_jobid`, `linesync_uid`, etc.) is 100% PRESERVED.
-     - Job is NOT finished or failed.
-     - `retryCount` is NOT incremented.
-     - `/campaign/next` is NEVER called.
-     - No message typing, attachment, or send occurs.
-     - No browser page reloads or navigations occur while incompatible.
-     - Schedules `setTimeout(() => resumeSavedActiveJob(savedJobData), CHECK_INTERVAL)` to re-check compatibility after 4000ms.
-     - When runtime compatibility eventually PASSES, resumes the SAME saved job through existing recipient & 404 recovery guards (`verifyCurrentRecipient`, `executeChatBot`, `handleSafeRecovery`).
-3. **Strict 2xx Runtime Response Validation (Blocker 3 Resolved)**:
-   - Refactored `fetchAPI()` so only HTTP 2xx status codes resolve response. Non-2xx (including 409) and network errors reject the Promise.
-   - `checkRuntimeCompatibility()` returns `true` ONLY when `fetchAPI('/runtime/version')` resolves a valid 2xx response where `res.requiredWorkerVersion === WORKER_VERSION`.
-   - Malformed JSON, non-2xx status, network errors, or missing `requiredWorkerVersion` ALL result in compatibility `false` without fabricating fallback credentials.
+### Operational Hardening & Final UAT Closure:
+- **OPS-WP001 — Runtime Version Gate**: **CLOSED / PASS**
+- **OPS-WP001-R1 — Runtime Retry + Strict Fail-Closed Corrective**: **CLOSED / PASS**
+- **Worker Version**: `28.3`
+- **Runtime Contract Version**: `1`
+- **Required Worker Version**: `28.3`
+
+### Accepted Live UAT Evidence:
+1. **UAT-01 — MATCHED VERSION (PASS)**:
+   - Worker v28.3 matched required backend version 28.3.
+   - 1-recipient live campaign completed cleanly (Success: 1, Fail: 0).
+   - No version block encountered during compatible execution.
+2. **UAT-02 — INCOMPATIBLE WORKER (PASS)**:
+   - Simulated worker sending header `X-LineSync-Worker-Version: 28.2` rejected with HTTP 409 Conflict (`status: "version_mismatch"`, `requiredWorkerVersion: "28.3"`).
+   - Pending campaign job was NOT claimed, status was NOT mutated, and NO LINE send occurred.
+   - Real worker v28.3 claimed the SAME pending job after Master Bot resumed (Success: 1, Fail: 0).
+3. **UAT-03 — BACKEND OFFLINE / AUTO RECOVERY (PASS)**:
+   - Worker emitted `RUNTIME VERSION BLOCKED: Unable to reach or validate /runtime/version endpoint` when backend was offline.
+   - Zero recipient navigation or message sends occurred while runtime was unavailable.
+   - When backend restarted, worker automatically recovered and processed the next job cleanly without requiring manual browser page reloads.
+
+### Deployment Safety Note:
+- OPS-WP001 cannot retroactively stop a message send that an OLD worker already physically started before deployment.
 
 ---
 
-## ⛔ Execution Policy
+## 🚀 Next Approved Work Package Candidate
 
-- **OPS-WP001-R1 Status**: `READY_FOR_CHATGPT_REVIEW`
-- **OPS-WP001 Status**: `READY_FOR_CHATGPT_REVIEW` (Do NOT mark CLOSED yet).
-- **Next Work Packages**:
-  - `REL-WP001`: `NOT STARTED`
-  - `REL-WP002`: `NOT STARTED`
-  - `REL-WP003`: `NOT STARTED`
-- **Next Step**: Await review and authorization from ChatGPT / Control Plane.
+- **Next Gate**: `REL-WP001 — Single Worker / Multi-Tab Lock`
+- **Status**: `READY / NOT STARTED`
+- **Instruction**: Do NOT start `REL-WP001` implementation until explicitly authorized by Project Owner.

@@ -147,18 +147,14 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - **BUG-WP001-UATLOG**: **CLOSED**
 - **BUG-WP002**: **CLOSED**
 - **SEC-WP001**: **CLOSED**
+- **OPS-WP001 / OPS-WP001-R1**: **CLOSED**
 - **83-recipient baseline UAT**: 83 targets / 80 success / 3 blocked / no observed 404
 - **UAT-1100 Campaign Evidence (LineSyncApp v28.2)**:
-  - Target = 1,100
-  - Processed = 473 (Campaign stopped by user after 473/1,100 jobs; NOT a completed 1,100-job endurance run)
-  - Success = 69
-  - Blocked / cannot send = 402
-  - NAVIGATION_404 terminal failures = 2 (Both preserved same job, retried same recipient, exhausted retryCount=2, failed safely, zero misdeliveries)
-  - User-stopped before processing = 627
-  - Wrong Recipient detected = 0
-  - Duplicate JOB_SUCCESS = 0
-  - Lost claimed job = 0
-  - RECIPIENT_VERIFY_FAIL during v28.2 session = 0
+  - Target = 1,100, Processed = 473, Success = 69, Blocked = 402, 404 = 2 (safe retry exhaust), zero misdeliveries.
+- **OPS-WP001 Live UAT Evidence (LineSyncApp v28.3)**:
+  - **UAT-01 (Matched Version)**: Worker v28.3 matched backend version 28.3. Live campaign completed cleanly (Success: 1, Fail: 0).
+  - **UAT-02 (Incompatible Worker)**: Simulated worker header `X-LineSync-Worker-Version: 28.2` rejected with HTTP 409 Conflict. Job remained pending; no LINE send occurred. Real worker v28.3 claimed SAME job after resume (Success: 1, Fail: 0).
+  - **UAT-03 (Backend Offline / Auto Recovery)**: Worker emitted `RUNTIME VERSION BLOCKED` when backend stopped. No navigation or send occurred. When backend restarted, worker automatically recovered without requiring manual page reloads (Success: 1, Fail: 0).
 
 ---
 
@@ -186,9 +182,9 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 - **Phase 0 — Security & Reliability Foundation**: **IN PROGRESS**
   - Safety hardening (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002`, `BUG-WP002-R1`): **COMPLETED**
   - `SEC-WP001` (Secret Hygiene): **COMPLETED / CLOSED**
-  - `OPS-WP001` (Runtime Version Gate): **READY_FOR_CHATGPT_REVIEW**
-  - `OPS-WP001-R1`: **READY_FOR_CHATGPT_REVIEW**
-  - `REL-WP001`: **NOT STARTED**
+  - `OPS-WP001` (Runtime Version Gate): **COMPLETED / CLOSED**
+  - `OPS-WP001-R1` (Runtime Retry + Fail-Closed Corrective): **COMPLETED / CLOSED**
+  - `REL-WP001` (Single Worker / Multi-Tab Lock): **READY / NOT STARTED**
   - `REL-WP002`: **NOT STARTED**
   - `REL-WP003`: **NOT STARTED**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
@@ -202,10 +198,11 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
-   - Operational runtime version gate (`OPS-WP001` & `OPS-WP001-R1` READY_FOR_CHATGPT_REVIEW).
+   - Operational runtime version gate (`OPS-WP001` & `OPS-WP001-R1` COMPLETED / CLOSED).
    - Secret hygiene & test isolation (`SEC-WP001` COMPLETED / CLOSED).
    - Fail-closed recipient verification & OA context validation (Completed in WP001/WP002).
 2. **P1 (Observability & Operational Hardening)**:
+   - Multi-tab single worker defense (`REL-WP001` READY / NOT STARTED).
    - Real-time diagnostic event stream UI widget in Dashboard.
 3. **P2 (Analytics & Automation)**:
    - Automated Telegram alert on session expiry / auth loss.
@@ -222,8 +219,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 14. Recommended Next Work Packages
 
-- **OPS-WP001-R1**: Runtime Retry + Strict Fail-Closed Corrective (**READY_FOR_CHATGPT_REVIEW**).
-- **REL-WP001**: Single-Worker Execution Lock / Multi-Tab Defense (**NOT STARTED**).
+- **REL-WP001**: Single-Worker Execution Lock / Multi-Tab Defense (**READY / NOT STARTED**).
 - **WP-UI-LOGS**: Implement browser diagnostic log viewer tab in single-page dashboard.
 
 ---
@@ -249,5 +245,5 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-The project is currently at Phase 0 (Security & Reliability Foundation) with OPS-WP001 and OPS-WP001-R1 implemented and READY_FOR_CHATGPT_REVIEW.
-Next Action: Await ChatGPT Control Plane review of OPS-WP001-R1 corrective implementation.
+The project is currently at Phase 0 (Security & Reliability Foundation) with OPS-WP001 and OPS-WP001-R1 COMPLETED and CLOSED.
+Next Action: Await explicit Project Owner authorization before starting `REL-WP001 — Single Worker / Multi-Tab Lock`.
