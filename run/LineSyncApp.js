@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      27.0
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (รองรับ Auto Return to Main Chat List ป้องกันค้างหน้าแชทผู้ใช้)
+// @version      28.0
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (รองรับ 404 Detection & Exact Recipient Verification Safety Guard)
 // @match        https://chat.line.biz/*
 // @match        https://manager.line.biz/*
 // @grant        GM_xmlhttpRequest
@@ -14,10 +14,12 @@
 
     const API_BASE = 'http://localhost:3005/api';
     const CHECK_INTERVAL = 4000;
+    const MAX_RETRIES = 2;
 
     let consecutiveErrorCount = parseInt(sessionStorage.getItem('linesync_consecutive_errors') || '0', 10);
+    let isExecutingJob = false;
 
-    console.log("🤖 LineSync Plus Bot v27.0: พร้อมทำงาน (Auto Return to Main Chat List System)...");
+    console.log("🤖 LineSync Plus Bot v28.0: พร้อมทำงาน (404 Detection & Exact Recipient Verification Safety Guard)...");
 
     function fetchAPI(endpoint, method = 'GET', data = null) {
         return new Promise((resolve, reject) => {
@@ -67,6 +69,61 @@
 
     function sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // 🛡️ 1. Explicit 404 & LINE Error Page Detector
+    function checkIfErrorPage() {
+        const path = window.location.pathname.toLowerCase();
+        if (path.includes('/error') || path.includes('/404') || path.includes('/not-found')) {
+            return true;
+        }
+
+        const errorBanners = deepQuerySelectorAll('h1, h2, h3, p, div, alert, ui-alert, section').find(el => {
+            try {
+                const txt = String(el.textContent || el.innerText || '').trim();
+                if (txt.length > 200) return false;
+                return txt.includes('404') ||
+                       txt.includes('Page Not Found') ||
+                       txt.includes('Page not found') ||
+                       txt.includes('ไม่พบหน้า') ||
+                       txt.includes('เกิดข้อผิดพลาดในการโหลด') ||
+                       txt.includes('An error occurred') ||
+                       txt.includes('This page is not available') ||
+                       txt.includes('ไม่สามารถโหลดข้อมูลได้');
+            } catch (e) { return false; }
+        });
+
+        return !!errorBanners;
+    }
+
+    // 🛡️ 2. Exact Recipient Verification Guard
+    function verifyCurrentRecipient(expectedUserId) {
+        if (!expectedUserId) return false;
+
+        // Must not be on an error page
+        if (checkIfErrorPage()) return false;
+
+        // Path check: URL pathname must contain /chat/{expectedUserId}
+        const pathname = window.location.pathname;
+        const expectedPattern = new RegExp(`/chat/${expectedUserId}(?:/|$)`, 'i');
+        const urlMatchesRecipient = expectedPattern.test(pathname);
+
+        if (!urlMatchesRecipient) {
+            console.warn(`🛡️ [SAFETY] URL path does not match expected recipient: Expected ${expectedUserId}, got URL: ${pathname}`);
+            return false;
+        }
+
+        // Additional DOM verification: ensure no mismatch in active chat container if data attributes are present
+        const activeChatElements = deepQuerySelectorAll('[data-user-id], [data-chat-id], [class*="active"], [class*="Selected"]');
+        for (let el of activeChatElements) {
+            const dataUid = el.getAttribute('data-user-id') || el.getAttribute('data-chat-id') || '';
+            if (dataUid && dataUid.toLowerCase() !== expectedUserId.toLowerCase()) {
+                console.warn(`🛡️ [SAFETY] DOM element data-user-id mismatch: Expected ${expectedUserId}, found ${dataUid}`);
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // 🛑 ตรวจจับข้อความเตือนโควต้า LINE OA เต็มบนหน้าจอ
@@ -174,7 +231,6 @@
             const txt = String(el.textContent || el.value || el.innerText || '').trim();
             if (txt !== 'ส่ง' && txt !== 'Send') return false;
             const rect = el.getBoundingClientRect();
-            // ปุ่มส่งของช่องแชตอยู่บริเวณล่างขวา (top > 400)
             return rect.width > 0 && rect.height > 0 && rect.width < 150 && rect.top > 400;
         });
 
@@ -248,9 +304,39 @@
         });
     }
 
+    // 🛡️ Safe Recovery Mechanism with Bounded Retries
+    async function handleSafeRecovery(jobData, reason = 'RECIPIENT_UNVERIFIED', isBlocked = false) {
+        console.warn(`🛡️ [SAFE RECOVERY] Triggered recovery for Job ID: ${jobData.jobId}, User ID: ${jobData.userId}, Reason: ${reason}`);
+
+        const retryKey = `linesync_retry_${jobData.jobId}`;
+        let retryCount = parseInt(sessionStorage.getItem(retryKey) || '0', 10);
+
+        if (retryCount < MAX_RETRIES && !isBlocked && !reason.includes('บล็อก')) {
+            retryCount++;
+            sessionStorage.setItem(retryKey, String(retryCount));
+            console.log(`🔄 [SAFE RECOVERY] Attempting bounded retry ${retryCount}/${MAX_RETRIES} for User ID: ${jobData.userId}...`);
+
+            // Clear temporary session items (preserve retry count)
+            sessionStorage.removeItem('linesync_jobid');
+            sessionStorage.removeItem('linesync_msg');
+            sessionStorage.removeItem('linesync_uid');
+            sessionStorage.removeItem('linesync_type');
+            sessionStorage.removeItem('linesync_img');
+            sessionStorage.removeItem('linesync_link');
+
+            // Redirect back to main chat URL safely
+            closeUserChatAndReturnToMain();
+            setTimeout(processQueue, 4000);
+        } else {
+            console.error(`❌ [SAFE RECOVERY] Bounded retries exceeded (${retryCount}/${MAX_RETRIES}) or non-retryable error. Failing job with reason: ${reason}`);
+            sessionStorage.removeItem(retryKey);
+            await finishJob(jobData.jobId, jobData.userId, false, reason, isBlocked);
+        }
+    }
+
     async function processQueue() {
-        if (window.location.href.includes('/tagaudience') || window.location.href.includes('/error')) {
-            console.log("🔀 เด้งกลับจากหน้า tagaudience เข้าสู่หน้าหลัก LINE OA Chat...");
+        if (checkIfErrorPage() || window.location.href.includes('/tagaudience') || window.location.href.includes('/error')) {
+            console.log("🔀 เด้งกลับจากหน้า 404/error เข้าสู่หน้าหลัก LINE OA Chat...");
             window.location.href = "https://chat.line.biz/";
             return;
         }
@@ -306,7 +392,6 @@
                 await executeChatBot(job);
 
             } else {
-                // หากไม่มีงานคิวให้รันขณะนี้ และยังค้างอยู่ที่หน้าแชทผู้ใช้ ให้สลับกลับหน้าแชทหลัก
                 if (window.location.pathname.includes('/chat/U') || window.location.pathname.includes('/chat/u')) {
                     closeUserChatAndReturnToMain();
                 }
@@ -322,7 +407,6 @@
     function closeUserChatAndReturnToMain() {
         console.log("🔙 จบรอบการส่ง ปิดหน้าต่างผู้ใช้และกลับสู่หน้าแชทหลัก...");
 
-        // 1. ลองหากดปุ่มปิดแชต (X) บนหน้าจอถ้ามี
         const closeBtns = deepQuerySelectorAll('button, a, [role="button"]').filter(el => {
             const aria = (el.getAttribute('aria-label') || '').toLowerCase();
             const text = String(el.textContent || el.innerText || '').trim().toLowerCase();
@@ -337,158 +421,219 @@
             } catch(e) {}
         }
 
-        // 2. ถ้า URL ยังค้างในหน้าแชทรายคน (/chat/U...) ให้ redirect กลับไปยังหน้าหลักของบอตทันที
         if (window.location.pathname.includes('/chat/U') || window.location.pathname.includes('/chat/u')) {
             const basePath = window.location.pathname.split('/chat/U')[0].split('/chat/u')[0];
             const mainChatUrl = window.location.origin + (basePath || '/') + (basePath.endsWith('/') ? '' : '/');
-            console.log(`🌐 สลับหน้ากลับเข้าสู่หน้าแชทหลัก: ${mainChatUrl}`);
+            console.log(`🌐 เปลี่ยนเส้นทางกลับหน้าแชทหลัก: ${mainChatUrl}`);
             window.location.href = mainChatUrl;
         }
     }
 
     async function executeChatBot(jobData) {
-        console.log("🔍 กำลังค้นหาช่องพิมพ์ในห้องแชท LINE OA...");
-
-        // 🛑 ตรวจสอบข้อความเตือนโควต้าเต็มบนหน้าแชต
-        if (checkQuotaLimitExceeded()) {
-            console.error("🛑 [CRITICAL] ตรวจพบการเตือนโควต้า LINE OA เต็ม! สั่งหยุดส่งแคมเปญทันที...");
-            await fetchAPI('/campaign/stop', 'POST', {
-                jobId: jobData.jobId,
-                reason: '🛑 สั่งหยุดแคมเปญทันทีเนื่องจากโควต้าข้อความ LINE OA เต็ม (Quota Exceeded Limit)',
-                limitReached: true
-            });
-            sessionStorage.clear();
-            alert('🛑 ระบบหยุดส่งแคมเปญอัตโนมัติ เนื่องจากโควต้าข้อความ LINE OA ของคุณเต็มแล้ว');
+        if (isExecutingJob) {
+            console.warn("⚠️ Job execution already in progress. Skipping re-entrant call.");
             return;
         }
+        isExecutingJob = true;
 
-        let attempts = 0;
-        const maxAttempts = 50;
+        try {
+            console.log("🔍 กำลังตรวจสอบความถูกต้องก่อนเริ่มส่งข้อความหา User ID:", jobData.userId);
 
-        const findAndType = setInterval(async () => {
-            attempts++;
-
-            if (attempts % 3 === 0) {
-                const userListItems = deepQuerySelectorAll('li, a, div, span');
-                const targetUserEl = userListItems.find(el => {
-                    const href = el.getAttribute('href') || '';
-                    return href.includes(jobData.userId);
-                });
-                if (targetUserEl) {
-                    targetUserEl.click();
-                }
+            // 1. Check for 404 / Error Page
+            if (checkIfErrorPage()) {
+                console.error("🛑 [SAFETY] ตรวจพบหน้า 404 / Error Page! ยกเลิกการส่งทันที");
+                await handleSafeRecovery(jobData, 'NAVIGATION_404');
+                return;
             }
 
-            const chatInput = deepQuerySelector('textarea[part="input"]') || deepQuerySelector('textarea');
+            // 2. Pre-execution Recipient Verification
+            if (!verifyCurrentRecipient(jobData.userId)) {
+                console.error("🛑 [SAFETY] ยืนยันผู้รับไม่ผ่าน (Recipient Mismatch / Unverified)! ยกเลิกการส่งทันที");
+                await handleSafeRecovery(jobData, 'RECIPIENT_MISMATCH');
+                return;
+            }
 
-            if (chatInput) {
-                clearInterval(findAndType);
-                chatInput.style.border = "3px solid #00c300";
+            // 3. Check LINE OA Quota limit
+            if (checkQuotaLimitExceeded()) {
+                console.error("🛑 [CRITICAL] ตรวจพบการเตือนโควต้า LINE OA เต็ม! สั่งหยุดส่งแคมเปญทันที...");
+                await fetchAPI('/campaign/stop', 'POST', {
+                    jobId: jobData.jobId,
+                    reason: '🛑 สั่งหยุดแคมเปญทันทีเนื่องจากโควต้าข้อความ LINE OA เต็ม (Quota Exceeded Limit)',
+                    limitReached: true
+                });
+                sessionStorage.clear();
+                alert('🛑 ระบบหยุดส่งแคมเปญอัตโนมัติ เนื่องจากโควต้าข้อความ LINE OA ของคุณเต็มแล้ว');
+                return;
+            }
 
-                // 🚫 ตรวจสอบสถานะว่าผู้ใช้บล็อกแชท หรือ แชทถูกปิดไม่ให้ส่งข้อความหรือไม่
-                if (checkIfChatDisabledOrBlocked(chatInput)) {
-                    console.warn(`🚫 ตรวจพบผู้ใช้นี้บล็อก/ไม่สามารถส่งข้อความได้แล้ว (LINE UserId: ${jobData.userId})`);
-                    await finishJob(jobData.jobId, jobData.userId, false, '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว', true);
+            let attempts = 0;
+            const maxAttempts = 35;
+
+            const findAndType = setInterval(async () => {
+                attempts++;
+
+                // 🛑 Pre-polling 404 & Recipient Guard Check
+                if (checkIfErrorPage()) {
+                    clearInterval(findAndType);
+                    console.error("🛑 [SAFETY] ตรวจพบหน้า 404/Error Page ระหว่างค้นหาช่องพิมพ์! ยกเลิกส่งทันที");
+                    await handleSafeRecovery(jobData, 'NAVIGATION_404');
                     return;
                 }
 
-                try {
-                    let hasImageToSend = (jobData.messageType === 'image_link' || jobData.messageType === 'image_only') && jobData.imageUrl;
+                if (!verifyCurrentRecipient(jobData.userId)) {
+                    clearInterval(findAndType);
+                    console.error("🛑 [SAFETY] ตรวจพบผู้รับไม่ตรงตามเป้าหมาย (Recipient Mismatch) ระหว่างค้นหาช่องพิมพ์! ยกเลิกส่งทันที");
+                    await handleSafeRecovery(jobData, 'RECIPIENT_MISMATCH');
+                    return;
+                }
 
-                    if (hasImageToSend) {
-                        console.log("📸 1. กำลังแนบรูปภาพส่งขึ้นเป็นอันดับแรก...");
-                        const imageData = await fetchImageBlob(jobData.imageUrl);
-                        if (imageData && imageData.blob) {
-                            const file = new File([imageData.blob], 'broadcast_image.png', { type: imageData.contentType || 'image/png' });
-                            
-                            const fileInput = deepQuerySelector('input[type="file"][accept*="image"]') || deepQuerySelector('input[type="file"]');
-                            if (fileInput) {
-                                const dt = new DataTransfer();
-                                dt.items.add(file);
-                                fileInput.files = dt.files;
-                                fileInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-                                console.log("✅ แนบไฟล์รูปภาพผ่าน File Input สำเร็จ!");
-                            } else {
-                                const dt = new DataTransfer();
-                                dt.items.add(file);
-                                const pasteEvent = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
-                                chatInput.dispatchEvent(pasteEvent);
-                                console.log("✅ จำลอง Paste รูปภาพใส่ช่องพิมพ์สำเร็จ!");
+                const chatInput = deepQuerySelector('textarea[part="input"]') || deepQuerySelector('textarea');
+
+                if (chatInput) {
+                    clearInterval(findAndType);
+
+                    // Final Pre-interaction Recipient Verification
+                    if (!verifyCurrentRecipient(jobData.userId)) {
+                        console.error("🛑 [SAFETY] ยืนยันผู้รับไม่ผ่านก่อนเริ่มพิมพ์! ยกเลิกการส่งทันที");
+                        await handleSafeRecovery(jobData, 'RECIPIENT_UNVERIFIED');
+                        return;
+                    }
+
+                    chatInput.style.border = "3px solid #00c300";
+
+                    if (checkIfChatDisabledOrBlocked(chatInput)) {
+                        console.warn(`🚫 ตรวจพบผู้ใช้นี้บล็อก/ไม่สามารถส่งข้อความได้แล้ว (LINE UserId: ${jobData.userId})`);
+                        await finishJob(jobData.jobId, jobData.userId, false, '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว', true);
+                        return;
+                    }
+
+                    try {
+                        let hasImageToSend = (jobData.messageType === 'image_link' || jobData.messageType === 'image_only') && jobData.imageUrl;
+
+                        if (hasImageToSend) {
+                            if (!verifyCurrentRecipient(jobData.userId)) {
+                                throw new Error('RECIPIENT_UNVERIFIED');
                             }
 
-                            // สั่งเจาะกดปุ่มยืนยันส่งรูปภาพเพียง 1 ครั้งถ้วน (Single Fire Strict)
-                            await confirmAndCloseImageModal();
-                        }
-                    }
+                            console.log("📸 1. กำลังแนบรูปภาพส่งขึ้นเป็นอันดับแรก...");
+                            const imageData = await fetchImageBlob(jobData.imageUrl);
+                            if (imageData && imageData.blob) {
+                                const file = new File([imageData.blob], 'broadcast_image.png', { type: imageData.contentType || 'image/png' });
+                                
+                                const fileInput = deepQuerySelector('input[type="file"][accept*="image"]') || deepQuerySelector('input[type="file"]');
+                                if (fileInput) {
+                                    const dt = new DataTransfer();
+                                    dt.items.add(file);
+                                    fileInput.files = dt.files;
+                                    fileInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+                                    console.log("✅ แนบไฟล์รูปภาพผ่าน File Input สำเร็จ!");
+                                } else {
+                                    const dt = new DataTransfer();
+                                    dt.items.add(file);
+                                    const pasteEvent = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
+                                    chatInput.dispatchEvent(pasteEvent);
+                                    console.log("✅ จำลอง Paste รูปภาพใส่ช่องพิมพ์สำเร็จ!");
+                                }
 
-                    let textToSend = '';
-                    if (jobData.messageType === 'image_only') {
-                        textToSend = ''; // รูปภาพอย่างเดียว ไม่ส่งข้อความใดๆ ตามหลัง
-                    } else if (jobData.messageType === 'link_only') {
-                        if (jobData.linkUrl) {
-                            textToSend = (jobData.message && jobData.message !== '🖼️ [ส่งรูปภาพเดี่ยว]') 
-                                ? `${jobData.message}\n\n🔗 ${jobData.linkUrl}` 
-                                : jobData.linkUrl;
+                                // Pre-confirm Recipient Verification
+                                if (!verifyCurrentRecipient(jobData.userId)) {
+                                    throw new Error('RECIPIENT_UNVERIFIED');
+                                }
+
+                                await confirmAndCloseImageModal();
+                            }
+                        }
+
+                        let textToSend = '';
+                        if (jobData.messageType === 'image_only') {
+                            textToSend = '';
+                        } else if (jobData.messageType === 'link_only') {
+                            if (jobData.linkUrl) {
+                                textToSend = (jobData.message && jobData.message !== '🖼️ [ส่งรูปภาพเดี่ยว]') 
+                                    ? `${jobData.message}\n\n🔗 ${jobData.linkUrl}` 
+                                    : jobData.linkUrl;
+                            } else {
+                                textToSend = jobData.message || '';
+                            }
                         } else {
-                            textToSend = jobData.message || '';
+                            textToSend = (jobData.message && jobData.message !== '🖼️ [ส่งรูปภาพเดี่ยว]') ? jobData.message : '';
+                            if (jobData.linkUrl) {
+                                textToSend += textToSend ? `\n\n🔗 ดูรายละเอียดเพิ่มเติม: ${jobData.linkUrl}` : `🔗 ดูรายละเอียดเพิ่มเติม: ${jobData.linkUrl}`;
+                            }
                         }
-                    } else {
-                        textToSend = (jobData.message && jobData.message !== '🖼️ [ส่งรูปภาพเดี่ยว]') ? jobData.message : '';
-                        if (jobData.linkUrl) {
-                            textToSend += textToSend ? `\n\n🔗 ดูรายละเอียดเพิ่มเติม: ${jobData.linkUrl}` : `🔗 ดูรายละเอียดเพิ่มเติม: ${jobData.linkUrl}`;
-                        }
-                    }
 
-                    if (textToSend && textToSend.trim() !== '') {
-                        console.log("✍️ 5. พิมพ์ข้อความ/ลิงก์ลงในช่องแชต...");
-                        chatInput.focus();
-                        chatInput.click();
+                        if (textToSend && textToSend.trim() !== '') {
+                            // Pre-type Recipient Verification
+                            if (!verifyCurrentRecipient(jobData.userId)) {
+                                throw new Error('RECIPIENT_UNVERIFIED');
+                            }
 
-                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-                        if (nativeInputValueSetter) {
-                            nativeInputValueSetter.call(chatInput, textToSend);
+                            console.log("✍️ 5. พิมพ์ข้อความ/ลิงก์ลงในช่องแชต...");
+                            chatInput.focus();
+                            chatInput.click();
+
+                            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+                            if (nativeInputValueSetter) {
+                                nativeInputValueSetter.call(chatInput, textToSend);
+                            } else {
+                                chatInput.value = textToSend;
+                            }
+
+                            chatInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+                            chatInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+                            chatInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: textToSend }));
+
+                            await sleep(1200);
+
+                            // 🛡️ ZERO-TOLERANCE FINAL PRE-SEND RECIPIENT VERIFICATION
+                            if (!verifyCurrentRecipient(jobData.userId)) {
+                                throw new Error('RECIPIENT_UNVERIFIED');
+                            }
+
+                            sendChatMessage(chatInput);
+
+                            await sleep(3000);
+                            console.log("✅ ส่งแคมเปญสำเร็จ 100%!");
+                            await finishJob(jobData.jobId, jobData.userId, true);
                         } else {
-                            chatInput.value = textToSend;
+                            await sleep(2000);
+                            console.log("✅ ส่งแคมเปญรูปภาพอย่างเดียวสำเร็จ 100%!");
+                            await finishJob(jobData.jobId, jobData.userId, true);
                         }
 
-                        chatInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-                        chatInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-                        chatInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: textToSend }));
-
-                        await sleep(1200);
-                        sendChatMessage(chatInput);
-
-                        await sleep(3000);
-                        console.log("✅ ส่งแคมเปญสำเร็จ 100%!");
-                        await finishJob(jobData.jobId, jobData.userId, true);
-                    } else {
-                        await sleep(2000);
-                        console.log("✅ ส่งแคมเปญรูปภาพอย่างเดียวสำเร็จ 100%!");
-                        await finishJob(jobData.jobId, jobData.userId, true);
+                    } catch (e) {
+                        console.error("❌ เกิด Error ตอนส่ง:", e);
+                        const errReason = e.message || 'Error ในกระบวนการพิมพ์';
+                        if (errReason.includes('RECIPIENT_UNVERIFIED') || errReason.includes('NAVIGATION_404') || errReason.includes('RECIPIENT_MISMATCH')) {
+                            await handleSafeRecovery(jobData, errReason);
+                        } else {
+                            await finishJob(jobData.jobId, jobData.userId, false, errReason);
+                        }
                     }
-
-                } catch (e) {
-                    console.error("❌ เกิด Error ตอนส่ง:", e);
-                    await finishJob(jobData.jobId, jobData.userId, false, e.message || 'Error ในกระบวนการพิมพ์');
+                } else if (attempts > maxAttempts) {
+                    clearInterval(findAndType);
+                    const isBlocked = checkIfChatDisabledOrBlocked(null);
+                    const reason = isBlocked ? '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว' : 'RECIPIENT_UNVERIFIED';
+                    console.error(`❌ ${reason} หาช่องพิมพ์ไม่เจอหรือยืนยันผู้รับไม่ได้...`);
+                    await handleSafeRecovery(jobData, reason, isBlocked);
                 }
-            } else if (attempts > maxAttempts) {
-                clearInterval(findAndType);
-                const isBlocked = checkIfChatDisabledOrBlocked(null);
-                const reason = isBlocked ? '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว' : 'หาช่องพิมพ์ไม่เจอภายในเวลาที่กำหนด';
-                console.error(`❌ ${reason} ข้ามคิวนี้...`);
-                await finishJob(jobData.jobId, jobData.userId, false, reason, isBlocked);
-            }
-        }, 1000);
+            }, 1000);
+
+        } finally {
+            isExecutingJob = false;
+        }
     }
 
     async function finishJob(jobId, userId, success, reason = '', isBlocked = false) {
         try {
+            // Clean up job retry counter upon completion or final failure
+            sessionStorage.removeItem(`linesync_retry_${jobId}`);
+
             if (success) {
                 consecutiveErrorCount = 0;
                 sessionStorage.setItem('linesync_consecutive_errors', '0');
                 await fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId });
             } else {
-                // 🚫 กรณีล้มเหลวเพราะผู้ใช้บล็อกแชท/ส่งไม่ได้ ไม่นับเป็น Error ระบบ (ไม่เพิ่มตัวนับ Circuit Breaker)
                 const isUserBlocked = isBlocked || (reason && (reason.includes('บล็อก') || reason.includes('ไม่สามารถส่งข้อความ')));
 
                 if (isUserBlocked) {
@@ -501,7 +646,6 @@
 
                 await fetchAPI('/campaign/fail', 'POST', { jobId: jobId, userId: userId, reason: reason, isBlocked: isBlocked });
 
-                // 🚨 2. ตรวจสอบระบบเซฟตี้ Circuit Breaker (พบ Error ติดต่อกันเกิน 10 รายการ)
                 if (consecutiveErrorCount >= 10) {
                     console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! สั่งหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
                     await fetchAPI('/campaign/stop', 'POST', {
@@ -524,7 +668,6 @@
             sessionStorage.removeItem('linesync_img');
             sessionStorage.removeItem('linesync_link');
 
-            // 🔙 จบรอบการส่ง 1 คน สลับหน้าจอกลับเข้าสู่หน้าแชตหลัก ป้องกันการเปิดแชตผู้ใช้ค้างไว้
             closeUserChatAndReturnToMain();
             setTimeout(processQueue, 3500);
         }
@@ -539,8 +682,15 @@
             const savedImg = sessionStorage.getItem('linesync_img');
             const savedLink = sessionStorage.getItem('linesync_link');
 
-            if (savedMsg && savedUid && window.location.href.includes(savedUid)) {
-                console.log("🚀 โหลดหน้าแชทสำเร็จ เริ่มพิมพ์ข้อความต่อ...");
+            if (checkIfErrorPage()) {
+                console.warn("🛑 [SAFETY] โหลดหน้าเว็บเจอ 404 / Error Page สลับกลับหน้าแชทหลัก...");
+                closeUserChatAndReturnToMain();
+                setTimeout(processQueue, 3000);
+                return;
+            }
+
+            if (savedUid && verifyCurrentRecipient(savedUid)) {
+                console.log("🚀 โหลดหน้าแชทสำเร็จและยืนยันผู้รับถูกต้อง เริ่มพิมพ์ข้อความต่อ...");
                 executeChatBot({
                     jobId: savedJobId,
                     userId: savedUid,

@@ -4,12 +4,12 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: c1c8369 (feat: initial project import, security audit and control documentation setup)
-* Working Tree: Clean (untracked files configured via .gitignore)
+* HEAD: Initial BUG-WP001 commit pending
+* Working Tree: Clean (BUG-WP001 implementation completed)
 
 ## Project Purpose
 
-LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v27.0) running inside `chat.line.biz` to send multi-type messages, manage quotas, handle blocks/errors safely, and report detailed summary reports to Telegram.
+LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.0) running inside `chat.line.biz` to send multi-type messages, manage quotas, handle blocks/errors safely, and report detailed summary reports to Telegram.
 
 ## Technology Stack
 
@@ -23,54 +23,58 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 - **Backend REST API (`src/app.controller.ts`)**: Serves contact listings, group tag mappings, multi-type campaign creation, job dispatch queue with stale item recovery, master bot switch, scheduled campaign controls, and Telegram settings.
 - **Database Layer (`src/entities/`)**: TypeORM PostgreSQL entities for `Customer`, `CustomerGroup`, `CustomerGroupMember`, `Campaign`, and `CampaignJob` with local timezone (`TIMESTAMP WITHOUT TIME ZONE`) handling.
-- **Client Userscript (`run/LineSyncApp.js` v27.0)**: Operates inside LINE OA web interface (`https://chat.line.biz/*`), performing automated chat inputs, image pastes, quota limit checks, Circuit Breaker error handling, auto block exclusions, and automatic return to main chat list page.
+- **Client Userscript (`run/LineSyncApp.js` v28.0)**: Operates inside LINE OA web interface (`https://chat.line.biz/*`), featuring 404 detection, exact recipient verification guards, zero-tolerance pre-send verification, safe recovery with bounded retries, Circuit Breaker error handling, auto block exclusions, and automatic return to main chat list page.
 - **Notification Subsystem (`src/telegram.service.ts`)**: Sends rich HTML campaign completion reports and connection tests to Telegram.
 
 ## Major Modules
 
 1. **Customer & Group Management**: Clean name formatting, block status flagging, group creation, member mapping, and deletion.
 2. **Campaign & Queue Engine**: Supports 5 message types (`text`, `image_only`, `link_only`, `text_link`, `image_link`), job dispatching (`GET /api/campaign/next`), success/fail result reporting, and local time scheduling.
-3. **Master Bot Switch & Safety**: Global bot pause/resume switch, Circuit Breaker (stops after 10 consecutive non-blocked errors), and auto-stop on quota full banner.
+3. **Safety & Recipient Verification Guard (BUG-WP001)**:
+   - `checkIfErrorPage`: Detects 404 & LINE error pages via URL path & DOM error banners.
+   - `verifyCurrentRecipient`: Exact regex matching on `/chat/${expectedUserId}` and DOM active data attributes.
+   - Removed unsafe blind-clicking on `li, a, div, span`.
+   - `handleSafeRecovery`: Bounded retries (max 2) with clean session recovery and explicit failure reasons (`NAVIGATION_404`, `RECIPIENT_MISMATCH`, `RECIPIENT_UNVERIFIED`).
+   - Re-entrancy lock (`isExecutingJob`).
 4. **Dashboard Toolbar & Filters**: Search box, Status filter (`Active`/`Blocked`), Name filter (`Named`/`Unnamed`), and Quick Selection shortcuts (`✅ เลือกเฉพาะ Active ทั้งหมด`, `🎯 เลือก 100 คนแรก`, `🧹 ล้างการเลือก`).
 5. **Telegram Summary Reporter**: Formatted HTML notification sent on campaign completion (`completed`, `stopped_limit`, `stopped_error`, `stopped_user`) with Thai labels, duration math, and top failure reasons.
 
 ## External Integrations
 
-- **LINE OA Web Interface (`https://chat.line.biz/*` / `https://manager.line.biz/*`)**: Automated via Tampermonkey userscript (`LineSyncApp.js`).
+- **LINE OA Web Interface (`https://chat.line.biz/*` / `https://manager.line.biz/*`)**: Automated via Tampermonkey userscript (`LineSyncApp.js` v28.0).
 - **Telegram Bot API (`https://api.telegram.org/bot<TOKEN>/sendMessage`)**: Automated HTML summary reports.
 
 ## Current State
 
 Fully functional, verified via Jest unit tests (`npm test`) and NestJS build compilation (`npm run build`).
 
-## Completed Work
+## Completed Work (BUG-WP001)
 
-- Implemented NestJS REST APIs, PostgreSQL schema, and database initialization.
-- Implemented dashboard UI (`index.html`) with toolbar, real-time filters, quick selection shortcuts, schedule manager modal, deep analytics, and Telegram setting modal.
-- Implemented Tampermonkey userscript `run/LineSyncApp.js` (v27.0) with auto-return to main chat list.
-- Implemented `TelegramService` with Thai message type localization.
-- Performed security audit: Excluded credentials, `.env`, `telegram-config.json`, build artifacts, and uploaded media from git tracking.
-- Created `telegram-config.example.json` and `.env.example`.
-- Created Control Plane documentation (`START_HERE.md`, `CURRENT_STATE.md`, `ACTIVE_TASK.md`, `CHAT_HANDOFF.md`).
+- Added explicit 404 / LINE error-page detection (`checkIfErrorPage`).
+- Added exact recipient verification guard (`verifyCurrentRecipient`) before execution, image paste, image confirm, text typing, and before clicking Send.
+- Removed unsafe blind-click iteration on `li, a, div, span`.
+- Implemented `handleSafeRecovery` with bounded retries (`MAX_RETRIES = 2`) and clear error reasons (`NAVIGATION_404`, `RECIPIENT_MISMATCH`, `RECIPIENT_UNVERIFIED`).
+- Added re-entrancy protection lock (`isExecutingJob`).
+- Updated `run/LineSyncApp.js` to v28.0.
+- Updated control documentation suite (`ACTIVE_TASK.md`, `CURRENT_STATE.md`, `CHAT_HANDOFF.md`).
+- Passed `npm test` (Jest unit test suite: 1 passed).
+- Passed `npm run build` (`nest build` clean exit code 0).
 
 ## Unfinished Work
 
-- None for the current onboarding package.
+- None for BUG-WP001.
 
 ## Known Issues / Risks
 
 - Requires active PostgreSQL database service (default port 5433).
-- Tampermonkey userscript requires an active browser tab logged into `https://chat.line.biz/`.
+- Tampermonkey userscript requires active browser session logged into `https://chat.line.biz/`.
 
 ## Relevant Files
 
-- `src/app.controller.ts`: Main API controller.
-- `src/app.module.ts`: Root NestJS application module.
-- `src/telegram.service.ts`: Telegram notification service.
-- `src/entities/`: TypeORM entity definitions.
-- `index.html`: Web dashboard UI.
-- `run/LineSyncApp.js`: Tampermonkey userscript (v27.0).
-- `project-docs/`: Project control documentation suite.
+- `run/LineSyncApp.js`: Tampermonkey userscript (v28.0).
+- `project-docs/ACTIVE_TASK.md`: Task tracking document.
+- `project-docs/CURRENT_STATE.md`: System state document.
+- `project-docs/CHAT_HANDOFF.md`: Handoff summary document.
 
 ## Tests / Validation Evidence
 
@@ -79,21 +83,16 @@ Fully functional, verified via Jest unit tests (`npm test`) and NestJS build com
 
 ## Security Notes
 
-- Security Audit Completed: No secrets, passwords, API keys, tokens, or credentials are tracked in Git.
-- `telegram-config.json` (containing user Telegram credentials) is added to `.gitignore`.
-- `.env` files and `uploads/*` are added to `.gitignore`.
+- Security Audit Maintained: No secrets, passwords, API keys, tokens, or credentials are tracked in Git.
 
-## Changes Made During Initial Handoff
+## Changes Made During BUG-WP001
 
-- Created project-docs documentation suite (`START_HERE.md`, `CURRENT_STATE.md`, `ACTIVE_TASK.md`, `CHAT_HANDOFF.md`).
-- Added `telegram-config.example.json` and `.env.example`.
-- Added `uploads/.gitkeep` and removed zero-byte scratch text files.
-- Configured `.gitignore` for public GitHub repository publishing.
-- Prepared Git repository with canonical branch `main` and remote `https://github.com/rebootob/line-sync-plus.git`.
+- Updated `run/LineSyncApp.js` to v28.0 with 404 detection & exact recipient verification guards.
+- Updated `project-docs/ACTIVE_TASK.md`, `project-docs/CURRENT_STATE.md`, and `project-docs/CHAT_HANDOFF.md`.
 
 ## Exact Recommended Next Step
 
-Await ChatGPT / Project Owner review of GitHub repository `rebootob/line-sync-plus`.
+Await ChatGPT / Project Owner review of BUG-WP001 implementation on GitHub repository `rebootob/line-sync-plus`.
 
 ## Antigravity Status
 
