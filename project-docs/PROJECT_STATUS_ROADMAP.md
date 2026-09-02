@@ -180,8 +180,14 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 11. Development Roadmap
 
-- **Phase 0 — Security & Reliability Foundation**: Core zero-tolerance recipient safety, full-lifecycle execution locking, OA context validation, and failure-closed recovery guards (**COMPLETED**).
-- **Phase 1 — Operations & Monitoring**: Browser diagnostic persistence, direct-socket loopback event logging, and local diagnostic evidence audit trails (**COMPLETED**).
+- **Phase 0 — Security & Reliability Foundation**: **IN PROGRESS**
+  - Safety hardening (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002`, `BUG-WP002-R1`): **COMPLETED**
+  - `SEC-WP001` (Secret Hygiene): **READY / NOT STARTED**
+  - `OPS-WP001`: **NOT STARTED**
+  - `REL-WP001`: **NOT STARTED**
+  - `REL-WP002`: **NOT STARTED**
+  - `REL-WP003`: **NOT STARTED**
+- **Phase 1 — Operations & Monitoring**: **NOT STARTED**
 - **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -237,5 +243,5 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-The project has passed all safety gates (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002` CLOSED).
+The project is currently at Phase 0 (Security & Reliability Foundation) with Safety Hardening COMPLETED.
 Next Action: Await explicit ChatGPT / Control Plane authorization before starting `SEC-WP001 — Secret Hygiene`.
