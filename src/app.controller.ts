@@ -164,7 +164,7 @@ export class AppController {
 
   // 1.1 อัปโหลดรูปภาพจากเครื่องคอมพิวเตอร์ Local บันทึกลงเซิร์ฟเวอร์
   @Post('upload/image')
-  async uploadImage(@Body() body: { base64: string; filename?: string }, @Req() req?: any) {
+  async uploadImage(@Body() body: { base64: string; filename?: string }) {
     if (!body.base64) {
       return { success: false, message: 'ไม่มีข้อมูลรูปภาพ' };
     }
@@ -185,9 +185,8 @@ export class AppController {
 
       fs.writeFileSync(filePath, buffer);
 
-      const protocol = req?.protocol || 'http';
-      const host = req?.get ? req.get('host') : (req?.headers?.host || 'localhost:3005');
-      const fileUrl = `${protocol}://${host}/api/uploads/${savedFilename}`;
+      const port = process.env.PORT || 3005;
+      const fileUrl = `http://localhost:${port}/api/uploads/${savedFilename}`;
 
       console.log(`🖼️ อัปโหลดรูปภาพสำเร็จ: ${fileUrl}`);
 

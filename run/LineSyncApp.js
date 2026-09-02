@@ -972,16 +972,23 @@
 
     // 🛡️ SAME-JOB SAFE RECOVERY: Retries the EXACT SAME jobData up to MAX_RETRIES using ONLY validated OA context (BUG-WP002-R1)
     async function handleSafeRecovery(jobData, reason = 'RECIPIENT_UNVERIFIED', isBlocked = false) {
-        console.warn(`🛡️ [SAME-JOB RECOVERY] Triggered recovery for Job ID: ${jobData.jobId}, User ID: ${jobData.userId}, Reason: ${reason}`);
+        console.warn(`🛡️ [SAME-JOB RECOVERY] Triggered recovery for Job ID: ${jobData ? jobData.jobId : ''}, User ID: ${jobData ? jobData.userId : ''}, Reason: ${reason}`);
 
-        emitDiagnostic('SAME_JOB_RECOVERY_START', { jobId: jobData.jobId, userId: jobData.userId, reason: reason });
+        if (!jobData || !jobData.botId || !isValidChatContextId(jobData.botId) || !verifyCurrentOAContext(jobData.botId)) {
+            console.error(`🛑 [OA] Same-job recovery aborted: Expected job botId missing, invalid, or unverified against current OA (botId: ${jobData ? jobData.botId : 'undefined'}). Relinquishing local active job state.`);
+            clearLocalActiveJobState();
+            isExecutingJob = false;
+            return;
+        }
+
+        emitDiagnostic('SAME_JOB_RECOVERY_START', { jobId: jobData.jobId, userId: jobData.userId, botId: jobData.botId, reason: reason });
 
         // 1. Check if valid target OA context URL exists BEFORE incrementing retryCount or consuming retries
         const targetUrl = getOAContextUrl(jobData.userId);
 
         if (!targetUrl) {
             console.warn(`🛑 [SAFETY] Same-job recovery waiting for valid OA context: Target URL unavailable for Job ID: ${jobData.jobId}. Preserving active job state and failing closed.`);
-            emitDiagnostic('SAME_JOB_RECOVERY_START', { jobId: jobData.jobId, userId: jobData.userId, reason: 'Missing valid OA context' });
+            emitDiagnostic('SAME_JOB_RECOVERY_START', { jobId: jobData.jobId, userId: jobData.userId, botId: jobData.botId, reason: 'Missing valid OA context' });
 
             // Preserve SAME job session parameters intact
             sessionStorage.setItem('linesync_jobid', jobData.jobId || '');
@@ -990,6 +997,7 @@
             sessionStorage.setItem('linesync_type', jobData.messageType || 'text');
             sessionStorage.setItem('linesync_img', jobData.imageUrl || '');
             sessionStorage.setItem('linesync_link', jobData.linkUrl || '');
+            sessionStorage.setItem('linesync_job_botid', jobData.botId);
 
             // DO NOT call finishJob, DO NOT call /campaign/fail, DO NOT increment retryCount, DO NOT fetch another job, DO NOT navigate
             isExecutingJob = false;
@@ -1004,7 +1012,7 @@
             sessionStorage.setItem(retryKey, String(retryCount));
             console.log(`🔄 [SAME-JOB RECOVERY] Attempting bounded retry ${retryCount}/${MAX_RETRIES} for SAME Job ID: ${jobData.jobId}, User ID: ${jobData.userId}...`);
 
-            emitDiagnostic('SAME_JOB_RETRY', { jobId: jobData.jobId, userId: jobData.userId, retryCount: retryCount, reason: reason });
+            emitDiagnostic('SAME_JOB_RETRY', { jobId: jobData.jobId, userId: jobData.userId, botId: jobData.botId, retryCount: retryCount, reason: reason });
 
             sessionStorage.setItem('linesync_jobid', jobData.jobId || '');
             sessionStorage.setItem('linesync_uid', jobData.userId || '');
@@ -1012,6 +1020,7 @@
             sessionStorage.setItem('linesync_type', jobData.messageType || 'text');
             sessionStorage.setItem('linesync_img', jobData.imageUrl || '');
             sessionStorage.setItem('linesync_link', jobData.linkUrl || '');
+            sessionStorage.setItem('linesync_job_botid', jobData.botId);
 
             isExecutingJob = false;
 
@@ -1025,10 +1034,10 @@
         } else {
             console.error(`❌ [SAME-JOB RECOVERY] Bounded retries exceeded (${retryCount}/${MAX_RETRIES}) or non-retryable error. Failing SAME job ${jobData.jobId} with reason: ${reason}`);
 
-            emitDiagnostic('SAME_JOB_RETRY_EXHAUSTED', { jobId: jobData.jobId, userId: jobData.userId, retryCount: retryCount, reason: reason });
+            emitDiagnostic('SAME_JOB_RETRY_EXHAUSTED', { jobId: jobData.jobId, userId: jobData.userId, botId: jobData.botId, retryCount: retryCount, reason: reason });
 
             sessionStorage.removeItem(retryKey);
-            await finishJob(jobData.jobId, jobData.userId, false, reason, isBlocked);
+            await finishJob(jobData.jobId, jobData.userId, false, reason, isBlocked, jobData.botId);
         }
     }
 

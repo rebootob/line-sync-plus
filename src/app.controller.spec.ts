@@ -855,6 +855,40 @@ describe('AppController', () => {
       expect(uploadRes.filename).toBeDefined();
       expect(uploadRes.url).toContain('/api/uploads/');
     });
+
+    it('15. handleSafeRecovery requires valid jobData.botId matching current OA context', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      const recoveryBlock = scriptContent.substring(
+        scriptContent.indexOf('function handleSafeRecovery'),
+        scriptContent.indexOf('processQueue()')
+      );
+      expect(recoveryBlock).toContain("if (!jobData || !jobData.botId || !isValidChatContextId(jobData.botId) || !verifyCurrentOAContext(jobData.botId))");
+      expect(recoveryBlock).toContain("clearLocalActiveJobState()");
+    });
+
+    it('16. same-job recovery persistence contains linesync_job_botid using jobData.botId', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      const recoveryBlock = scriptContent.substring(
+        scriptContent.indexOf('function handleSafeRecovery'),
+        scriptContent.indexOf('processQueue()')
+      );
+      expect(recoveryBlock).toContain("sessionStorage.setItem('linesync_job_botid', jobData.botId)");
+    });
+
+    it('17. upload contract uses exact http://localhost:<PORT>/api/uploads/<filename> format', async () => {
+      const uploadRes = await appController.uploadImage({
+        base64: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        filename: 'test_exact.png'
+      });
+
+      const port = process.env.PORT || 3005;
+      expect(uploadRes.success).toBe(true);
+      expect(uploadRes.url).toBe(`http://localhost:${port}/api/uploads/${uploadRes.filename}`);
+    });
   });
 });
 

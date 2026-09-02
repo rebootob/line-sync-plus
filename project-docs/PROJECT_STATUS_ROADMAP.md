@@ -104,26 +104,139 @@ The LineSync Plus safety model operates on strict **fail-closed** principles:
 
 ## 6. Problems Found & Work Packages
 
-1. **BUG-WP001** (CLOSED / PASS)
-2. **BUG-WP001-R1** (CLOSED / PASS)
-3. **BUG-WP001-UATLOG** (CLOSED / PASS)
-4. **BUG-WP001-UATLOG-R1** to **R5** (CLOSED / PASS)
-5. **BUG-WP002 / BUG-WP002-R1** (CLOSED / PASS)
-6. **SEC-WP001** (CLOSED / PASS)
-7. **OPS-WP001 / OPS-WP001-R1** (CLOSED / PASS)
-8. **REL-WP001 / REL-WP001-R1 / REL-WP001-R2** (CLOSED / PASS)
-9. **OA-WP001** (READY_FOR_CHATGPT_REVIEW / NOT CLOSED)
-10. **OA-WP001-R1** (READY_FOR_CHATGPT_REVIEW)
+Over the course of safety hardening, 12 work packages were identified, implemented, verified, and updated:
+
+1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard (CLOSED)**
+2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard (CLOSED)**
+3. **BUG-WP001-UATLOG — Persistent Browser Safety Diagnostic Logging (CLOSED)**
+4. **BUG-WP001-UATLOG-R1 — Low-Noise / Local-Only Diagnostic Logging (CLOSED)**
+5. **BUG-WP001-UATLOG-R2 — Trusted Loopback Enforcement / Clean Test Evidence (CLOSED)**
+6. **BUG-WP001-UATLOG-R3 — Navigation-Safe Diagnostic Persistence (CLOSED)**
+7. **BUG-WP001-UATLOG-R4 — Atomic Spool Flush / No Lost Concurrent Events (CLOSED)**
+8. **BUG-WP001-UATLOG-R5 — Confirmed-Write Spool Removal (CLOSED)**
+9. **BUG-WP002 — OA Context Poisoning / Invalid BotId 404 Loop (CLOSED)**
+10. **BUG-WP002-R1 — Preserve Active Job When OA Context Is Unknown (CLOSED)**
+11. **REL-WP001 / REL-WP001-R1 / REL-WP001-R2 — Single Worker / Multi-Tab Lock (CLOSED)**
+12. **OA-WP001 / OA-WP001-R1 — OA Context Isolation & Strict OA Identity Fencing (READY_FOR_CHATGPT_REVIEW / NOT CLOSED)**
 
 ---
 
-## 7. Status Summary
+## 7. Operational Findings
 
-- **OA-WP001-R1**: `READY_FOR_CHATGPT_REVIEW`
-- **OA-WP001**: `READY_FOR_CHATGPT_REVIEW` (NOT CLOSED)
-- **REL-WP001**: `CLOSED / PASS`
-- **REL-WP002**: `NOT STARTED`
-- **REL-WP003**: `NOT STARTED`
-- **Worker Version**: `28.5`
-- **Runtime Contract Version**: `2`
-- **Required Worker Version**: `28.5`
+- Browser page reloads cancel in-flight HTTP requests unless spooled synchronously in `sessionStorage`.
+- Direct socket peer validation (`req.socket.remoteAddress`) is required to prevent proxy header spoofing on local UAT diagnostic endpoints.
+- LINE OA context IDs strictly adhere to `^U[0-9a-fA-F]{32}$`; short IDs or manager account strings must never be treated as valid chat contexts.
+- Multi-tab browser coordination requires document-lifetime identity locks (`ensureTabIdentity`) to prevent cloned-tab identity reuse, combined with `navigator.locks` election mutex and durable `localStorage` lease records (`writeAndVerifyLeaderRecord`) to maintain ownership across same-tab navigations (`navigateAsLeader`).
+
+---
+
+## 8. UAT Evidence
+
+- **Safety Gate Status**: **PASS**
+- **BUG-WP001**: **CLOSED / PASS**
+- **BUG-WP001-UATLOG**: **CLOSED / PASS**
+- **BUG-WP002**: **CLOSED / PASS**
+- **SEC-WP001**: **CLOSED / PASS**
+- **OPS-WP001 / OPS-WP001-R1**: **CLOSED / PASS**
+- **REL-WP001 / REL-WP001-R1 / REL-WP001-R2**: **CLOSED / PASS**
+  - **UAT-01 (Multi-Tab Election)**: PASS (1 Leader, 1 Standby).
+  - **UAT-02 (Duplicate Tab Clone Defense)**: PASS (`[REL] DUPLICATE TAB IDENTITY DETECTED` -> new `tabSessionId` assigned, copied lease not reused).
+  - **UAT-03 (Leader Failover)**: PASS (Original leader closed -> `[REL] WORKER LEADER TAKEOVER`, 1 Leader active).
+  - **UAT-04 (Live Single Consumption)**: PASS (2 tabs open -> 1-recipient campaign sent by Leader alone, Target=1, Success=1, Fail=0, Duplicate Send=0).
+- **OA-WP001 / OA-WP001-R1**: **READY_FOR_CHATGPT_REVIEW (Live UAT pending)**
+- **83-recipient baseline UAT**: 83 targets / 80 success / 3 blocked / no observed 404
+- **UAT-1100 Campaign Evidence (LineSyncApp v28.2)**:
+  - Target = 1,100, Processed = 473, Success = 69, Blocked = 402, 404 = 2 (safe retry exhaust), zero misdeliveries.
+
+---
+
+## 9. Known Risks & Technical Debt
+
+### Secret Hygiene P0 Mandate (`SEC-WP001` STATUS: COMPLETED / CLOSED)
+- **CRITICAL**: The repository `rebootob/line-sync-plus` is **PUBLIC**.
+- **PROHIBITED**: Under no circumstances may `.env` files, API keys, passwords, database credentials, access tokens, refresh tokens, private keys, or LINE channel secrets be committed or pushed to Git.
+- **SEC-WP001 Status**: Untracked secret `telegram-config.json` from Git. Compromised token revoked and rotated via `@BotFather` by Project Owner. Live Telegram test after rotation = **PASS**.
+
+### Multi-Part Message Residual Risk (REL-WP003)
+- For multi-part messages (`image_link`), if a browser process crashes after physical image send completes but before text send/finishJob completes, a future worker could re-send the image part without idempotency ledger protection. Documented as residual risk for REL-WP003.
+
+---
+
+## 10. Target Vision
+
+To establish LineSync Plus as a robust, secure, and production-ready automated communication platform for LINE Official Account operations.
+
+---
+
+## 11. Development Roadmap
+
+- **Phase 0 — Security & Reliability Foundation**: **IN PROGRESS**
+  - Safety hardening (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002`, `BUG-WP002-R1`): **COMPLETED**
+  - `SEC-WP001` (Secret Hygiene): **COMPLETED / CLOSED**
+  - `OPS-WP001` (Runtime Version Gate): **COMPLETED / CLOSED**
+  - `OPS-WP001-R1` (Runtime Retry + Fail-Closed Corrective): **COMPLETED / CLOSED**
+  - `REL-WP001 / REL-WP001-R1 / REL-WP001-R2` (Single Worker / Multi-Tab Lock): **COMPLETED / CLOSED**
+  - `OA-WP001 / OA-WP001-R1` (OA Context Isolation & Strict Identity Fencing): **READY_FOR_CHATGPT_REVIEW**
+  - `REL-WP002`: **NOT STARTED**
+  - `REL-WP003`: **NOT STARTED**
+- **Phase 1 — Operations & Monitoring**: **NOT STARTED**
+- **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
+- **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
+- **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
+- **Phase 5 — Analytics & Optimization**: Performance reporting, delivery throughput metrics, and campaign success analytics.
+
+---
+
+## 12. Proposed Feature Priority
+
+1. **P0 (Critical Safety & Security)**:
+   - OA Context Isolation & Strict Identity Fencing (`OA-WP001 / OA-WP001-R1` READY_FOR_CHATGPT_REVIEW).
+   - Single worker multi-tab lock (`REL-WP001 / R1 / R2` COMPLETED / CLOSED).
+   - Operational runtime version gate (`OPS-WP001 / R1` COMPLETED / CLOSED).
+   - Secret hygiene & test isolation (`SEC-WP001` COMPLETED / CLOSED).
+2. **P1 (Observability & Operational Hardening)**:
+   - Backend Job Lease & Heartbeat (`REL-WP002` NOT STARTED).
+   - Idempotent Send Ledger (`REL-WP003` NOT STARTED).
+   - Real-time diagnostic event stream UI widget in Dashboard.
+
+---
+
+## 13. Technical Evolution
+
+- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 -> v28.4 -> v28.5 (OA-WP001 / R1).
+- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, fail-closed runtime version gates, single-worker multi-tab election locks with document-lifetime tab identity clone defense, read-back persistence verification, complete navigation holds, atomic pre-send mutex confirmation, and strict multi-OA identity fencing.
+
+---
+
+## 14. Recommended Next Work Package Candidate
+
+- **OA-WP001 / OA-WP001-R1**: OA Context Isolation & Strict OA Identity Fencing (**READY_FOR_CHATGPT_REVIEW**).
+
+---
+
+## 15. Success Metrics
+
+- **Zero Misdeliveries**: 0% message delivery to wrong recipients or wrong OA context.
+- **Zero Duplicate Tab Workers**: 0 competing `/campaign/next` calls or duplicate DOM automation from multiple open or duplicated LINE OA tabs (Verified in REL-WP001 UAT-01..04).
+- **Zero Incompatible Worker Claims**: 0 campaign jobs claimed by outdated browser workers.
+- **Zero Poisoning Loops**: 0 infinite 404 redirect loops on invalid bot IDs.
+- **100% Spool Integrity**: 0 lost navigation diagnostic events during page transitions.
+- **100% Test Pass Rate**: All Jest unit tests passing cleanly.
+
+---
+
+## 16. Source-of-Truth Policy
+
+- All code changes MUST exist in BOTH local workspace (`C:\Users\allda\Desktop\Dev\git\line-sync-plus`) AND GitHub repository (`rebootob/line-sync-plus` branch `main`).
+- `ACTIVE_TASK.md` tracks current active work package.
+- `CHAT_HANDOFF.md` tracks Control Plane evaluation state.
+- `PROJECT_STATUS_ROADMAP.md` tracks complete architectural roadmap and incident history.
+
+---
+
+## 17. Immediate Decision Gate
+
+Phase 0 OA-WP001-R1 is READY_FOR_CHATGPT_REVIEW.
+Worker Version: 28.5 | Runtime Contract: 2 | Required Worker: 28.5
+REL-WP001 is CLOSED / PASS.
+Do NOT claim Live UAT PASS until Live UAT evidence is accepted.
