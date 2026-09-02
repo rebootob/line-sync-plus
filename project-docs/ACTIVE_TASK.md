@@ -1,8 +1,8 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: SAFE-WP001-R3 — Active Worker Telemetry Heartbeat
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: NONE
+STATUS: SAFE-WP001 CLOSED / PASS
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: REL-WP002 — Job Lease + Heartbeat
 NEXT_CANDIDATE_STATUS: READY / NOT STARTED / AUTHORIZATION REQUIRED
@@ -10,45 +10,68 @@ NEXT_CANDIDATE_STATUS: READY / NOT STARTED / AUTHORIZATION REQUIRED
 
 ---
 
-## 📋 Work Package Summary: SAFE-WP001-R3 (READY FOR CHATGPT REVIEW)
+## 📋 Work Package Status Summary
 
-### Status Summary
-- **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `NOT CLOSED / R3 READY_FOR_CHATGPT_REVIEW`
-- **SYNC-WP001**: `CLOSED / PASS` (Accepted on Worker v28.8)
-- **OA-WP001**: `CLOSED / PASS` (Accepted on Worker v28.5)
-- **REL-WP001**: `CLOSED / PASS`
-- **REL-WP002**: `READY / NOT STARTED / AUTHORIZATION REQUIRED`
+- **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `CLOSED / PASS`
+  - **SAFE-WP001-R1**: `CLOSED / PASS`
+  - **SAFE-WP001-R2**: `CLOSED / PASS`
+  - **SAFE-WP001-R3**: `CLOSED / PASS`
+- **SYNC-WP001 — LINE OA Customer Directory Sync**: `CLOSED / PASS` (Accepted on Worker v28.8)
+- **OA-WP001 — OA Context Isolation & Strict Identity Fencing**: `CLOSED / PASS` (Accepted on Worker v28.5)
+- **REL-WP001 — Single Worker Multi-Tab Lock**: `CLOSED / PASS`
+- **REL-WP002 — Job Lease + Heartbeat**: `READY / NOT STARTED / AUTHORIZATION REQUIRED`
 - **REL-WP003**: `NOT STARTED`
 
 ### Version Contracts
 - **Worker Version**: `28.12`
 - **Runtime Contract Version**: `2`
 - **Required Worker Version**: `28.12`
-- **Implementation Baseline**: `07ac293a08d2c412890d3d20dde486e65e4177b7`
+- **Implementation Baseline**: `fed96f1ce97c552066b7de1b7e2d6dd1c83d6591`
 
 ---
 
-## 📜 Live UAT Findings (Worker v28.11 Baseline Evidence)
+## 📜 Accepted Live UAT Evidence (SAFE-WP001)
 
-- **Observed Behavior**: Worker v28.11 successfully processed and delivered a 2-recipient test campaign created while PAUSED.
-- **Safety Confirmations**: No recipient mismatch, no OA mismatch, and no protection state errors occurred.
-- **Observed Deficiency**: Upon return to Dashboard, telemetry displayed `unknown` for `10m`, `1h`, `Next Send`, and `Cooling` because backend telemetry expires after 30s and idle workers did not publish heartbeats.
-- **Conclusion**: Campaign send succeeded; telemetry freshness UAT failed on v28.11 -> resolved in v28.12 (`SAFE-WP001-R3`).
+### Worker v28.11 Baseline Test Run
+- 2-recipient text campaign created while Master Bot was **PAUSED**.
+- Exactly 2 jobs queued and processed to completion.
+- LINE messages/send physically observed and verified.
+- Zero recipient mismatch, zero OA mismatch, and zero `ACCOUNT_PROTECTION_STATE_UNAVAILABLE` errors.
+- Initial post-run telemetry became `unknown` after 30s due to missing idle heartbeat.
+
+### Worker v28.12 Telemetry Heartbeat Verification
+- Worker v28.12 introduced active-worker telemetry heartbeat in `processQueue()`.
+- **Accepted Live UAT Dashboard Telemetry**:
+  - Account Protection: **ON**
+  - 10m: **0 / 60**
+  - 1h: **2 / 300**
+  - Next Send: **now**
+  - Cooling: **none**
+- **UAT Interpretation & Validation**:
+  - The 2 previously accepted send reservations correctly aged out of the rolling 10-minute window while remaining inside the rolling 1-hour window.
+  - Telemetry heartbeat maintains freshness while Worker is idle without creating fake timestamps.
+  - Rolling-window telemetry accurately reflects persisted reservation history.
+  - Dashboard no longer falls back to stale `unknown` status while active Worker is healthy and polling.
 
 ---
 
-## 🛡️ Corrective Adjustments (SAFE-WP001-R3)
+## 🛡️ Final SAFE-WP001 Protection & Safety Contract
 
-1. **Active Worker Telemetry Heartbeat (`run/LineSyncApp.js`)**:
-   - Integrated heartbeat into existing `processQueue()` polling loop (~4s cadence).
-   - Heartbeat executes ONLY after passing leadership check, runtime compatibility check, and OA alignment check.
-   - Publishes observational telemetry (`publishAccountProtectionTelemetry(validBotId, 0)`) without creating send reservations or mutating rate limit counters.
-   - Keeps Dashboard Account Protection telemetry continuously fresh while active worker is idle.
+- **Per-OA Protection State**: Scoped by `botId`.
+- **Send Rate Limits**: Minimum send gap = 10 seconds; Rolling 10-minute cap = 60 send actions; Rolling 1-hour cap = 300 send actions.
+- **Fail-Closed Protection Storage**: Strict schema validation (`ACCOUNT_PROTECTION_STATE_UNAVAILABLE` on malformed data).
+- **Exact Reservation Verification**: Exact array length/order/value read-back before returning reservation object `{ botId, reservedAt }`. Final reservation revalidated immediately before physical clicks/keydowns.
+- **Context Revalidation**: Worker leadership, target recipient, and active OA revalidated post-wait.
+- **Target Hygiene**: Excludes blocked recipients (`isBlocked === true`) and deduplicates target IDs on `POST /api/campaign/add`.
+- **Adaptive Error Cooldown**: 30s / 60s / 120s / max 300s. 10 consecutive errors triggers circuit breaker stop.
+- **Observational Telemetry**: Heartbeat runs via `processQueue()` (~4s cadence) without mutating timestamps or claiming jobs. Stale telemetry (> 30s) displays `unknown` (never fake zero).
+
+> ⚠️ **Compliance Notice**: SAFE-WP001 reduces operational risk. It does NOT guarantee LINE will never restrict or suspend an OA. Internal thresholds are LineSync Plus safety defaults, NOT official LINE API limits. No detection-evasion functionality is included.
 
 ---
 
-## 🚀 Next Work Package Candidate
+## 🚀 Next Candidate Work Package
 
 - **Candidate**: `REL-WP002 — Job Lease + Heartbeat`
 - **Status**: `READY / NOT STARTED / AUTHORIZATION REQUIRED`
-- **Note**: Awaits explicit authorization from Project Owner before commencement. Do NOT start automatically.
+- **Note**: Awaits explicit Project Owner authorization before starting. Do NOT start automatically.

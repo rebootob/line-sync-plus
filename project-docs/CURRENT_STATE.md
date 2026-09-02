@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-03 (Post SAFE-WP001-R3 Implementation)
+**Last Updated**: 2026-09-03 (Post SAFE-WP001 Closure)
 
 ---
 
@@ -28,30 +28,23 @@
 
 ---
 
-## 🛡️ Account Protection & Send Compliance Guard (SAFE-WP001 STATUS: NOT CLOSED / R3 READY_FOR_CHATGPT_REVIEW)
+## 🛡️ Account Protection & Send Compliance Guard (SAFE-WP001 STATUS: CLOSED / PASS)
 
 - **Worker Version**: `28.12` (`run/LineSyncApp.js` v28.12).
 - **Backend Required Version**: `28.12` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
-- **Baseline**: `07ac293a08d2c412890d3d20dde486e65e4177b7`.
-- **Active Worker Telemetry Heartbeat (SAFE-WP001-R3)**:
-  - `processQueue()` polling loop publishes telemetry heartbeat (`publishAccountProtectionTelemetry(validBotId, 0)`) on ~4s cadence after verifying leadership, runtime compatibility, and OA alignment.
-  - Heartbeat is strictly observational (no reservation creation, timestamp mutations, or job claims).
-  - Standby / non-leader workers do not publish heartbeats.
-- **Strict Protection State Schema**:
-  - `loadProtectionTimestamps` throws `ACCOUNT_PROTECTION_STATE_UNAVAILABLE` on reading malformed storage or non-finite timestamp array members.
-- **Exact Read-Back Timestamp Reservation**:
-  - `recordProtectionSendAction` enforces exact array length, order, and value read-back verification before returning reservation object `{ botId, reservedAt }`.
-- **Final Reservation Revalidation**:
-  - `verifyProtectionReservation` verifies that `reservation.reservedAt` matches the newest reservation in storage immediately before pointer/click/keydown events on image send, text button, and Enter key fallback.
-- **Truthful Telemetry & Loopback Write Trust**:
-  - `POST /api/account-protection/telemetry` enforces loopback IP, matching `X-LineSync-Worker-Version`, matching `X-LineSync-OA-Context`, header/body `botId` alignment, and strict numeric schema.
-- **Internal Protection Defaults**:
-  - `MIN_SEND_GAP_MS = 10000` (10s gap)
-  - `MAX_SEND_ACTIONS_10_MIN = 60` (rolling 10m limit)
-  - `MAX_SEND_ACTIONS_1_HOUR = 300` (rolling 1h limit)
-- **Adaptive System-Error Backoff**:
-  - Error #1 = 30s, Error #2 = 60s, Error #3 = 120s, Error #4+ = max 300s.
+- **Baseline**: `fed96f1ce97c552066b7de1b7e2d6dd1c83d6591`.
+- **Accepted Live UAT Evidence**:
+  - **v28.11 Campaign Send**: 2-recipient test campaign processed to completion; physical sends verified; zero recipient/OA mismatch; zero storage errors.
+  - **v28.12 Heartbeat & Telemetry**: Dashboard telemetry displayed `Protection: ON`, `10m: 0 / 60`, `1h: 2 / 300`, `Next Send: now`, `Cooling: none`. The 2 send reservations aged out of 10m window while remaining in 1h window. Heartbeat keeps telemetry fresh while idle without creating fake timestamps.
+- **Safety Contract Summary**:
+  - Per-OA rate limits: Minimum gap = 10s; Rolling 10m cap = 60 sends; Rolling 1h cap = 300 sends.
+  - Fail-closed storage reading: Throws `ACCOUNT_PROTECTION_STATE_UNAVAILABLE` on malformed storage or invalid timestamps.
+  - Exact read-back verification: Validates array length, order, and values before returning `{ botId, reservedAt }`. Revalidated immediately before physical sends.
+  - Target hygiene: Deduplicates target IDs and excludes blocked users (`isBlocked === true`) before campaign creation.
+  - Adaptive error backoff: 30s / 60s / 120s / max 300s. 10 consecutive errors triggers circuit breaker stop.
+  - Active worker telemetry heartbeat: `processQueue()` polling loop (~4s cadence) updates telemetry observatorially. Stale (> 30s) telemetry displays `unknown` (never fake zero).
+  > ⚠️ **Notice**: SAFE-WP001 reduces operational risk. It does NOT guarantee LINE will never restrict or suspend an OA. Thresholds are safety defaults, not official LINE limits. No detection-evasion functionality is included.
 
 ---
 
@@ -84,6 +77,6 @@
 
 ## 🚀 Work Packages Overview
 
-- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001` (`CLOSED / PASS`).
-- **Active Work Package**: `SAFE-WP001-R3` (`READY_FOR_CHATGPT_REVIEW`).
+- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001` (`CLOSED / PASS`).
+- **Active Work Package**: `NONE`.
 - **Next Candidate**: `REL-WP002 — Job Lease + Heartbeat` (`READY / NOT STARTED / AUTHORIZATION REQUIRED`).
