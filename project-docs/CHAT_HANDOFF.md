@@ -4,7 +4,7 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: Initial BUG-WP001-R1 commit pending
+* HEAD: 3ed60b6 (fix(security): implement full-lifecycle lock, same-job recovery and zero-tolerance send guards BUG-WP001-R1)
 * Working Tree: Clean (BUG-WP001-R1 implementation completed)
 
 ## Project Purpose
