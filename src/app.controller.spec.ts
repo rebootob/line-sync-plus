@@ -480,11 +480,11 @@ describe('AppController', () => {
       };
     });
 
-    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.6', () => {
+    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.7', () => {
       const res = appController.getRuntimeVersion();
       expect(res).toEqual({
         runtimeContractVersion: 2,
-        requiredWorkerVersion: '28.6',
+        requiredWorkerVersion: '28.7',
       });
     });
 
@@ -497,7 +497,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.6',
+        requiredWorkerVersion: '28.7',
       });
       // Prove version gate executes BEFORE job query/claim logic
       expect(findSpy).not.toHaveBeenCalled();
@@ -512,7 +512,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.6',
+        requiredWorkerVersion: '28.7',
       });
       expect(findSpy).not.toHaveBeenCalled();
     });
@@ -534,10 +534,10 @@ describe('AppController', () => {
       expect(saveCampSpy).not.toHaveBeenCalled();
     });
 
-    it('5. GET /api/campaign/next with EXACT version ("28.6") and valid OA header -> reaches normal job claim logic', async () => {
+    it('5. GET /api/campaign/next with EXACT version ("28.7") and valid OA header -> reaches normal job claim logic', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
 
-      const res = await appController.getNextJob('28.6', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const res = await appController.getNextJob('28.7', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
 
       expect(mockRes.statusCode).toBe(200);
       expect(findSpy).toHaveBeenCalled();
@@ -662,23 +662,23 @@ describe('AppController', () => {
       findSpy.mockClear();
 
       // Missing OA header
-      const resMissingOa = await appController.getNextJob('28.6', undefined, mockRes);
+      const resMissingOa = await appController.getNextJob('28.7', undefined, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMissingOa).toEqual({ status: 'missing_oa_context', message: 'X-LineSync-OA-Context header missing or invalid' });
       expect(findSpy).not.toHaveBeenCalled();
 
       // OA Mismatch (worker sends foreign OA)
-      const resMismatchOa = await appController.getNextJob('28.6', 'U11111111222222223333333344444444', mockRes);
+      const resMismatchOa = await appController.getNextJob('28.7', 'U11111111222222223333333344444444', mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMismatchOa.status).toBe('oa_context_mismatch');
       expect(findSpy).not.toHaveBeenCalled();
     });
 
-    it('6. Tampermonkey script contains version 28.6, controlled OA switch, job OA fencing, and physical send OA guard', () => {
+    it('6. Tampermonkey script contains version 28.7, controlled OA switch, job OA fencing, and physical send OA guard', () => {
       const fs = require('fs');
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
 
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.6'");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.7'");
       expect(scriptContent).toContain('headers[\'X-LineSync-OA-Context\']');
       expect(scriptContent).toContain('checkAndExecuteControlledOaSwitch');
       expect(scriptContent).toContain('verifyCurrentOAContext');
@@ -829,7 +829,7 @@ describe('AppController', () => {
         message: 'Hello'
       } as any);
 
-      const jobRes: any = await appController.getNextJob('28.6', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const jobRes: any = await appController.getNextJob('28.7', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
       expect(jobRes.botId).toBe('U09d6b978fcbfb5275e533ca9b788eb22');
     });
 
@@ -1111,6 +1111,68 @@ describe('AppController', () => {
       expect(htmlContent).toContain('${API_BASE}/bot/status');
       expect(htmlContent).toContain("typeof statusData.enabled !== 'boolean'");
       expect(htmlContent).not.toContain('if (isBotEnabled)');
+    });
+  });
+
+  describe('SYNC-WP001-R4 — Live Contacts Response Contract & Rate-Limit Tests', () => {
+    const fs = require('fs');
+
+    it('1. userscript requires Array.isArray(resp.list)', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('Array.isArray(resp.list)');
+    });
+
+    it('2. userscript does NOT use resp.contacts for contacts collection', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).not.toContain('resp.contacts');
+      expect(scriptContent).toContain('const contacts = resp.list;');
+    });
+
+    it('3. pagination still consumes resp.next', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('const rawNext = resp.next;');
+    });
+
+    it('4. display name prefers profile.nickname', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("typeof profile.nickname === 'string' && profile.nickname.trim()");
+      expect(scriptContent).toContain('displayName = profile.nickname.trim();');
+    });
+
+    it('5. display name falls back to profile.name', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("typeof profile.name === 'string' && profile.name.trim()");
+      expect(scriptContent).toContain('displayName = profile.name.trim();');
+    });
+
+    it('6. identity remains profile.userId', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('const rawUid = profile ? profile.userId : null;');
+      expect(scriptContent).not.toContain('lineUserId: item.contactId');
+    });
+
+    it('7. 429/403 retry is bounded', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('res.status === 429 || res.status === 403');
+      expect(scriptContent).toContain('const MAX_PAGE_RETRIES = 3;');
+      expect(scriptContent).toContain('if (pageRetryCount > MAX_PAGE_RETRIES)');
+    });
+
+    it('8. rate-limit exhaustion cannot report PASS', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('Rate limit retries exhausted');
+      expect(scriptContent).toContain("updateUI(`❌ ถูกระงับคำขอชั่วคราวจาก LINE API (HTTP ${resp.status}) การ Sync ไม่เสร็จสมบูรณ์`, false, true);");
+    });
+
+    it('9. Worker = 28.7', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.7'");
+      expect(scriptContent).toContain("@version      28.7");
+    });
+
+    it('10. Required Worker = 28.7', () => {
+      const versionRes = appController.getRuntimeVersion();
+      expect(versionRes.requiredWorkerVersion).toBe('28.7');
     });
   });
 });

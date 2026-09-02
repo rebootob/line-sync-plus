@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.6
+// @version      28.7
 // @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SYNC-WP001 Directory Sync Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.6';
+    const WORKER_VERSION = '28.7';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -1619,6 +1619,9 @@
         let batchRecords = [];
         const BATCH_SIZE = 200;
 
+        let pageRetryCount = 0;
+        const MAX_PAGE_RETRIES = 3;
+
         try {
             while (pagesFetched < maxPages) {
                 let url = `https://chat.line.biz/api/v2/bots/${botId}/contacts?query=&sortKey=DISPLAY_NAME&sortOrder=ASC&filterKey=ALL&limit=20`;
@@ -1642,6 +1645,8 @@
                                 try {
                                     resolve(JSON.parse(res.responseText));
                                 } catch(e) { resolve(null); }
+                            } else if (res.status === 429 || res.status === 403) {
+                                resolve({ isRateLimited: true, status: res.status });
                             } else {
                                 resolve(null);
                             }
@@ -1650,19 +1655,34 @@
                     });
                 });
 
-                if (!resp || !Array.isArray(resp.contacts)) {
+                if (resp && resp.isRateLimited) {
+                    pageRetryCount++;
+                    if (pageRetryCount > MAX_PAGE_RETRIES) {
+                        console.error(`🛑 [SYNC] Rate limit retries exhausted (HTTP ${resp.status}) on page ${pagesFetched}. Aborting.`);
+                        updateUI(`❌ ถูกระงับคำขอชั่วคราวจาก LINE API (HTTP ${resp.status}) การ Sync ไม่เสร็จสมบูรณ์`, false, true);
+                        return;
+                    }
+                    const cooldownMs = 1000 * pageRetryCount;
+                    console.warn(`⚠️ [SYNC] HTTP ${resp.status} Rate Limit / Forbidden on page ${pagesFetched}. Retrying in ${cooldownMs}ms (Attempt ${pageRetryCount}/${MAX_PAGE_RETRIES})...`);
+                    await new Promise(r => setTimeout(r, cooldownMs));
+                    pagesFetched--;
+                    continue;
+                }
+
+                pageRetryCount = 0;
+
+                if (!resp || !Array.isArray(resp.list)) {
                     console.error(`🛑 [SYNC] LINE Contacts API returned invalid response structure on page ${pagesFetched}. Aborting.`);
-                    updateUI(`❌ รูปแบบข้อมูลตอบกลับจาก LINE Contacts API 不正確 (ไม่ถูกต้อง) หน้า ${pagesFetched}`, false, true);
+                    updateUI(`❌ รูปแบบข้อมูลตอบกลับจาก LINE Contacts API ไม่ถูกต้อง หน้า ${pagesFetched}`, false, true);
                     return;
                 }
 
-                const contacts = resp.contacts;
+                const contacts = resp.list;
                 contactsFetched += contacts.length;
 
                 for (const item of contacts) {
                     const profile = item ? item.profile : null;
                     const rawUid = profile ? profile.userId : null;
-                    const name = profile ? profile.name : null;
 
                     if (!rawUid || typeof rawUid !== 'string' || !/^U[0-9a-fA-F]{32}$/.test(rawUid.trim())) {
                         invalid++;
@@ -1676,10 +1696,19 @@
                         continue;
                     }
 
+                    let displayName = 'ลูกค้า';
+                    if (profile) {
+                        if (typeof profile.nickname === 'string' && profile.nickname.trim()) {
+                            displayName = profile.nickname.trim();
+                        } else if (typeof profile.name === 'string' && profile.name.trim()) {
+                            displayName = profile.name.trim();
+                        }
+                    }
+
                     seenSyncUserIds.add(uid);
                     batchRecords.push({
                         lineUserId: uid,
-                        displayName: (name && typeof name === 'string') ? name.trim() : 'ลูกค้า'
+                        displayName: displayName
                     });
                 }
 
@@ -1728,6 +1757,8 @@
                     updateUI(`❌ จำนวนหน้าที่ดึงเกินขีดจำกัดสูงสุด (${maxPages.toLocaleString()} หน้า) การ Sync ไม่เสร็จสมบูรณ์`, false, true);
                     return;
                 }
+
+                await new Promise(r => setTimeout(r, 200));
             }
 
             if (!paginationCompleted) {

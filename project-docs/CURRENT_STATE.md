@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post SYNC-WP001-R3 Strict Dashboard Bot Status Response Validation)
+**Last Updated**: 2026-09-02 (Post SYNC-WP001-R4 Confirmed Contacts Schema + LINE Nickname Mapping + Rate-Limit Guard)
 
 ---
 
@@ -28,16 +28,17 @@
 
 ---
 
-## 🔄 Customer Directory Synchronization (SYNC-WP001-R3 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔄 Customer Directory Synchronization (SYNC-WP001-R4 STATUS: READY_FOR_CHATGPT_REVIEW)
 
-- **Worker Version**: `28.6` (`run/LineSyncApp.js` v28.6).
-- **Backend Required Version**: `28.6` (`src/runtime-version.ts`).
+- **Worker Version**: `28.7` (`run/LineSyncApp.js` v28.7).
+- **Backend Required Version**: `28.7` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
-- **Dashboard Sync Gate (`index.html`)**:
-  - `startCustomerSync()` fetches `${API_BASE}/bot/status` directly from backend before opening contact sync tab.
-  - Strictly validates boolean schema: `typeof statusData.enabled !== 'boolean'`.
-  - Fail-closed error handling: rejects sync if `/bot/status` check fails or returns invalid/non-boolean response.
-  - Paused Master Bot enforcement: blocks sync if `enabled === true` and alerts `"กรุณา Pause Master Bot ก่อน Sync รายชื่อลูกค้า"`.
+- **Live Response Alignment**:
+  - Consumes `resp.list` array and `resp.next` cursor from `GET /api/v2/bots/{botId}/contacts`.
+  - Maps `displayName` using `profile.nickname` -> `profile.name` -> `"ลูกค้า"`.
+  - Identity remains `profile.userId`.
+  - Bounded 429/403 rate-limit retries (max 3 retries, increasing cooldown) + 200ms page pacing.
+  - Fail-closed pagination and schema validation; aborts as ERROR on retry exhaustion.
 
 ---
 
@@ -80,9 +81,9 @@
 - Customer sync trigger button `🔄 Sync รายชื่อลูกค้า` (`btnSyncCustomers`).
 - Authoritative backend `/bot/status` query gate with strict `typeof statusData.enabled === 'boolean'` validation in `startCustomerSync()`.
 
-### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.6)
+### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.7)
 - Fail-closed sequential LINE contacts directory sync with Web Lock protection (`linesync_customer_sync_v1`).
-- Granular 9-metric full-run reporting and Thai summary banner.
+- Aligned `resp.list` schema parser, `profile.nickname` display name mapping, 429/403 rate-limit retries, and granular 9-metric full-run reporting banner.
 
 ---
 
@@ -96,7 +97,7 @@
   - `REL-WP001`, `REL-WP001-R1`, `REL-WP001-R2` (`CLOSED / PASS`)
   - `OA-WP001`, `OA-WP001-R1` (`CLOSED / PASS`)
 - **Active Work Package**:
-  - `SYNC-WP001-R3 — Strict Dashboard Bot Status Response Validation` (`READY_FOR_CHATGPT_REVIEW`)
-  - `SYNC-WP001 — LINE OA Customer Directory Sync to DB` (`NOT CLOSED / LIVE UAT BLOCKED PENDING R3 REVIEW`)
+  - `SYNC-WP001-R4 — Confirmed Contacts Schema + LINE Nickname Mapping + Rate-Limit Guard` (`READY_FOR_CHATGPT_REVIEW`)
+  - `SYNC-WP001 — LINE OA Customer Directory Sync to DB` (`NOT CLOSED / LIVE UAT BLOCKED PENDING R4 REVIEW`)
 - **Next Work Package Candidate**:
   - `REL-WP002 — Job Lease + Heartbeat` (`READY / NOT STARTED` — Project Owner authorization required)
