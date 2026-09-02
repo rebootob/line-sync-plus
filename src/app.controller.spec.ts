@@ -185,6 +185,26 @@ describe('AppController', () => {
       expect(appendSpy).toHaveBeenCalled();
       expect(writtenLines.length).toBe(1);
     });
+
+    it('10. should preserve original clientTimestamp for queued navigation-critical events', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const originalTime = '2026-09-02T08:00:00.000Z';
+      const result = await appController.logBrowserEvent(
+        {
+          event: 'NAVIGATE_TARGET',
+          clientTimestamp: originalTime,
+          jobId: 'job_nav_1',
+          expectedUserId: 'U999',
+        },
+        mockReq,
+      );
+
+      expect(result).toEqual({ success: true });
+      expect(writtenLines.length).toBe(1);
+      const parsed = JSON.parse(writtenLines[0]);
+      expect(parsed.event).toBe('NAVIGATE_TARGET');
+      expect(parsed.clientTimestamp).toBe(originalTime);
+    });
   });
 });
 

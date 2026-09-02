@@ -2,7 +2,7 @@
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
 // @version      28.1
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP001-UATLOG-R1 Low-Noise / Local-Only Diagnostic Logging)
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP001-UATLOG-R3 Navigation-Safe Diagnostic Persistence)
 // @match        https://chat.line.biz/*
 // @match        https://manager.line.biz/*
 // @grant        GM_xmlhttpRequest
@@ -15,11 +15,22 @@
     const API_BASE = 'http://localhost:3005/api';
     const CHECK_INTERVAL = 4000;
     const MAX_RETRIES = 2;
+    const MAX_SPOOL_SIZE = 50;
+
+    const NAVIGATION_EVENTS = new Set([
+        'JOB_RECEIVED',
+        'NAVIGATE_TARGET',
+        'NAVIGATION_404',
+        'SAME_JOB_RECOVERY_START',
+        'SAME_JOB_RETRY',
+        'SAME_JOB_RETRY_EXHAUSTED'
+    ]);
 
     let consecutiveErrorCount = parseInt(sessionStorage.getItem('linesync_consecutive_errors') || '0', 10);
     let isExecutingJob = false;
+    let isFlushingSpool = false;
 
-    console.log("🤖 LineSync Plus Bot v28.1: พร้อมทำงาน (BUG-WP001-UATLOG-R1 Active)...");
+    console.log("🤖 LineSync Plus Bot v28.1: พร้อมทำงาน (BUG-WP001-UATLOG-R3 Active)...");
 
     function getTabSessionId() {
         let id = sessionStorage.getItem('linesync_tab_session_id');
@@ -30,12 +41,82 @@
         return id;
     }
 
-    // 🛡️ Observability Emitter (Fire-and-Forget, Non-Blocking, Never Throws)
+    // 🛡️ Bounded Diagnostic Spool in sessionStorage for Navigation Safety
+    function getSpool() {
+        try {
+            const raw = sessionStorage.getItem('linesync_pending_diagnostics');
+            if (raw) {
+                const arr = JSON.parse(raw);
+                if (Array.isArray(arr)) return arr;
+            }
+        } catch (e) {}
+        return [];
+    }
+
+    function saveSpool(spool) {
+        try {
+            while (spool.length > MAX_SPOOL_SIZE) {
+                spool.shift();
+            }
+            sessionStorage.setItem('linesync_pending_diagnostics', JSON.stringify(spool));
+        } catch (e) {}
+    }
+
+    function enqueueSpool(payload) {
+        try {
+            const sanitized = {
+                clientTimestamp: payload.clientTimestamp || new Date().toISOString(),
+                event: String(payload.event || 'UNKNOWN').slice(0, 50),
+                scriptVersion: '28.1',
+                tabSessionId: getTabSessionId(),
+                jobId: String(payload.jobId || '').slice(0, 100),
+                expectedUserId: String(payload.expectedUserId || payload.userId || '').slice(0, 100),
+                botId: String(payload.botId || getBotId() || '').slice(0, 100),
+                currentPath: String(payload.currentPath || window.location.pathname).split('?')[0].split('#')[0].slice(0, 200),
+                retryCount: typeof payload.retryCount === 'number' ? payload.retryCount : (parseInt(payload.retryCount, 10) || 0),
+                reason: String(payload.reason || '').slice(0, 200)
+            };
+
+            const spool = getSpool();
+            spool.push(sanitized);
+            saveSpool(spool);
+        } catch (e) {}
+    }
+
+    async function flushPendingDiagnostics() {
+        if (isFlushingSpool) return;
+        isFlushingSpool = true;
+
+        try {
+            let spool = getSpool();
+            if (spool.length === 0) return;
+
+            const remaining = [];
+            for (let i = 0; i < spool.length; i++) {
+                const item = spool[i];
+                if (!item || !item.event) continue;
+
+                try {
+                    await fetchAPI('/diagnostics/browser-event', 'POST', item);
+                } catch (err) {
+                    remaining.push(item);
+                }
+            }
+
+            saveSpool(remaining);
+        } catch (e) {
+            // Safety invariant: logging failure must never affect bot execution
+        } finally {
+            isFlushingSpool = false;
+        }
+    }
+
+    // 🛡️ Observability Emitter (Navigation-Safe, Fire-and-Forget, Non-Blocking, Never Throws)
     function emitDiagnostic(eventName, context = {}) {
         try {
             const jobId = context.jobId || sessionStorage.getItem('linesync_jobid') || '';
             const payload = {
-                clientTimestamp: new Date().toISOString(),
+                clientTimestamp: context.clientTimestamp || new Date().toISOString(),
                 event: eventName,
                 scriptVersion: '28.1',
                 tabSessionId: getTabSessionId(),
@@ -47,7 +128,14 @@
                 reason: context.reason || ''
             };
 
-            fetchAPI('/diagnostics/browser-event', 'POST', payload).catch(() => {});
+            if (NAVIGATION_EVENTS.has(eventName)) {
+                // Synchronously enqueue navigation-critical events into spool BEFORE window.location.href occurs
+                enqueueSpool(payload);
+            } else {
+                fetchAPI('/diagnostics/browser-event', 'POST', payload).catch(() => {
+                    enqueueSpool(payload);
+                });
+            }
         } catch (e) {
             // Safety invariant: logging failure must never affect bot execution
         }
@@ -156,10 +244,8 @@
     function verifyCurrentRecipient(expectedUserId) {
         if (!expectedUserId) return false;
 
-        // Must not be on an error page
         if (checkIfErrorPage()) return false;
 
-        // Path check: URL pathname must contain /chat/{expectedUserId}
         const pathname = window.location.pathname;
         const expectedPattern = new RegExp(`/chat/${expectedUserId}(?:/|$)`, 'i');
         const urlMatchesRecipient = expectedPattern.test(pathname);
@@ -170,7 +256,6 @@
             return false;
         }
 
-        // Additional DOM verification: ensure no mismatch in active chat container if data attributes are present
         const activeChatElements = deepQuerySelectorAll('[data-user-id], [data-chat-id], [class*="active"], [class*="Selected"]');
         for (let el of activeChatElements) {
             const dataUid = el.getAttribute('data-user-id') || el.getAttribute('data-chat-id') || '';
@@ -272,7 +357,6 @@
             return;
         }
 
-        // ZERO-TOLERANCE FINAL CHECK IMMEDIATELY BEFORE CLICKING CONFIRM IMAGE BUTTON
         if (expectedUserId && !verifyCurrentRecipient(expectedUserId)) {
             console.error("🛑 [SAFETY] Zero-tolerance image send guard: Recipient unverified immediately before clicking image Send button!");
             throw new Error('RECIPIENT_UNVERIFIED');
@@ -461,7 +545,6 @@
             return;
         }
 
-        // 🛑 ตรวจจับโควต้าเต็มก่อนดึงคิวงานใหม่
         if (checkQuotaLimitExceeded()) {
             console.error("🛑 [CRITICAL] ตรวจพบการเตือนโควต้า LINE OA เต็ม! หยุดคิวงาน...");
             sessionStorage.clear();
@@ -506,7 +589,6 @@
         }
     }
 
-    // 🔙 ปิดหน้าต่างผู้ใช้และเปลี่ยนเส้นทางกลับสู่หน้าแชทหลัก (Main Chat List Page of SAME OA)
     function closeUserChatAndReturnToMain() {
         console.log("🔙 ปิดหน้าต่างผู้ใช้และกลับสู่หน้าแชทหลักของ OA...");
 
@@ -535,29 +617,24 @@
             console.warn("⚠️ Job execution already in progress. Skipping re-entrant call for Job ID:", jobData.jobId);
             return;
         }
-        // 🔒 LOCK EXECUTION FOR ENTIRE JOB LIFECYCLE
         isExecutingJob = true;
 
         console.log("🔍 กำลังตรวจสอบความถูกต้องก่อนเริ่มส่งข้อความหา User ID:", jobData.userId);
 
-        // 1. Check for 404 / Error Page
         if (checkIfErrorPage()) {
             console.error("🛑 [SAFETY] ตรวจพบหน้า 404 / Error Page! ยกเลิกการส่งทันที");
             await handleSafeRecovery(jobData, 'NAVIGATION_404');
             return;
         }
 
-        // 2. Pre-execution Recipient Verification
         if (!verifyCurrentRecipient(jobData.userId)) {
             console.error("🛑 [SAFETY] ยืนยันผู้รับไม่ผ่าน (Recipient Mismatch / Unverified)! ยกเลิกการส่งทันที");
             await handleSafeRecovery(jobData, 'RECIPIENT_MISMATCH');
             return;
         }
 
-        // Emit SINGLE RECIPIENT_VERIFY_OK checkpoint once initial verification passes
         emitDiagnostic('RECIPIENT_VERIFY_OK', { jobId: jobData.jobId, expectedUserId: jobData.userId });
 
-        // 3. Check LINE OA Quota limit
         if (checkQuotaLimitExceeded()) {
             console.error("🛑 [CRITICAL] ตรวจพบการเตือนโควต้า LINE OA เต็ม! สั่งหยุดส่งแคมเปญทันที...");
             await fetchAPI('/campaign/stop', 'POST', {
@@ -577,7 +654,6 @@
         const findAndType = setInterval(async () => {
             attempts++;
 
-            // 🛑 Pre-polling 404 & Recipient Guard Check
             if (checkIfErrorPage()) {
                 clearInterval(findAndType);
                 console.error("🛑 [SAFETY] ตรวจพบหน้า 404/Error Page ระหว่างค้นหาช่องพิมพ์! ยกเลิกส่งทันที");
@@ -597,7 +673,6 @@
             if (chatInput) {
                 clearInterval(findAndType);
 
-                // Final Pre-interaction Recipient Verification
                 if (!verifyCurrentRecipient(jobData.userId)) {
                     console.error("🛑 [SAFETY] ยืนยันผู้รับไม่ผ่านก่อนเริ่มพิมพ์! ยกเลิกการส่งทันที");
                     await handleSafeRecovery(jobData, 'RECIPIENT_UNVERIFIED');
@@ -640,7 +715,6 @@
                                 console.log("✅ จำลอง Paste รูปภาพใส่ช่องพิมพ์สำเร็จ!");
                             }
 
-                            // 🛡️ ZERO-TOLERANCE IMAGE GUARD (Pass expectedUserId)
                             await confirmAndCloseImageModal(jobData.userId);
                         }
                     }
@@ -664,7 +738,6 @@
                     }
 
                     if (textToSend && textToSend.trim() !== '') {
-                        // Pre-type Recipient Verification
                         if (!verifyCurrentRecipient(jobData.userId)) {
                             throw new Error('RECIPIENT_UNVERIFIED');
                         }
@@ -686,7 +759,6 @@
 
                         await sleep(1200);
 
-                        // 🛡️ ZERO-TOLERANCE TEXT GUARD (Pass expectedUserId)
                         sendChatMessage(chatInput, jobData.userId);
 
                         await sleep(3000);
@@ -764,7 +836,6 @@
             sessionStorage.removeItem('linesync_img');
             sessionStorage.removeItem('linesync_link');
 
-            // 🔓 RELEASE EXECUTION LOCK ONLY UPON TERMINAL STATE (Success or Final Failure)
             isExecutingJob = false;
 
             closeUserChatAndReturnToMain();
@@ -775,6 +846,7 @@
     // 🛡️ PAGE-LOAD RECOVERY GUARD & DIAGNOSTIC INITIALIZATION
     window.addEventListener('load', () => {
         emitDiagnostic('BOT_START');
+        flushPendingDiagnostics().catch(() => {});
 
         setTimeout(() => {
             const savedJobId = sessionStorage.getItem('linesync_jobid');
