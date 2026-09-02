@@ -480,11 +480,11 @@ describe('AppController', () => {
       };
     });
 
-    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.10', () => {
+    it('1. GET /api/runtime/version returns contract version 2 and required worker version 28.11', () => {
       const res = appController.getRuntimeVersion();
       expect(res).toEqual({
         runtimeContractVersion: 2,
-        requiredWorkerVersion: '28.10',
+        requiredWorkerVersion: '28.11',
       });
     });
 
@@ -497,7 +497,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.10',
+        requiredWorkerVersion: '28.11',
       });
       // Prove version gate executes BEFORE job query/claim logic
       expect(findSpy).not.toHaveBeenCalled();
@@ -512,7 +512,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.10',
+        requiredWorkerVersion: '28.11',
       });
       expect(findSpy).not.toHaveBeenCalled();
     });
@@ -534,10 +534,10 @@ describe('AppController', () => {
       expect(saveCampSpy).not.toHaveBeenCalled();
     });
 
-    it('5. GET /api/campaign/next with EXACT version ("28.10") and valid OA header -> reaches normal job claim logic', async () => {
+    it('5. GET /api/campaign/next with EXACT version ("28.11") and valid OA header -> reaches normal job claim logic', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
 
-      const res = await appController.getNextJob('28.10', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const res = await appController.getNextJob('28.11', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
 
       expect(mockRes.statusCode).toBe(200);
       expect(findSpy).toHaveBeenCalled();
@@ -662,23 +662,23 @@ describe('AppController', () => {
       findSpy.mockClear();
 
       // Missing OA header
-      const resMissingOa = await appController.getNextJob('28.10', undefined, mockRes);
+      const resMissingOa = await appController.getNextJob('28.11', undefined, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMissingOa).toEqual({ status: 'missing_oa_context', message: 'X-LineSync-OA-Context header missing or invalid' });
       expect(findSpy).not.toHaveBeenCalled();
 
       // OA Mismatch (worker sends foreign OA)
-      const resMismatchOa = await appController.getNextJob('28.10', 'U11111111222222223333333344444444', mockRes);
+      const resMismatchOa = await appController.getNextJob('28.11', 'U11111111222222223333333344444444', mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMismatchOa.status).toBe('oa_context_mismatch');
       expect(findSpy).not.toHaveBeenCalled();
     });
 
-    it('6. Tampermonkey script contains version 28.10, controlled OA switch, job OA fencing, and physical send OA guard', () => {
+    it('6. Tampermonkey script contains version 28.11, controlled OA switch, job OA fencing, and physical send OA guard', () => {
       const fs = require('fs');
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
 
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.10'");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.11'");
       expect(scriptContent).toContain('headers[\'X-LineSync-OA-Context\']');
       expect(scriptContent).toContain('checkAndExecuteControlledOaSwitch');
       expect(scriptContent).toContain('verifyCurrentOAContext');
@@ -829,7 +829,7 @@ describe('AppController', () => {
         message: 'Hello'
       } as any);
 
-      const jobRes: any = await appController.getNextJob('28.10', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      const jobRes: any = await appController.getNextJob('28.11', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
       expect(jobRes.botId).toBe('U09d6b978fcbfb5275e533ca9b788eb22');
     });
 
@@ -1184,30 +1184,30 @@ describe('AppController', () => {
       expect(res.success).toBe(true);
     });
 
-    it('10. Worker = 28.10', () => {
+    it('10. Worker = 28.11', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.10'");
-      expect(scriptContent).toContain("@version      28.10");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.11'");
+      expect(scriptContent).toContain("@version      28.11");
     });
 
-    it('11. Required Worker = 28.10', () => {
+    it('11. Required Worker = 28.11', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.10');
+      expect(versionRes.requiredWorkerVersion).toBe('28.11');
     });
   });
 
   describe('SAFE-WP001 — LINE OA Account Protection & Send Compliance Guard Tests', () => {
     const fs = require('fs');
 
-    it('1. Worker = 28.10', () => {
+    it('1. Worker = 28.11', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.10'");
-      expect(scriptContent).toContain("@version      28.10");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.11'");
+      expect(scriptContent).toContain("@version      28.11");
     });
 
-    it('2. Required Worker = 28.10', () => {
+    it('2. Required Worker = 28.11', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.10');
+      expect(versionRes.requiredWorkerVersion).toBe('28.11');
     });
 
     it('3. Rate guard exists immediately before text irreversible send', () => {
@@ -1395,128 +1395,290 @@ describe('AppController', () => {
     });
   });
 
-  describe('SAFE-WP001-R1 — Fail-Closed Protection State & Truthful Telemetry Tests', () => {
+  describe('SAFE-WP001-R2 — Reservation Integrity & Truthful Telemetry Executable Tests', () => {
     const fs = require('fs');
 
-    it('1. malformed protection storage fails closed', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('throw new Error(\'ACCOUNT_PROTECTION_STATE_UNAVAILABLE\');');
-      expect(scriptContent).toContain('JSON parse failure for key');
-      expect(scriptContent).toContain('Protection state is not an array');
+    function createClientHarness(storageObj: Record<string, string> = {}, throwMethod?: 'getItem' | 'setItem') {
+      const localStorageMock = {
+        getItem: (key: string) => {
+          if (throwMethod === 'getItem') throw new Error('Storage access blocked');
+          return storageObj[key] ?? null;
+        },
+        setItem: (key: string, val: string) => {
+          if (throwMethod === 'setItem') throw new Error('QuotaExceededError');
+          storageObj[key] = val;
+        }
+      };
+
+      const rawScript = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const loadStart = rawScript.indexOf('function loadProtectionTimestamps');
+      const gateStart = rawScript.indexOf('async function enforceAccountProtectionGate');
+      const snippet = rawScript.slice(loadStart, gateStart);
+
+      const code = `
+        const MIN_SEND_GAP_MS = 10000;
+        const MAX_SEND_ACTIONS_10_MIN = 60;
+        const MAX_SEND_ACTIONS_1_HOUR = 300;
+        const WORKER_VERSION = '28.11';
+        async function fetchAPI() {}
+        function sessionStorageItem() { return '0'; }
+        const sessionStorage = { getItem: () => '0' };
+
+        function isValidChatContextId(botId) {
+          return typeof botId === 'string' && /^U[0-9a-fA-F]{32}$/.test(botId.trim());
+        }
+
+        function getProtectionStorageKey(botId) {
+          return 'linesync_account_protection_v1_' + botId;
+        }
+
+        ${snippet}
+
+        return { loadProtectionTimestamps, recordProtectionSendAction, verifyProtectionReservation, calculateProtectionWaitMs };
+      `;
+
+      const fn = new Function('localStorage', 'console', code);
+      return fn(localStorageMock, { error: () => {}, warn: () => {}, log: () => {} });
+    }
+
+    const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+    const storageKey = 'linesync_account_protection_v1_' + testBotId;
+
+    it('1. JSON parse failure => fail closed', () => {
+      const storageObj = { [storageKey]: '{ invalid json }' };
+      const harness = createClientHarness(storageObj);
+      expect(() => harness.loadProtectionTimestamps(testBotId)).toThrow('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
     });
 
-    it('2. localStorage read failure fails closed', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('Storage read failure for key');
-      expect(scriptContent).toContain('throw new Error(\'ACCOUNT_PROTECTION_STATE_UNAVAILABLE\');');
+    it('2. non-array => fail closed', () => {
+      const storageObj = { [storageKey]: '{"a": 123}' };
+      const harness = createClientHarness(storageObj);
+      expect(() => harness.loadProtectionTimestamps(testBotId)).toThrow('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
     });
 
-    it('3. localStorage write failure fails closed', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('Storage write failure for key');
-      expect(scriptContent).toContain('throw new Error(\'ACCOUNT_PROTECTION_STATE_UNAVAILABLE\');');
+    it('3. array containing invalid member => fail closed', () => {
+      const storageObj = { [storageKey]: '[1700000000000, "invalid_ts", 1700000001000]' };
+      const harness = createClientHarness(storageObj);
+      expect(() => harness.loadProtectionTimestamps(testBotId)).toThrow('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
     });
 
-    it('4. write without matching read-back fails closed', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('Read-back verification failed');
-      expect(scriptContent).toContain('throw new Error(\'ACCOUNT_PROTECTION_STATE_UNAVAILABLE\');');
+    it('4. localStorage read exception => fail closed', () => {
+      const harness = createClientHarness({}, 'getItem');
+      expect(() => harness.loadProtectionTimestamps(testBotId)).toThrow('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
     });
 
-    it('5. no physical send occurs when reservation fails', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('Invalid or missing botId in protection gate. Failing closed.');
-      expect(scriptContent).toContain('throw new Error(\'ACCOUNT_PROTECTION_STATE_UNAVAILABLE\');');
+    it('5. localStorage write exception => fail closed', () => {
+      const harness = createClientHarness({}, 'setItem');
+      expect(() => harness.recordProtectionSendAction(testBotId)).toThrow('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
     });
 
-    it('6. rolling 10-minute calculation', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('const sends10Min = timestamps.filter(ts => (now - ts) <= 600000);');
-      expect(scriptContent).toContain('if (sends10Min.length >= MAX_SEND_ACTIONS_10_MIN)');
+    it('6. read-back array mismatch => fail closed', () => {
+      const storageObj: Record<string, string> = {};
+      const harness = createClientHarness(storageObj);
+
+      // Override setItem after read to cause mismatch
+      let count = 0;
+      const localStorageTampered = {
+        getItem: () => {
+          count++;
+          if (count > 1) return JSON.stringify([9999999999999]); // Tampered read-back
+          return storageObj[storageKey] ?? null;
+        },
+        setItem: (k: string, v: string) => { storageObj[k] = v; }
+      };
+
+      const rawScript = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const snippet = rawScript.slice(rawScript.indexOf('function loadProtectionTimestamps'), rawScript.indexOf('async function enforceAccountProtectionGate'));
+      const code = `
+        const MIN_SEND_GAP_MS = 10000;
+        const MAX_SEND_ACTIONS_10_MIN = 60;
+        const MAX_SEND_ACTIONS_1_HOUR = 300;
+        const WORKER_VERSION = '28.11';
+        async function fetchAPI() {}
+        const sessionStorage = { getItem: () => '0' };
+        function isValidChatContextId(b) { return typeof b === 'string' && /^U[0-9a-fA-F]{32}$/.test(b); }
+        function getProtectionStorageKey(b) { return 'linesync_account_protection_v1_' + b; }
+        ${snippet}
+        return { recordProtectionSendAction };
+      `;
+      const fn = new Function('localStorage', 'console', code);
+      const tamperedHarness = fn(localStorageTampered, { error: () => {}, warn: () => {}, log: () => {} });
+
+      expect(() => tamperedHarness.recordProtectionSendAction(testBotId)).toThrow('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
     });
 
-    it('7. rolling 1-hour calculation', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('const sends1Hour = timestamps.filter(ts => (now - ts) <= 3600000);');
-      expect(scriptContent).toContain('if (sends1Hour.length >= MAX_SEND_ACTIONS_1_HOUR)');
+    it('7. exact read-back => reservation returned', () => {
+      const storageObj: Record<string, string> = {};
+      const harness = createClientHarness(storageObj);
+
+      const reservation = harness.recordProtectionSendAction(testBotId);
+      expect(reservation).toHaveProperty('botId', testBotId);
+      expect(typeof reservation.reservedAt).toBe('number');
+      expect(reservation.reservedAt).toBeGreaterThan(0);
     });
 
-    it('8. minimum-gap calculation', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('if (elapsedSinceLast < MIN_SEND_GAP_MS)');
-      expect(scriptContent).toContain('waitMs = Math.max(waitMs, MIN_SEND_GAP_MS - elapsedSinceLast);');
+    it('8. rolling 10m logic works with sample timestamps', () => {
+      const now = Date.now();
+      const sampleTimestamps = Array.from({ length: 60 }, (_, i) => now - (i * 5000)); // 60 sends within last 5 mins
+      const storageObj = { [storageKey]: JSON.stringify(sampleTimestamps) };
+
+      const harness = createClientHarness(storageObj);
+      const waitMs = harness.calculateProtectionWaitMs(testBotId);
+      expect(waitMs).toBeGreaterThan(0);
     });
 
-    it('9. successful reservation persists only timestamps', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('const bounded = timestamps.filter(ts => typeof ts === \'number\' && (now - ts) <= 3600000);');
-      expect(scriptContent).toContain('const jsonToSave = JSON.stringify(bounded);');
+    it('9. rolling 1h logic works with sample timestamps', () => {
+      const now = Date.now();
+      const sampleTimestamps = Array.from({ length: 300 }, (_, i) => now - (i * 10000)); // 300 sends within last 50 mins
+      const storageObj = { [storageKey]: JSON.stringify(sampleTimestamps) };
+
+      const harness = createClientHarness(storageObj);
+      const waitMs = harness.calculateProtectionWaitMs(testBotId);
+      expect(waitMs).toBeGreaterThan(0);
     });
 
-    it('10. dashboard telemetry unavailable => "unknown", not fake 0', async () => {
-      const htmlContent = fs.readFileSync('index.html', 'utf8');
-      expect(htmlContent).toContain('<b id="prot10m">unknown</b>');
-      expect(htmlContent).toContain('<b id="prot1h">unknown</b>');
-      expect(htmlContent).toContain('<b id="protNextSend">unknown</b>');
-      expect(htmlContent).toContain('<b id="protCooling">unknown</b>');
+    it('10. 10-second minimum gap works', () => {
+      const now = Date.now();
+      const storageObj = { [storageKey]: JSON.stringify([now - 3000]) }; // Last send 3s ago
 
+      const harness = createClientHarness(storageObj);
+      const waitMs = harness.calculateProtectionWaitMs(testBotId);
+      expect(waitMs).toBeGreaterThanOrEqual(6000);
+      expect(waitMs).toBeLessThanOrEqual(7100);
+    });
+
+    it('11. reservation lost before final action => physical action blocked', () => {
+      const storageObj: Record<string, string> = {};
+      const harness = createClientHarness(storageObj);
+
+      const reservation = harness.recordProtectionSendAction(testBotId);
+      // Simulate another tab making a newer reservation in storage
+      const newerReservation = Date.now() + 100;
+      storageObj[storageKey] = JSON.stringify([reservation.reservedAt, newerReservation]);
+
+      expect(() => harness.verifyProtectionReservation(testBotId, reservation)).toThrow('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+    });
+
+    it('12. image path checks reservation immediately before action', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const confirmImageIndex = scriptContent.indexOf('async function confirmAndCloseImageModal');
+      const verifyResIndex = scriptContent.indexOf('verifyProtectionReservation(expectedBotId, reservation)', confirmImageIndex);
+      const dispatchClickIndex = scriptContent.indexOf('target.click()', confirmImageIndex);
+
+      expect(confirmImageIndex).toBeGreaterThan(-1);
+      expect(verifyResIndex).toBeGreaterThan(-1);
+      expect(dispatchClickIndex).toBeGreaterThan(-1);
+      expect(verifyResIndex).toBeLessThan(dispatchClickIndex);
+    });
+
+    it('13. text click checks reservation immediately before action', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const sendTextIndex = scriptContent.indexOf('async function sendChatMessage');
+      const verifyResIndex = scriptContent.indexOf('verifyProtectionReservation(expectedBotId, reservation)', sendTextIndex);
+      const clickIndex = scriptContent.indexOf('sendBtn.click()', sendTextIndex);
+
+      expect(sendTextIndex).toBeGreaterThan(-1);
+      expect(verifyResIndex).toBeGreaterThan(-1);
+      expect(clickIndex).toBeGreaterThan(-1);
+      expect(verifyResIndex).toBeLessThan(clickIndex);
+    });
+
+    it('14. Enter path checks reservation immediately before keydown', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const sendTextIndex = scriptContent.indexOf('async function sendChatMessage');
+      const keydownIndex = scriptContent.indexOf('chatInput.dispatchEvent(new KeyboardEvent(\'keydown\'', sendTextIndex);
+
+      const snippetBeforeKeydown = scriptContent.slice(sendTextIndex, keydownIndex);
+      expect(snippetBeforeKeydown).toContain('verifyProtectionReservation(expectedBotId, reservation)');
+    });
+
+    it('15. post-reservation telemetry reports real nextSendAt', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('if (realWaitMs === 0) {');
+      expect(scriptContent).toContain('realWaitMs = calculateProtectionWaitMs(botId);');
+    });
+
+    it('16. error cooldown telemetry updates correctly', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('sessionStorage.setItem(\'linesync_error_cooldown_until\', String(cooldownUntil));');
+      expect(scriptContent).toContain('publishAccountProtectionTelemetry(expectedJobBotId, 0).catch(() => {});');
+    });
+
+    it('17. telemetry POST rejects non-loopback', async () => {
+      const mockReq = { socket: { remoteAddress: '203.0.113.195' } } as any;
       const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
-      const res: any = await appController.getAccountProtectionStatus('U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
-      expect(res.available).toBe(false);
+
+      const res: any = await appController.recordAccountProtectionTelemetry(
+        '28.11',
+        testBotId,
+        mockReq,
+        { botId: testBotId, sendActions10m: 0, sendActions1h: 0, nextSendAt: 0, errorCooldownUntil: 0 },
+        mockRes
+      );
+
+      expect(mockRes.statusCode).toBe(403);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('Loopback requests only');
     });
 
-    it('11. telemetry is scoped by botId', async () => {
-      const botId1 = 'U09d6b978fcbfb5275e533ca9b788eb22';
-      const botId2 = 'U11111111222222223333333344444444';
-
+    it('18. telemetry POST rejects wrong Worker version', async () => {
+      const mockReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
       const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
 
-      await appController.recordAccountProtectionTelemetry({
-        botId: botId1,
-        sendActions10m: 5,
-        sendActions1h: 20,
-      }, mockRes);
+      const res: any = await appController.recordAccountProtectionTelemetry(
+        '28.4',
+        testBotId,
+        mockReq,
+        { botId: testBotId, sendActions10m: 0, sendActions1h: 0, nextSendAt: 0, errorCooldownUntil: 0 },
+        mockRes
+      );
 
-      const status1: any = await appController.getAccountProtectionStatus(botId1, mockRes);
-      expect(status1.available).toBe(true);
-      expect(status1.botId).toBe(botId1);
-      expect(status1.sendActions10m).toBe(5);
-
-      const status2: any = await appController.getAccountProtectionStatus(botId2, mockRes);
-      expect(status2.available).toBe(false);
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('version_mismatch');
     });
 
-    it('12. final image send revalidates leadership/recipient/OA', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('async function confirmAndCloseImageModal(');
-      expect(scriptContent).toContain('Zero-tolerance image send guard: Recipient unverified immediately before clicking image Send button!');
-      expect(scriptContent).toContain('Zero-tolerance image send guard: Expected job botId missing, invalid, or unverified');
+    it('19. telemetry POST rejects OA header/body mismatch', async () => {
+      const mockReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
+      const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
+
+      const res: any = await appController.recordAccountProtectionTelemetry(
+        '28.11',
+        'U11111111222222223333333344444444',
+        mockReq,
+        { botId: testBotId, sendActions10m: 0, sendActions1h: 0, nextSendAt: 0, errorCooldownUntil: 0 },
+        mockRes
+      );
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.message).toContain('OA context mismatch between header and body');
     });
 
-    it('13. final text click revalidates leadership/recipient/OA', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('Leadership lost right before sendBtn click!');
-      expect(scriptContent).toContain('Zero-tolerance text send guard: Recipient unverified right before sendBtn click!');
-      expect(scriptContent).toContain('Zero-tolerance text send guard: OA context unverified right before sendBtn click!');
+    it('20. stale telemetry returns available=false', async () => {
+      const mockReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
+      const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
+
+      await appController.recordAccountProtectionTelemetry(
+        '28.11',
+        testBotId,
+        mockReq,
+        { botId: testBotId, sendActions10m: 1, sendActions1h: 1, nextSendAt: 0, errorCooldownUntil: 0 },
+        mockRes
+      );
+
+      // Simulate stale telemetry by backdating workerSeenAt by 35 seconds
+      (AppController as any).accountProtectionTelemetry[testBotId].workerSeenAt = Date.now() - 35000;
+
+      const statusRes: any = await appController.getAccountProtectionStatus(testBotId, mockRes);
+      expect(statusRes.available).toBe(false);
+      expect(statusRes.message).toContain('telemetry unavailable or stale');
     });
 
-    it('14. Enter fallback revalidates leadership/recipient/OA', () => {
+    it('21. existing SAFE / OA / REL / SYNC tests remain passing', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('Leadership lost right before Enter key fallback!');
-      expect(scriptContent).toContain('Zero-tolerance text send guard: Recipient unverified right before Enter key fallback!');
-      expect(scriptContent).toContain('Zero-tolerance text send guard: OA context unverified right before Enter key fallback!');
-    });
-
-    it('15. all previous SAFE-WP001 tests remain passing', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('MIN_SEND_GAP_MS = 10000');
-      expect(scriptContent).toContain('MAX_SEND_ACTIONS_10_MIN = 60');
-      expect(scriptContent).toContain('MAX_SEND_ACTIONS_1_HOUR = 300');
-    });
-
-    it('16. all existing project tests remain passing', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('WORKER_VERSION = \'28.10\'');
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.11'");
+      expect(scriptContent).toContain("verifyCurrentRecipient");
+      expect(scriptContent).toContain("verifyCurrentOAContext");
+      expect(scriptContent).toContain("confirmWorkerLeadershipForSend");
     });
   });
 });

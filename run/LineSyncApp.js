@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.10
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SAFE-WP001-R1 Fail-Closed Protection Active)
+// @version      28.11
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (SAFE-WP001-R2 Reservation Integrity Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.10';
+    const WORKER_VERSION = '28.11';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -68,17 +68,26 @@
             throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
         }
 
+        for (const item of parsed) {
+            if (typeof item !== 'number' || !Number.isFinite(item) || item <= 0) {
+                console.error(`🛑 [PROTECTION] Malformed timestamp member in protection state array for key (${key}):`, item);
+                throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+            }
+        }
+
         const now = Date.now();
-        return parsed.filter(ts => typeof ts === 'number' && (now - ts) <= 3600000);
+        const validUnexpired = parsed.filter(ts => (now - ts) <= 3600000);
+        return validUnexpired.sort((a, b) => a - b);
     }
 
     function recordProtectionSendAction(botId) {
         const timestamps = loadProtectionTimestamps(botId);
-        const now = Date.now();
-        timestamps.push(now);
+        const reservedAt = Date.now();
+        timestamps.push(reservedAt);
 
         const key = getProtectionStorageKey(botId);
-        const bounded = timestamps.filter(ts => typeof ts === 'number' && (now - ts) <= 3600000);
+        const now = Date.now();
+        const bounded = timestamps.filter(ts => (now - ts) <= 3600000).sort((a, b) => a - b);
         const jsonToSave = JSON.stringify(bounded);
 
         try {
@@ -104,10 +113,45 @@
             throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
         }
 
-        if (!Array.isArray(readBackParsed) || !readBackParsed.includes(now)) {
-            console.error(`🛑 [PROTECTION] Read-back verification failed: Timestamp ${now} missing from read-back state`);
+        if (!Array.isArray(readBackParsed) || readBackParsed.length !== bounded.length) {
+            console.error(`🛑 [PROTECTION] Read-back length mismatch for key (${key})`);
             throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
         }
+
+        for (let i = 0; i < bounded.length; i++) {
+            if (readBackParsed[i] !== bounded[i]) {
+                console.error(`🛑 [PROTECTION] Read-back value mismatch at index ${i} for key (${key})`);
+                throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+            }
+        }
+
+        return { botId: botId, reservedAt: reservedAt };
+    }
+
+    function verifyProtectionReservation(botId, reservation) {
+        if (!botId || !isValidChatContextId(botId) || !reservation || reservation.botId !== botId) {
+            console.error("🛑 [PROTECTION] Invalid botId or reservation object in verifyProtectionReservation.");
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+
+        if (typeof reservation.reservedAt !== 'number' || !Number.isFinite(reservation.reservedAt) || reservation.reservedAt <= 0) {
+            console.error("🛑 [PROTECTION] Malformed reservedAt in reservation object.");
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+
+        const timestamps = loadProtectionTimestamps(botId);
+        if (timestamps.length === 0) {
+            console.error("🛑 [PROTECTION] Verification failed: Protection timestamps array is empty.");
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+
+        const newestTimestamp = timestamps[timestamps.length - 1];
+        if (newestTimestamp !== reservation.reservedAt) {
+            console.error(`🛑 [PROTECTION] Verification failed: Newest reservation in storage (${newestTimestamp}) != expected reservation (${reservation.reservedAt})`);
+            throw new Error('ACCOUNT_PROTECTION_STATE_UNAVAILABLE');
+        }
+
+        return true;
     }
 
     async function publishAccountProtectionTelemetry(botId, waitMs = 0) {
@@ -118,7 +162,17 @@
             const sendActions10m = timestamps.filter(ts => (now - ts) <= 600000).length;
             const sendActions1h = timestamps.filter(ts => (now - ts) <= 3600000).length;
             const errorCooldownUntil = parseInt(sessionStorage.getItem('linesync_error_cooldown_until') || '0', 10);
-            const nextSendAt = waitMs > 0 ? (now + waitMs) : 0;
+
+            let realWaitMs = waitMs;
+            if (realWaitMs === 0) {
+                realWaitMs = calculateProtectionWaitMs(botId);
+            }
+            const nextSendAt = realWaitMs > 0 ? (now + realWaitMs) : 0;
+
+            const headers = {
+                'X-LineSync-Worker-Version': WORKER_VERSION,
+                'X-LineSync-OA-Context': botId
+            };
 
             await fetchAPI('/account-protection/telemetry', 'POST', {
                 botId: botId,
@@ -126,7 +180,7 @@
                 sendActions1h: sendActions1h,
                 nextSendAt: nextSendAt,
                 errorCooldownUntil: errorCooldownUntil
-            });
+            }, headers);
         } catch (e) {
             // Telemetry publish fails gracefully without affecting send safety
         }
@@ -200,8 +254,9 @@
             throw new Error('OA_CONTEXT_MISMATCH');
         }
 
-        recordProtectionSendAction(expectedBotId);
+        const reservation = recordProtectionSendAction(expectedBotId);
         publishAccountProtectionTelemetry(expectedBotId, 0).catch(() => {});
+        return reservation;
     }
 
     function getSystemErrorCooldownMs(consecutiveErrors) {
@@ -1015,7 +1070,7 @@
             throw new Error('WORKER_LEADERSHIP_LOST');
         }
 
-        await enforceAccountProtectionGate(expectedBotId, expectedUserId);
+        const reservation = await enforceAccountProtectionGate(expectedBotId, expectedUserId);
 
         emitDiagnostic('IMAGE_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
@@ -1025,6 +1080,8 @@
         if (target.shadowRoot && target.shadowRoot.querySelector('button')) {
             target = target.shadowRoot.querySelector('button');
         }
+
+        verifyProtectionReservation(expectedBotId, reservation);
 
         const opts = { bubbles: true, cancelable: true, composed: true, view: window };
         try { target.focus(); } catch(e){}
@@ -1060,7 +1117,7 @@
             throw new Error('OA_CONTEXT_MISMATCH');
         }
 
-        await enforceAccountProtectionGate(expectedBotId, expectedUserId);
+        const reservation = await enforceAccountProtectionGate(expectedBotId, expectedUserId);
 
         const allButtons = deepQuerySelectorAll('button, input[type="submit"], [role="button"], div, span');
         const chatSendBtns = allButtons.filter(el => {
@@ -1092,6 +1149,8 @@
                 throw new Error('OA_CONTEXT_MISMATCH');
             }
 
+            verifyProtectionReservation(expectedBotId, reservation);
+
             emitDiagnostic('TEXT_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
             console.log("✅ เจอและสั่งคลิกปุ่มส่งสีเขียวที่มุมล่างขวาช่องพิมพ์สำเร็จ!");
@@ -1119,6 +1178,8 @@
                 console.error("🛑 [OA] Zero-tolerance text send guard: OA context unverified right before Enter key fallback!");
                 throw new Error('OA_CONTEXT_MISMATCH');
             }
+
+            verifyProtectionReservation(expectedBotId, reservation);
 
             emitDiagnostic('TEXT_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
@@ -1291,6 +1352,7 @@
             const remainingMs = errorCooldownUntil - Date.now();
             console.warn(`⏳ [SAFETY] Cooldown ระบบหลังเกิด Error (${consecutiveErrorCount}/10): พักรอ ${(remainingMs / 1000).toFixed(1)} วินาที...`);
             updateUI(`⏳ Cooldown หลังพบ Error (${(remainingMs / 1000).toFixed(1)}s)`);
+            publishAccountProtectionTelemetry(validBotId).catch(() => {});
             setTimeout(processQueue, Math.min(remainingMs, CHECK_INTERVAL));
             return;
         }
@@ -1642,6 +1704,7 @@
                 consecutiveErrorCount = 0;
                 sessionStorage.setItem('linesync_consecutive_errors', '0');
                 sessionStorage.removeItem('linesync_error_cooldown_until');
+                publishAccountProtectionTelemetry(expectedJobBotId, 0).catch(() => {});
                 await fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId });
             } else {
                 emitDiagnostic('JOB_FAIL', { jobId: jobId, userId: userId, botId: expectedJobBotId, reason: reason });
@@ -1654,7 +1717,9 @@
                     consecutiveErrorCount++;
                     sessionStorage.setItem('linesync_consecutive_errors', String(consecutiveErrorCount));
                     const cooldownMs = getSystemErrorCooldownMs(consecutiveErrorCount);
-                    sessionStorage.setItem('linesync_error_cooldown_until', String(Date.now() + cooldownMs));
+                    const cooldownUntil = Date.now() + cooldownMs;
+                    sessionStorage.setItem('linesync_error_cooldown_until', String(cooldownUntil));
+                    publishAccountProtectionTelemetry(expectedJobBotId, 0).catch(() => {});
                     console.warn(`⚠️ เกิด Error สะสมติดต่อกันแล้ว ${consecutiveErrorCount}/10 รายการ (${reason}). คูลดาวน์ระบบ ${cooldownMs / 1000}s`);
                 }
 

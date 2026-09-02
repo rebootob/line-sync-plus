@@ -487,9 +487,12 @@ export class AppController {
     return { success: true };
   }
 
-  // 🛡️ SAFE-WP001-R1 ACCOUNT PROTECTION TELEMETRY ENDPOINTS
+  // 🛡️ SAFE-WP001-R2 ACCOUNT PROTECTION TELEMETRY ENDPOINTS
   @Post('account-protection/telemetry')
   async recordAccountProtectionTelemetry(
+    @Headers('x-linesync-worker-version') workerVersion: string | undefined,
+    @Headers('x-linesync-oa-context') oaContext: string | undefined,
+    @Req() req: Request,
     @Body()
     body: {
       botId: string;
@@ -500,17 +503,58 @@ export class AppController {
     },
     @Res({ passthrough: true }) res: Response,
   ) {
+    const remoteAddress = (req?.socket?.remoteAddress || (req as any)?.connection?.remoteAddress || '').trim();
+    const isLoopback = remoteAddress === '127.0.0.1' ||
+                       remoteAddress === '::1' ||
+                       remoteAddress === '::ffff:127.0.0.1';
+
+    if (!isLoopback) {
+      res.status(HttpStatus.FORBIDDEN);
+      return { success: false, message: 'Forbidden: Loopback requests only' };
+    }
+
+    if (!workerVersion || workerVersion.trim() !== REQUIRED_WORKER_VERSION) {
+      res.status(HttpStatus.CONFLICT);
+      return {
+        success: false,
+        status: 'version_mismatch',
+        requiredWorkerVersion: REQUIRED_WORKER_VERSION,
+      };
+    }
+
+    if (!oaContext || !/^U[0-9a-fA-F]{32}$/.test(oaContext.trim())) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: 'X-LineSync-OA-Context header missing or invalid' };
+    }
+
     if (!body || !body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
       res.status(HttpStatus.BAD_REQUEST);
       return { success: false, message: 'Missing or invalid botId parameter' };
     }
 
     const cleanBotId = body.botId.trim();
+    if (oaContext.trim() !== cleanBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: 'OA context mismatch between header and body' };
+    }
+
+    const { sendActions10m, sendActions1h, nextSendAt, errorCooldownUntil } = body;
+
+    if (
+      typeof sendActions10m !== 'number' || !Number.isInteger(sendActions10m) || sendActions10m < 0 ||
+      typeof sendActions1h !== 'number' || !Number.isInteger(sendActions1h) || sendActions1h < 0 ||
+      typeof nextSendAt !== 'number' || !Number.isFinite(nextSendAt) || nextSendAt < 0 ||
+      typeof errorCooldownUntil !== 'number' || !Number.isFinite(errorCooldownUntil) || errorCooldownUntil < 0
+    ) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Invalid telemetry parameter values' };
+    }
+
     AppController.accountProtectionTelemetry[cleanBotId] = {
-      sendActions10m: Number(body.sendActions10m || 0),
-      sendActions1h: Number(body.sendActions1h || 0),
-      nextSendAt: Number(body.nextSendAt || 0),
-      errorCooldownUntil: Number(body.errorCooldownUntil || 0),
+      sendActions10m,
+      sendActions1h,
+      nextSendAt,
+      errorCooldownUntil,
       workerSeenAt: Date.now(),
     };
 
