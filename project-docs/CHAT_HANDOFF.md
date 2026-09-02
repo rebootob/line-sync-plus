@@ -4,7 +4,7 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: Initial BUG-WP001-UATLOG commit pending
+* HEAD: e3f8423 (feat(observability): add persistent browser safety diagnostic logging BUG-WP001-UATLOG)
 * Working Tree: Clean (BUG-WP001-UATLOG implementation completed)
 
 ## Project Purpose
