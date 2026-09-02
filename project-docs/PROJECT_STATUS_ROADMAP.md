@@ -87,7 +87,7 @@ Key Operational Goals:
 The LineSync Plus safety model operates on strict **fail-closed** principles to eliminate risks of context loss or misdirection:
 
 - **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path (`/${botId}/chat/${expectedUserId}`) and DOM attribute validation before any text insertion or image send click.
-- **Fail-Closed Runtime Version Gate (OPS-WP001)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.3'` before querying or claiming any job.
+- **Fail-Closed Runtime Version Gate (OPS-WP001 / OPS-WP001-R1)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.3'` before querying or claiming any job. Client retries compatibility check via `setTimeout(..., CHECK_INTERVAL)` without fetching jobs while incompatible. Only 2xx HTTP responses can pass compatibility check.
 - **Full-Lifecycle Execution Lock**: `isExecutingJob` remains active across the entire job lifecycle (navigation verification -> input discovery -> payload preparation -> recipient re-verification -> send -> terminal job report) preventing re-entrant duplicate sends.
 - **Circuit Breaker**: Halts campaign execution automatically if 10 consecutive system errors occur (`sessionStorage.setItem('linesync_consecutive_errors', ...)`).
 - **Quota Limit Protection**: Detects LINE OA quota limit alerts on-screen and immediately stops campaign processing without recording system errors.
@@ -187,6 +187,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
   - Safety hardening (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002`, `BUG-WP002-R1`): **COMPLETED**
   - `SEC-WP001` (Secret Hygiene): **COMPLETED / CLOSED**
   - `OPS-WP001` (Runtime Version Gate): **READY_FOR_CHATGPT_REVIEW**
+  - `OPS-WP001-R1`: **READY_FOR_CHATGPT_REVIEW**
   - `REL-WP001`: **NOT STARTED**
   - `REL-WP002`: **NOT STARTED**
   - `REL-WP003`: **NOT STARTED**
@@ -201,7 +202,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
-   - Operational runtime version gate (`OPS-WP001` READY_FOR_CHATGPT_REVIEW).
+   - Operational runtime version gate (`OPS-WP001` & `OPS-WP001-R1` READY_FOR_CHATGPT_REVIEW).
    - Secret hygiene & test isolation (`SEC-WP001` COMPLETED / CLOSED).
    - Fail-closed recipient verification & OA context validation (Completed in WP001/WP002).
 2. **P1 (Observability & Operational Hardening)**:
@@ -214,14 +215,14 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 13. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 (OPS-WP001).
-- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, and fail-closed runtime version gates.
+- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 (OPS-WP001/R1).
+- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, and fail-closed runtime version gates with retry controls.
 
 ---
 
 ## 14. Recommended Next Work Packages
 
-- **OPS-WP001**: Runtime Version Gate (**READY_FOR_CHATGPT_REVIEW**).
+- **OPS-WP001-R1**: Runtime Retry + Strict Fail-Closed Corrective (**READY_FOR_CHATGPT_REVIEW**).
 - **REL-WP001**: Single-Worker Execution Lock / Multi-Tab Defense (**NOT STARTED**).
 - **WP-UI-LOGS**: Implement browser diagnostic log viewer tab in single-page dashboard.
 
@@ -248,5 +249,5 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-The project is currently at Phase 0 (Security & Reliability Foundation) with OPS-WP001 implemented and READY_FOR_CHATGPT_REVIEW.
-Next Action: Await ChatGPT Control Plane review of OPS-WP001 implementation.
+The project is currently at Phase 0 (Security & Reliability Foundation) with OPS-WP001 and OPS-WP001-R1 implemented and READY_FOR_CHATGPT_REVIEW.
+Next Action: Await ChatGPT Control Plane review of OPS-WP001-R1 corrective implementation.

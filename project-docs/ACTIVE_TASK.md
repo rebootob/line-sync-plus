@@ -1,47 +1,44 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: OPS-WP001 — Runtime Version Gate
+ACTIVE_WORK_PACKAGE: OPS-WP001-R1 — Runtime Retry + Strict Fail-Closed Corrective
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: ChatGPT / Control Plane
-TASK_TYPE: OPERATIONAL_HARDENING
+TASK_TYPE: OPERATIONAL_HARDENING_CORRECTIVE
 ```
 
 ---
 
-## 📋 Completed Work Package Summary: OPS-WP001
+## 📋 Completed Work Package Summary: OPS-WP001-R1
 
-### Implemented Operational Version Gate Controls:
-1. **Backend Runtime Contract (`src/runtime-version.ts`)**:
-   - Declared `RUNTIME_CONTRACT_VERSION = 1` and `REQUIRED_WORKER_VERSION = '28.3'`.
-2. **Backend Runtime Version Endpoint (`GET /api/runtime/version`)**:
-   - Exposes safe contract info `{ runtimeContractVersion: 1, requiredWorkerVersion: "28.3" }` without exposing system paths or secrets.
-3. **Fail-Closed Gate on `GET /api/campaign/next`**:
-   - Reads `X-LineSync-Worker-Version` header at the VERY BEGINNING of `getNextJob()` before querying or mutating any `CampaignJob` or `Campaign`.
-   - If missing or header != `'28.3'`, immediately blocks job claim with HTTP 409 Conflict (`{ status: "version_mismatch", requiredWorkerVersion: "28.3" }`).
-   - Rejection occurs BEFORE job selection, claim status mutation, counter increment, or recipient payload disclosure.
-4. **Tampermonkey Worker v28.3 (`run/LineSyncApp.js`)**:
-   - Metadata updated `@version 28.3`.
-   - Declared constant `const WORKER_VERSION = '28.3'`.
-   - `fetchAPI()` automatically sends header `X-LineSync-Worker-Version: WORKER_VERSION`.
-   - Added `checkRuntimeCompatibility()` performing handshake against `/api/runtime/version`.
-   - Gate in `processQueue()` blocks fetching `/campaign/next` if compatibility check fails.
-   - Page-load active job recovery requires runtime compatibility PASS before resuming saved job. If incompatible, active job session state is safely preserved without finishing/failing or executing.
-5. **Dashboard Visibility (`index.html`)**:
-   - Displays non-intrusive badge `Runtime Contract: v1 | Required Worker: v28.3` fetched dynamically via `loadRuntimeVersionUI()`.
-6. **Deployment Rollout Safety Order**:
-   - **Step 1**: Pause campaign / ensure no active campaign job.
-   - **Step 2**: Deploy Backend runtime gate requiring worker `28.3`.
-   - **Step 3**: Update Tampermonkey worker to v28.3.
-   - **Step 4**: Verify runtime compatibility PASS.
-   - **Step 5**: Resume campaign operation.
-   - *Deployment Safety Note*: OPS-WP001 cannot retroactively stop a message that an OLD worker already physically started sending before deployment.
+### Corrective Details & Strict Fail-Closed Verification:
+1. **ProcessQueue Retry Control (Blocker 1 Resolved)**:
+   - In `processQueue()`, when `checkRuntimeCompatibility()` returns `false`, execution calls `setTimeout(processQueue, CHECK_INTERVAL)` and returns safely.
+   - Does NOT call `/campaign/next` while incompatible.
+   - Does NOT claim any job or mutate status.
+   - Retries compatibility check later after `CHECK_INTERVAL` (4000ms) without creating tight/duplicate loops.
+2. **Saved Active Job Safe Retry (Blocker 2 Resolved)**:
+   - Created `resumeSavedActiveJob(savedJobData)` helper function.
+   - When a saved active job exists on page load and `checkRuntimeCompatibility()` fails:
+     - Active job session data in `sessionStorage` (`linesync_jobid`, `linesync_uid`, etc.) is 100% PRESERVED.
+     - Job is NOT finished or failed.
+     - `retryCount` is NOT incremented.
+     - `/campaign/next` is NEVER called.
+     - No message typing, attachment, or send occurs.
+     - No browser page reloads or navigations occur while incompatible.
+     - Schedules `setTimeout(() => resumeSavedActiveJob(savedJobData), CHECK_INTERVAL)` to re-check compatibility after 4000ms.
+     - When runtime compatibility eventually PASSES, resumes the SAME saved job through existing recipient & 404 recovery guards (`verifyCurrentRecipient`, `executeChatBot`, `handleSafeRecovery`).
+3. **Strict 2xx Runtime Response Validation (Blocker 3 Resolved)**:
+   - Refactored `fetchAPI()` so only HTTP 2xx status codes resolve response. Non-2xx (including 409) and network errors reject the Promise.
+   - `checkRuntimeCompatibility()` returns `true` ONLY when `fetchAPI('/runtime/version')` resolves a valid 2xx response where `res.requiredWorkerVersion === WORKER_VERSION`.
+   - Malformed JSON, non-2xx status, network errors, or missing `requiredWorkerVersion` ALL result in compatibility `false` without fabricating fallback credentials.
 
 ---
 
 ## ⛔ Execution Policy
 
-- **Work Package Status**: `READY_FOR_CHATGPT_REVIEW` (Do NOT mark CLOSED yet).
+- **OPS-WP001-R1 Status**: `READY_FOR_CHATGPT_REVIEW`
+- **OPS-WP001 Status**: `READY_FOR_CHATGPT_REVIEW` (Do NOT mark CLOSED yet).
 - **Next Work Packages**:
   - `REL-WP001`: `NOT STARTED`
   - `REL-WP002`: `NOT STARTED`

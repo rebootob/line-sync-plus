@@ -196,9 +196,6 @@
                     if (response.status >= 200 && response.status < 300) {
                         try { resolve(JSON.parse(response.responseText)); }
                         catch (e) { resolve(response.responseText); }
-                    } else if (response.status === 409) {
-                        try { resolve(JSON.parse(response.responseText)); }
-                        catch (e) { resolve({ status: 'version_mismatch', requiredWorkerVersion: WORKER_VERSION }); }
                     } else {
                         reject(`Error: ${response.status}`);
                     }
@@ -214,7 +211,7 @@
     let lastCompatibilityCheckTime = 0;
     let isCompatibilityWarningShown = false;
 
-    // 🛡️ WORKER RUNTIME HANDSHAKE (OPS-WP001 Fail-Closed Version Gate)
+    // 🛡️ WORKER RUNTIME HANDSHAKE (OPS-WP001 / OPS-WP001-R1 Fail-Closed Version Gate)
     async function checkRuntimeCompatibility() {
         const now = Date.now();
         if (isRuntimeCompatible && (now - lastCompatibilityCheckTime < 10000)) {
@@ -223,14 +220,14 @@
 
         try {
             const res = await fetchAPI('/runtime/version');
-            if (res && res.requiredWorkerVersion === WORKER_VERSION) {
+            if (res && typeof res === 'object' && typeof res.requiredWorkerVersion === 'string' && res.requiredWorkerVersion === WORKER_VERSION) {
                 isRuntimeCompatible = true;
                 lastCompatibilityCheckTime = now;
                 isCompatibilityWarningShown = false;
                 return true;
             } else {
                 isRuntimeCompatible = false;
-                const requiredVer = (res && res.requiredWorkerVersion) ? res.requiredWorkerVersion : 'UNKNOWN';
+                const requiredVer = (res && typeof res === 'object' && res.requiredWorkerVersion) ? String(res.requiredWorkerVersion) : 'UNKNOWN';
                 if (!isCompatibilityWarningShown) {
                     console.warn(`🛑 [OPS] RUNTIME VERSION BLOCKED: Worker ${WORKER_VERSION} is incompatible with required backend version ${requiredVer}`);
                     isCompatibilityWarningShown = true;
@@ -240,7 +237,7 @@
         } catch (e) {
             isRuntimeCompatible = false;
             if (!isCompatibilityWarningShown) {
-                console.warn(`🛑 [OPS] RUNTIME VERSION BLOCKED: Unable to reach /runtime/version endpoint`);
+                console.warn(`🛑 [OPS] RUNTIME VERSION BLOCKED: Unable to reach or validate /runtime/version endpoint`);
                 isCompatibilityWarningShown = true;
             }
             return false;
@@ -692,6 +689,7 @@
 
         const isCompatible = await checkRuntimeCompatibility();
         if (!isCompatible) {
+            setTimeout(processQueue, CHECK_INTERVAL);
             return;
         }
 
@@ -993,12 +991,41 @@
         }
     }
 
+    // 🛡️ SAVED ACTIVE JOB RECOVERY WITH FAIL-CLOSED RUNTIME RETRY (OPS-WP001-R1)
+    async function resumeSavedActiveJob(savedJobData) {
+        if (!savedJobData) return;
+
+        const isCompatible = await checkRuntimeCompatibility();
+        if (!isCompatible) {
+            console.warn("🛑 [OPS] Page-load active job resumption blocked: Runtime compatibility check failed. Preserving active job session safely.");
+            setTimeout(() => resumeSavedActiveJob(savedJobData), CHECK_INTERVAL);
+            return;
+        }
+
+        emitDiagnostic('PAGE_LOAD_ACTIVE_JOB', { jobId: savedJobData.jobId, userId: savedJobData.userId });
+
+        if (checkIfErrorPage()) {
+            console.warn("🛑 [SAFETY] โหลดหน้าเจอ 404 / Error Page พร้อมมีคิวค้าง -> ส่งเข้า Same-Job Safe Recovery...");
+            emitDiagnostic('NAVIGATION_404', { jobId: savedJobData.jobId, userId: savedJobData.userId, reason: 'Page load 404 error page detected' });
+            handleSafeRecovery(savedJobData, 'NAVIGATION_404');
+            return;
+        }
+
+        if (verifyCurrentRecipient(savedJobData.userId)) {
+            console.log("🚀 โหลดหน้าแชทสำเร็จและยืนยันผู้รับถูกต้อง เริ่มพิมพ์ข้อความต่อ...");
+            executeChatBot(savedJobData);
+        } else {
+            console.warn("🛑 [SAFETY] โหลดหน้าแชทยืนยันผู้รับไม่ตรง -> ส่งเข้า Same-Job Safe Recovery...");
+            handleSafeRecovery(savedJobData, 'RECIPIENT_UNVERIFIED');
+        }
+    }
+
     // 🛡️ PAGE-LOAD RECOVERY GUARD & DIAGNOSTIC INITIALIZATION
     window.addEventListener('load', () => {
         emitDiagnostic('BOT_START');
         flushPendingDiagnostics().catch(() => {});
 
-        setTimeout(async () => {
+        setTimeout(() => {
             const savedJobId = sessionStorage.getItem('linesync_jobid');
             const savedMsg = sessionStorage.getItem('linesync_msg');
             const savedUid = sessionStorage.getItem('linesync_uid');
@@ -1016,28 +1043,7 @@
             } : null;
 
             if (savedJobData) {
-                const isCompatible = await checkRuntimeCompatibility();
-                if (!isCompatible) {
-                    console.warn("🛑 [OPS] Page-load active job resumption blocked: Runtime compatibility check failed. Preserving active job session safely.");
-                    return;
-                }
-
-                emitDiagnostic('PAGE_LOAD_ACTIVE_JOB', { jobId: savedJobData.jobId, userId: savedJobData.userId });
-
-                if (checkIfErrorPage()) {
-                    console.warn("🛑 [SAFETY] โหลดหน้าเจอ 404 / Error Page พร้อมมีคิวค้าง -> ส่งเข้า Same-Job Safe Recovery...");
-                    emitDiagnostic('NAVIGATION_404', { jobId: savedJobData.jobId, userId: savedJobData.userId, reason: 'Page load 404 error page detected' });
-                    handleSafeRecovery(savedJobData, 'NAVIGATION_404');
-                    return;
-                }
-
-                if (verifyCurrentRecipient(savedUid)) {
-                    console.log("🚀 โหลดหน้าแชทสำเร็จและยืนยันผู้รับถูกต้อง เริ่มพิมพ์ข้อความต่อ...");
-                    executeChatBot(savedJobData);
-                } else {
-                    console.warn("🛑 [SAFETY] โหลดหน้าแชทยืนยันผู้รับไม่ตรง -> ส่งเข้า Same-Job Safe Recovery...");
-                    handleSafeRecovery(savedJobData, 'RECIPIENT_UNVERIFIED');
-                }
+                resumeSavedActiveJob(savedJobData);
             } else {
                 if (checkIfErrorPage()) {
                     console.warn("🛑 [SAFETY] โหลดหน้าเจอ 404 / Error Page (ไม่มีคิวค้าง)...");

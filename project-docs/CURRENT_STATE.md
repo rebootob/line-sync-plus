@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post OPS-WP001 Runtime Version Gate Implementation)
+**Last Updated**: 2026-09-02 (Post OPS-WP001-R1 Runtime Gate Corrective Implementation)
 
 ---
 
@@ -28,12 +28,13 @@
 
 ---
 
-## 🛑 Runtime Version Gate (OPS-WP001 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🛑 Runtime Version Gate (OPS-WP001 / OPS-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Backend Runtime Contract**: Declared in `src/runtime-version.ts` (`RUNTIME_CONTRACT_VERSION = 1`, `REQUIRED_WORKER_VERSION = '28.3'`).
 - **Endpoint**: `GET /api/runtime/version` returns safe version contract info.
 - **Fail-Closed Queue Gate**: `GET /api/campaign/next` checks `X-LineSync-Worker-Version` header before any DB query or job claim. Returns HTTP 409 Conflict if header is missing or incompatible.
 - **Client Automation Worker v28.3**: `run/LineSyncApp.js` v28.3 sends `X-LineSync-Worker-Version: 28.3` header on all API calls and performs `checkRuntimeCompatibility()` before processing queue or resuming active jobs on page load.
+- **Strict Fail-Closed Retry Control**: Incompatible `processQueue()` or page-load active job recovery schedules compatibility retry via `setTimeout(..., CHECK_INTERVAL)` without fetching `/campaign/next` or altering job state. `fetchAPI()` only resolves HTTP 2xx responses.
 - **Dashboard Operator Visibility**: Displays `Runtime Contract: v1 | Required Worker: v28.3` badge in dashboard header.
 
 ---
@@ -51,7 +52,7 @@
 - Interactive dashboard UI with toolbar search, status/name filters, quick selection shortcuts, schedule management, deep analytics, secure Telegram setting modal, and runtime version contract indicator.
 
 ### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.3)
-- Fail-closed runtime version handshake (`checkRuntimeCompatibility()`).
+- Fail-closed runtime version handshake with retry loop (`checkRuntimeCompatibility()`, `resumeSavedActiveJob()`).
 - Strict OA context validation (`isValidChatContextId` testing `/^U[0-9a-fA-F]{32}$/`).
 - Fail-closed context navigation (`getOAContextUrl` returns `null` when context is missing/invalid).
 - Active job preservation during missing context (`handleSafeRecovery` preserves session parameters without calling `finishJob` or incrementing `retryCount`).
@@ -65,7 +66,9 @@
 
 ## 🚀 Active / Next Work Packages
 
-- **Active Work Package**: `OPS-WP001 — Runtime Version Gate` (`READY_FOR_CHATGPT_REVIEW`)
+- **Active Work Packages**:
+  - `OPS-WP001`: `READY_FOR_CHATGPT_REVIEW`
+  - `OPS-WP001-R1`: `READY_FOR_CHATGPT_REVIEW`
 - **Next Work Packages**:
   - `REL-WP001`: `NOT STARTED`
   - `REL-WP002`: `NOT STARTED`
