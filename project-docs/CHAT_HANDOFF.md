@@ -4,7 +4,7 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: Initial BUG-WP002 commit pending
+* HEAD: 18f0780 (fix(safety): prevent invalid OA context poisoning and 404 recovery loop BUG-WP002)
 * Working Tree: Clean (BUG-WP002 implementation completed)
 
 ## Project Purpose
