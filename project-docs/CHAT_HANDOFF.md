@@ -4,7 +4,7 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: Initial BUG-WP002-R1 commit pending
+* HEAD: 56141d3 (fix(safety): preserve active job when OA context unavailable BUG-WP002-R1)
 * Working Tree: Clean (BUG-WP002-R1 implementation completed)
 
 ## Project Purpose
