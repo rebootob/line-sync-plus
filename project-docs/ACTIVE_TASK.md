@@ -1,40 +1,46 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: BUG-WP002-R1 — Preserve Active Job When OA Context Is Unknown
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: SEC-WP001 — Secret Hygiene
+STATUS: READY_NOT_STARTED
 AUTHORIZED_BY: ChatGPT / Control Plane
-TASK_TYPE: SAFETY_CORRECTIVE_PRESERVATION
+TASK_TYPE: SECURITY_MANDATE
 ```
 
 ---
 
-## 📋 Completed Work Package Summary: BUG-WP002-R1
+## 📋 Completed Safety Closure Summary: UAT-1100 Campaign Evidence
 
-### Implemented Corrections:
-1. **Active Job Preservation When OA Context Is Missing (`handleSafeRecovery`)**:
-   - `handleSafeRecovery` checks `const targetUrl = getOAContextUrl(jobData.userId)` BEFORE consuming a retry attempt or incrementing `retryCount`.
-   - If `!targetUrl` (missing/invalid OA context):
-     - Does **NOT** call `finishJob()`.
-     - Does **NOT** call `/campaign/fail`.
-     - Does **NOT** clear active job session fields (`linesync_jobid`, `linesync_uid`, `linesync_msg`, `linesync_type`, `linesync_img`, `linesync_link`).
-     - Does **NOT** fetch another job (`/campaign/next`).
-     - Does **NOT** navigate or redirect.
-     - Does **NOT** increment `retryCount`.
-     - Sets `isExecutingJob = false` safely and returns to wait for the user to manually open a valid `chat.line.biz/U<32hex>/` page.
-2. **Page-Load Recovery & Job Resumption**:
-   - When the user manually navigates to a valid LINE Chat page (`https://chat.line.biz/Uaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/`), `getBotId()` captures the valid context ID into `sessionStorage`.
-   - On page load, the bot reconstructs saved Job A parameters from `sessionStorage`.
-   - Since current URL is main OA list `/U.../` (not recipient chat), `handleSafeRecovery(Job A, 'RECIPIENT_UNVERIFIED')` is called.
-   - Now `getOAContextUrl(User A)` returns `https://chat.line.biz/U.../chat/User A`. `retryCount` is incremented (1/2), and the bot navigates directly to the recipient chat room to complete Job A.
-   - Job A is finalized ONLY after successful send or actual bounded retry exhaustion on a valid target URL.
-3. **Unit Test Suite (`src/app.controller.spec.ts`)**:
-   - Added test 9 verifying active job preservation when `targetUrl` is null.
-   - Added test 10 verifying `retryCount` is not consumed when OA context is missing (20 tests passed).
+### Safety Gate Status & Corrective Closure:
+- **Safety Gate**: **PASS**
+- **BUG-WP001**: **CLOSED**
+- **BUG-WP001-UATLOG**: **CLOSED**
+- **BUG-WP002**: **CLOSED**
+
+### Exact UAT-1100 Campaign Evidence (LineSyncApp v28.2):
+- **Target Recipient Count**: 1,100
+- **Processed Jobs**: 473 (Stopped by user after 473/1,100 jobs; NOT a full 1,100-job endurance completion)
+- **Successful Sends**: 69
+- **Blocked / Cannot Send**: 402
+- **NAVIGATION_404 Terminal Failures**: 2
+- **User-Stopped Before Processing**: 627
+- **Wrong Recipient Detected**: 0
+- **Duplicate JOB_SUCCESS**: 0
+- **Lost Claimed Job**: 0
+- **RECIPIENT_VERIFY_FAIL During v28.2 Session**: 0
+
+### 404 Terminal Failure Safety Evidence:
+Both real `NAVIGATION_404` jobs:
+1. Preserved the exact same active job in `sessionStorage`
+2. Retried the exact same recipient
+3. Bounded retry count exhausted (`retryCount = 2`)
+4. Failed closed and logged terminal failure safely
+5. Did **NOT** send messages to any incorrect recipient
 
 ---
 
 ## ⛔ Execution Policy
 
-- **Package Completion**: BUG-WP002-R1 completed, validated (`node --check` PASS, `npm test` PASS [20 passed], `npm run build` PASS, `git diff --check` PASS).
-- **Next Step**: Await review and authorization from ChatGPT / Control Plane.
+- **Safety Gate Status**: PASS (BUG-WP001, BUG-WP001-UATLOG, BUG-WP002 closed).
+- **Next Gate**: `SEC-WP001 — Secret Hygiene` (READY / NOT STARTED).
+- **Instruction**: Do NOT modify source code or start SEC-WP001 implementation until explicitly authorized.

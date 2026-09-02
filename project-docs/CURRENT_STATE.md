@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post BUG-WP001 Implementation)
+**Last Updated**: 2026-09-02 (Post UAT-1100 Safety Closure & BUG Work Package Completion)
 
 ---
 
@@ -36,29 +36,52 @@
 - Recording `startedAt` execution timestamp when campaign starts processing.
 
 ### 2. NestJS REST API (`src/app.controller.ts`)
-- REST API endpoints for customer list, grouping, multi-type campaign creation, job dispatch queue (`GET /api/campaign/next`), result status reporting, bot master switch, schedule management, and Telegram notification integration.
+- REST API endpoints for customer list, grouping, multi-type campaign creation, job dispatch queue (`GET /api/campaign/next`), result status reporting, bot master switch, schedule management, Telegram notification integration, and trusted loopback browser diagnostic event logger (`POST /api/diagnostics/browser-event`).
 
 ### 3. Web Dashboard (`index.html`)
 - Interactive dashboard UI with toolbar search, status/name filters, quick selection shortcuts (`✅ เลือกเฉพาะ Active ทั้งหมด`, `🎯 เลือก 100 คนแรก`, `🧹 ล้างการเลือก`), schedule management, deep analytics, and Telegram setting modal.
 
-### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.0)
-- Execution inside LINE OA (`chat.line.biz` / `manager.line.biz`).
+### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.2)
+- Strict OA context validation (`isValidChatContextId` testing `/^U[0-9a-fA-F]{32}$/`).
+- Fail-closed context navigation (`getOAContextUrl` returns `null` when context is missing/invalid).
+- Active job preservation during missing context (`handleSafeRecovery` preserves session parameters without calling `finishJob` or incrementing `retryCount`).
 - Quota limit auto-stop detection (`checkQuotaLimitExceeded`).
 - Circuit Breaker safety: Emergency stop when encountering 10 consecutive non-blocked errors.
 - Blocked user exclusion: `isBlocked = true` users do not increment the consecutive error counter.
 - **404 & LINE Error Page Guard (`checkIfErrorPage`)**: Aborts sending immediately upon encountering error URLs or DOM error banners.
-- **Exact Recipient Verification Guard (`verifyCurrentRecipient`)**: Verifies recipient against URL pathname regex `/chat/${expectedUserId}` and DOM data attributes prior to execution, image upload, image confirmation, text typing, and before clicking Send.
-- **Removed Unsafe Blind-Clicks**: Removed unsafe iteration clicking elements with `href.includes(userId)`.
-- **Safe Recovery (`handleSafeRecovery`)**: Bounded retries (max 2 retries per job) with clean session recovery, returning to main chat view (`closeUserChatAndReturnToMain`), and explicit error reporting (`NAVIGATION_404`, `RECIPIENT_MISMATCH`, `RECIPIENT_UNVERIFIED`).
+- **Exact Recipient Verification Guard (`verifyCurrentRecipient`)**: Verifies recipient against URL pathname regex `/${botId}/chat/${expectedUserId}` and DOM data attributes prior to execution, image upload, image confirmation, text typing, and before clicking Send.
+- **Confirmed-Write Diagnostic Spooling (`enqueueSpool`, `flushPendingDiagnostics`)**: Navigation-safe diagnostic event persistence to `uat-logs/browser-BUG-WP001-UAT.log`.
 
 ### 5. Telegram Notification Subsystem (`src/telegram.service.ts`)
 - HTML summary completion reporting with Thai message type labels and icons.
 
 ---
 
-## 🚧 Active / Unfinished Work
+## 🔒 Closed Work Packages & Safety Gate Status
 
-- None for BUG-WP001. Ready for ChatGPT Control Plane review.
+- **Safety Gate**: **PASS**
+- **BUG-WP001**: **CLOSED**
+- **BUG-WP001-UATLOG**: **CLOSED**
+- **BUG-WP002**: **CLOSED**
+
+### UAT-1100 Campaign Evidence Summary:
+- **Target Recipient Count**: 1,100
+- **Processed Jobs**: 473 (Stopped by user after 473/1,100 jobs; NOT a completed 1,100-job endurance run)
+- **Successful Sends**: 69
+- **Blocked / Cannot Send**: 402
+- **NAVIGATION_404 Terminal Failures**: 2 (Preserved same job, retried same recipient, exhausted retryCount=2, failed safely, zero misdeliveries)
+- **User-Stopped Before Processing**: 627
+- **Wrong Recipient Detected**: 0
+- **Duplicate JOB_SUCCESS**: 0
+- **Lost Claimed Job**: 0
+- **RECIPIENT_VERIFY_FAIL During v28.2 Session**: 0
+
+---
+
+## 🚀 Next Approved Work Package
+
+- **Next Gate**: `SEC-WP001 — Secret Hygiene`
+- **Status**: `READY / NOT STARTED`
 
 ---
 

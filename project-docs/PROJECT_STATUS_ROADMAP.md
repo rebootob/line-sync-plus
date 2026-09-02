@@ -96,36 +96,36 @@ The LineSync Plus safety model operates on strict **fail-closed** principles to 
 
 ## 6. Problems Found & 10 Corrective Work Packages
 
-Over the course of safety hardening, 10 corrective work packages were identified, implemented, and verified:
+Over the course of safety hardening, 10 corrective work packages were identified, implemented, verified, and **CLOSED**:
 
-1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard**:
+1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard (CLOSED)**:
    - *Problem*: Navigation and context loss on LINE OA caused risks of sending messages to incorrect chat rooms.
    - *Fix*: Created explicit error page detection (`checkIfErrorPage`) and strict recipient verification (`verifyCurrentRecipient`).
-2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard**:
+2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard (CLOSED)**:
    - *Problem*: Re-entrancy race conditions and loss of active job parameters across page reloads.
    - *Fix*: Extended `isExecutingJob` lock across full job lifecycle, implemented `handleSafeRecovery` preserving job state in `sessionStorage` up to 2 bounded retries, and added zero-tolerance pre-send checks.
-3. **BUG-WP001-UATLOG — Persistent Browser Safety Diagnostic Logging**:
+3. **BUG-WP001-UATLOG — Persistent Browser Safety Diagnostic Logging (CLOSED)**:
    - *Problem*: Lack of persistence for browser safety events during UAT endurance testing.
    - *Fix*: Added backend diagnostic endpoint `POST /api/diagnostics/browser-event` logging to `uat-logs/browser-BUG-WP001-UAT.log`.
-4. **BUG-WP001-UATLOG-R1 — Low-Noise / Local-Only Diagnostic Logging**:
+4. **BUG-WP001-UATLOG-R1 — Low-Noise / Local-Only Diagnostic Logging (CLOSED)**:
    - *Problem*: High-frequency log spamming on every verification tick and unhardened backend input.
    - *Fix*: Restricted logging to lifecycle checkpoints, enforced event allowlist, and added loopback IP protection.
-5. **BUG-WP001-UATLOG-R2 — Trusted Loopback Enforcement / Clean Test Evidence**:
+5. **BUG-WP001-UATLOG-R2 — Trusted Loopback Enforcement / Clean Test Evidence (CLOSED)**:
    - *Problem*: Potential IP header spoofing via `x-forwarded-for` and test log pollution.
    - *Fix*: Bound IP check strictly to direct socket `remoteAddress` (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`), ignoring forwarded headers, and spied on file writes in Jest tests.
-6. **BUG-WP001-UATLOG-R3 — Navigation-Safe Diagnostic Persistence**:
+6. **BUG-WP001-UATLOG-R3 — Navigation-Safe Diagnostic Persistence (CLOSED)**:
    - *Problem*: Pre-navigation diagnostic events were dropped during browser page unload.
    - *Fix*: Created synchronous `sessionStorage` diagnostic spooling (`linesync_pending_diagnostics`) with page-load flush.
-7. **BUG-WP001-UATLOG-R4 — Atomic Spool Flush / No Lost Concurrent Events**:
+7. **BUG-WP001-UATLOG-R4 — Atomic Spool Flush / No Lost Concurrent Events (CLOSED)**:
    - *Problem*: Race conditions during flush snapshot overwrote newly appended events.
    - *Fix*: Implemented atomic merge-safe removal via `_sqId` and created `safeClearSessionStorage` to protect spool state across emergency stops.
-8. **BUG-WP001-UATLOG-R5 — Confirmed-Write Spool Removal**:
+8. **BUG-WP001-UATLOG-R5 — Confirmed-Write Spool Removal (CLOSED)**:
    - *Problem*: Events were removed from spool on HTTP 2xx even if backend returned `{ success: false }`.
    - *Fix*: Required `result && result.success === true` before removing items from spool, preserving event ordering on network failures.
-9. **BUG-WP002 — OA Context Poisoning / Invalid BotId 404 Loop**:
+9. **BUG-WP002 — OA Context Poisoning / Invalid BotId 404 Loop (CLOSED)**:
    - *Problem*: Unvalidated short IDs (`798hcuca`) and manager portal paths (`manager.line.biz`) poisoned `linesync_botid` in `sessionStorage`, leading to 404 redirect loops.
    - *Fix*: Created validator `isValidChatContextId` (`^U[0-9a-fA-F]{32}$`), removed manager execution, refactored `getBotId` and `getOAContextUrl` to fail closed (`null`), and added processQueue context gate.
-10. **BUG-WP002-R1 — Preserve Active Job When OA Context Is Unknown**:
+10. **BUG-WP002-R1 — Preserve Active Job When OA Context Is Unknown (CLOSED)**:
     - *Problem*: `handleSafeRecovery` prematurely called `finishJob` and failed active campaign jobs on the backend when browser context was temporarily lost.
     - *Fix*: Refactored `handleSafeRecovery` to check `targetUrl` before consuming retries or calling `finishJob`. If missing, active job state is preserved in `sessionStorage`, `retryCount` is NOT incremented, and execution fails closed until manual valid navigation.
 
@@ -141,8 +141,22 @@ Over the course of safety hardening, 10 corrective work packages were identified
 
 ## 8. UAT Evidence
 
+- **Safety Gate Status**: **PASS**
+- **BUG-WP001**: **CLOSED**
+- **BUG-WP001-UATLOG**: **CLOSED**
+- **BUG-WP002**: **CLOSED**
 - **83-recipient baseline UAT**: 83 targets / 80 success / 3 blocked / no observed 404
-- **1,100-recipient endurance UAT**: RUNNING / RESULT PENDING
+- **UAT-1100 Campaign Evidence (LineSyncApp v28.2)**:
+  - Target = 1,100
+  - Processed = 473 (Campaign stopped by user after 473/1,100 jobs; NOT a completed 1,100-job endurance run)
+  - Success = 69
+  - Blocked / cannot send = 402
+  - NAVIGATION_404 terminal failures = 2 (Both preserved same job, retried same recipient, exhausted retryCount=2, failed safely, zero misdeliveries)
+  - User-stopped before processing = 627
+  - Wrong Recipient detected = 0
+  - Duplicate JOB_SUCCESS = 0
+  - Lost claimed job = 0
+  - RECIPIENT_VERIFY_FAIL during v28.2 session = 0
 
 ---
 
@@ -153,7 +167,7 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - **PROHIBITED**: Under no circumstances may `.env` files, API keys, passwords, database credentials, access tokens, refresh tokens, private keys, or LINE channel secrets be committed or pushed to Git.
 
 ### Technical Debt Items
-- Database credentials currently reside in local `.env` (gitignored). Production setup requires secure environment secret injection.
+- Database credentials currently reside in local `.env` (gitignored). Production setup requires secure environment secret injection (`SEC-WP001`).
 - Diagnostic log files (`uat-logs/`) must be rotated periodically to prevent disk bloat.
 
 ---
@@ -166,8 +180,8 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 11. Development Roadmap
 
-- **Phase 0 — Security & Reliability Foundation**: Core zero-tolerance recipient safety, full-lifecycle execution locking, OA context validation, and failure-closed recovery guards.
-- **Phase 1 — Operations & Monitoring**: Browser diagnostic persistence, direct-socket loopback event logging, and local diagnostic evidence audit trails.
+- **Phase 0 — Security & Reliability Foundation**: Core zero-tolerance recipient safety, full-lifecycle execution locking, OA context validation, and failure-closed recovery guards (**COMPLETED**).
+- **Phase 1 — Operations & Monitoring**: Browser diagnostic persistence, direct-socket loopback event logging, and local diagnostic evidence audit trails (**COMPLETED**).
 - **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -178,10 +192,9 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
-   - Secret hygiene enforcement (Zero secrets in public repo).
-   - Fail-closed recipient verification & OA context validation.
+   - Secret hygiene enforcement (`SEC-WP001`).
+   - Fail-closed recipient verification & OA context validation (Completed in WP001/WP002).
 2. **P1 (Observability & Operational Hardening)**:
-   - Completion of 1,100-recipient endurance UAT run.
    - Real-time diagnostic event stream UI widget in Dashboard.
 3. **P2 (Analytics & Automation)**:
    - Automated Telegram alert on session expiry / auth loss.
@@ -198,7 +211,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 14. Recommended Next Work Packages
 
-- **WP-UAT-1100**: Complete and verify 1,100-recipient endurance UAT run log analysis.
+- **SEC-WP001**: Secret Hygiene & credential security audit (READY / NOT STARTED).
 - **WP-UI-LOGS**: Implement browser diagnostic log viewer tab in single-page dashboard.
 - **WP-AUTH-ALERT**: Implement session disconnect & re-authentication alert via Telegram.
 
@@ -224,5 +237,5 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-The project is currently at Phase 1 (Operations & Monitoring) completing the 1,100-recipient endurance UAT run.
-Next Action: Await ChatGPT Control Plane review of BUG-WP002-R1 and approval of next work package assignment.
+The project has passed all safety gates (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002` CLOSED).
+Next Action: Await explicit ChatGPT / Control Plane authorization before starting `SEC-WP001 — Secret Hygiene`.
