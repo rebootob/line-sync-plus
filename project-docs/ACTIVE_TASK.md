@@ -1,37 +1,36 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: BUG-WP001-UATLOG-R3 — Navigation-Safe Diagnostic Persistence
+ACTIVE_WORK_PACKAGE: BUG-WP001-UATLOG-R4 — Atomic Spool Flush / No Lost Concurrent Events
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: ChatGPT / Control Plane
-TASK_TYPE: OBSERVABILITY_CORRECTIVE_SPOOLING
+TASK_TYPE: OBSERVABILITY_CORRECTIVE_CONCURRENCY
 ```
 
 ---
 
-## 📋 Completed Work Package Summary: BUG-WP001-UATLOG-R3
+## 📋 Completed Work Package Summary: BUG-WP001-UATLOG-R4
 
 ### Implemented Corrections:
-1. **Bounded Diagnostic Spool in `sessionStorage` (`linesync_pending_diagnostics`)**:
-   - Navigation-critical events (`JOB_RECEIVED`, `NAVIGATE_TARGET`, `NAVIGATION_404`, `SAME_JOB_RECOVERY_START`, `SAME_JOB_RETRY`, `SAME_JOB_RETRY_EXHAUSTED`) are synchronously enqueued in a `sessionStorage` spool array BEFORE `window.location.href = ...` unloads the page.
-   - Queue size bounded to a maximum of 50 items (`MAX_SPOOL_SIZE = 50`).
-   - Contains ONLY approved diagnostic fields (`clientTimestamp`, `event`, `scriptVersion`, `tabSessionId`, `jobId`, `expectedUserId`, `botId`, `currentPath`, `retryCount`, `reason`).
-   - STRICTLY NEVER stores message body, `imageUrl`, `linkUrl`, credentials, tokens, or arbitrary job data.
-2. **Page-Load Asynchronous Spool Flush (`flushPendingDiagnostics`)**:
-   - On subsequent page load, `flushPendingDiagnostics()` flushes queued diagnostic payloads via `fetchAPI('/diagnostics/browser-event', 'POST', item)`.
-   - Non-blocking execution; does not delay or block main bot execution.
-   - Successfully posted items are removed from spool; failed items remain in spool for subsequent retry.
-   - Malformed entries safely discarded.
-3. **Preserved Original Chronology (`clientTimestamp`)**:
-   - Retains original `clientTimestamp` in queued events so server logs reflect exact client-side event timeline.
-4. **No Execution or Bot Behavior Changes**:
-   - Bot send logic, navigation destinations, recipient verification, retry counters, timers, campaign logic, blocked user handling, and quota handling remain 100% unchanged.
-5. **Unit Test Suite (`src/app.controller.spec.ts`)**:
-   - Added test 10 verifying that original `clientTimestamp` is preserved for queued navigation-critical events (10 tests passed).
+1. **Atomic / Merge-Safe Spool Flush (`flushPendingDiagnostics`)**:
+   - Takes a snapshot (`initialSnapshot`) at flush start and processes only those existing items (bounded work).
+   - For each successful `POST`:
+     - Re-reads CURRENT spool from `sessionStorage` (`currentSpool = getSpool()`).
+     - Removes ONLY the exact successfully posted event matching unique internal `_sqId` (`currentSpool.splice(indexToRemove, 1)`).
+     - Re-saves updated `currentSpool`.
+   - Any diagnostic events enqueued during an active HTTP request in flight are preserved intact in `currentSpool` and NEVER overwritten or dropped.
+   - On transport failure, the flush loop breaks immediately to preserve event ordering; failed and subsequent events remain in spool.
+2. **Safe Session Cleanup (`safeClearSessionStorage`)**:
+   - Replaced all calls to `sessionStorage.clear()` in quota limit and circuit breaker handlers with `safeClearSessionStorage()`.
+   - Preserves `linesync_pending_diagnostics`, `linesync_tab_session_id`, and `linesync_botid` across emergency bot stops so pending evidence is never destroyed.
+3. **Internal Key Stripping**:
+   - Unique internal matching key `_sqId` is used exclusively inside client-side `sessionStorage` spool and is automatically stripped before sending JSON to the backend API endpoint.
+4. **No Bot Behavior or Execution Changes**:
+   - Send logic, recipient verification, navigation destination, retry counters, timers, campaign queue, quota decisions, blocked user decisions, and circuit breaker logic remain 100% unchanged.
 
 ---
 
 ## ⛔ Execution Policy
 
-- **Package Completion**: BUG-WP001-UATLOG-R3 completed, validated (`node --check` PASS, `npm test` PASS [10 passed], `npm run build` PASS).
+- **Package Completion**: BUG-WP001-UATLOG-R4 completed, validated (`node --check` PASS, `npm test` PASS [10 passed], `npm run build` PASS).
 - **Next Step**: Await review and authorization from ChatGPT / Control Plane.

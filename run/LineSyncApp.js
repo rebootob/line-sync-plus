@@ -2,7 +2,7 @@
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
 // @version      28.1
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP001-UATLOG-R3 Navigation-Safe Diagnostic Persistence)
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP001-UATLOG-R4 Atomic Spool Flush & Safe Session Cleanup)
 // @match        https://chat.line.biz/*
 // @match        https://manager.line.biz/*
 // @grant        GM_xmlhttpRequest
@@ -30,7 +30,7 @@
     let isExecutingJob = false;
     let isFlushingSpool = false;
 
-    console.log("🤖 LineSync Plus Bot v28.1: พร้อมทำงาน (BUG-WP001-UATLOG-R3 Active)...");
+    console.log("🤖 LineSync Plus Bot v28.1: พร้อมทำงาน (BUG-WP001-UATLOG-R4 Active)...");
 
     function getTabSessionId() {
         let id = sessionStorage.getItem('linesync_tab_session_id');
@@ -39,6 +39,19 @@
             sessionStorage.setItem('linesync_tab_session_id', id);
         }
         return id;
+    }
+
+    // 🛡️ Helper: Safe Session Clear preserving diagnostic logs & session IDs
+    function safeClearSessionStorage() {
+        const pendingDiagnostics = sessionStorage.getItem('linesync_pending_diagnostics');
+        const tabSessionId = sessionStorage.getItem('linesync_tab_session_id');
+        const botId = sessionStorage.getItem('linesync_botid');
+
+        sessionStorage.clear();
+
+        if (pendingDiagnostics) sessionStorage.setItem('linesync_pending_diagnostics', pendingDiagnostics);
+        if (tabSessionId) sessionStorage.setItem('linesync_tab_session_id', tabSessionId);
+        if (botId) sessionStorage.setItem('linesync_botid', botId);
     }
 
     // 🛡️ Bounded Diagnostic Spool in sessionStorage for Navigation Safety
@@ -64,7 +77,9 @@
 
     function enqueueSpool(payload) {
         try {
+            const sqId = 'sq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
             const sanitized = {
+                _sqId: sqId,
                 clientTimestamp: payload.clientTimestamp || new Date().toISOString(),
                 event: String(payload.event || 'UNKNOWN').slice(0, 50),
                 scriptVersion: '28.1',
@@ -83,27 +98,39 @@
         } catch (e) {}
     }
 
+    // 🛡️ ATOMIC / MERGE-SAFE SPOOL FLUSH
     async function flushPendingDiagnostics() {
         if (isFlushingSpool) return;
         isFlushingSpool = true;
 
         try {
-            let spool = getSpool();
-            if (spool.length === 0) return;
+            // Snapshot initial spool at start of flush (bounded work)
+            const initialSnapshot = getSpool();
+            if (initialSnapshot.length === 0) return;
 
-            const remaining = [];
-            for (let i = 0; i < spool.length; i++) {
-                const item = spool[i];
-                if (!item || !item.event) continue;
+            for (let i = 0; i < initialSnapshot.length; i++) {
+                const item = initialSnapshot[i];
+                if (!item || !item.event || !item._sqId) continue;
+
+                // Strip internal matching key _sqId before sending to backend
+                const { _sqId, ...backendPayload } = item;
 
                 try {
-                    await fetchAPI('/diagnostics/browser-event', 'POST', item);
+                    await fetchAPI('/diagnostics/browser-event', 'POST', backendPayload);
+
+                    // ATOMIC REMOVAL: Re-read CURRENT spool from sessionStorage after successful POST
+                    const currentSpool = getSpool();
+                    const indexToRemove = currentSpool.findIndex(el => el._sqId === _sqId);
+
+                    if (indexToRemove !== -1) {
+                        currentSpool.splice(indexToRemove, 1);
+                        saveSpool(currentSpool);
+                    }
                 } catch (err) {
-                    remaining.push(item);
+                    // Stop current flush loop immediately on transport failure to preserve event ordering
+                    break;
                 }
             }
-
-            saveSpool(remaining);
         } catch (e) {
             // Safety invariant: logging failure must never affect bot execution
         } finally {
@@ -547,7 +574,7 @@
 
         if (checkQuotaLimitExceeded()) {
             console.error("🛑 [CRITICAL] ตรวจพบการเตือนโควต้า LINE OA เต็ม! หยุดคิวงาน...");
-            sessionStorage.clear();
+            safeClearSessionStorage();
             return;
         }
 
@@ -642,7 +669,7 @@
                 reason: '🛑 สั่งหยุดแคมเปญทันทีเนื่องจากโควต้าข้อความ LINE OA เต็ม (Quota Exceeded Limit)',
                 limitReached: true
             });
-            sessionStorage.clear();
+            safeClearSessionStorage();
             isExecutingJob = false;
             alert('🛑 ระบบหยุดส่งแคมเปญอัตโนมัติ เนื่องจากโควต้าข้อความ LINE OA ของคุณเต็มแล้ว');
             return;
@@ -820,7 +847,7 @@
                         reason: '🚨 สคริปต์หยุดทำงานอัตโนมัติเนื่องจากพบ Error ติดต่อกันเกิน 10 รายการ',
                         errorOverflow: true
                     });
-                    sessionStorage.clear();
+                    safeClearSessionStorage();
                     isExecutingJob = false;
                     alert('🚨 ระบบเซฟตี้หยุดสคริปต์อัตโนมัติ เนื่องจากพบ Error ติดต่อกันเกิน 10 รายการเพื่อความปลอดภัยของบัญชี LINE OA');
                     return;
