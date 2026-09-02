@@ -4,7 +4,7 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* HEAD: Initial BUG-WP001-UATLOG-R4 commit pending
+* HEAD: 91c8bfd (fix(observability): implement atomic merge-safe spool flush and safe session clear BUG-WP001-UATLOG-R4)
 * Working Tree: Clean (BUG-WP001-UATLOG-R4 implementation completed)
 
 ## Project Purpose
