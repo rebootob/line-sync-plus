@@ -54,9 +54,84 @@
         return id;
     }
 
+    const TAB_IDENTITY_LOCK_PREFIX = 'linesync_tab_identity_v1_';
     let currentTabLeaseId = sessionStorage.getItem('linesync_tab_lease_id') || null;
     let isCurrentTabLeader = false;
+    let isTabIdentityVerified = false;
     let isLeadershipWarningShown = false;
+
+    // 🛡️ REL-WP001-R2 DOCUMENT-LIFETIME TAB IDENTITY DEFENSE
+    async function ensureTabIdentity() {
+        if (isTabIdentityVerified) return true;
+
+        if (!navigator.locks || typeof navigator.locks.request !== 'function') {
+            console.warn("🛑 [REL] TAB IDENTITY UNVERIFIED: Web Locks API unavailable in browser.");
+            isTabIdentityVerified = false;
+            return false;
+        }
+
+        const currentTabId = getTabSessionId();
+        const identityLockName = TAB_IDENTITY_LOCK_PREFIX + currentTabId;
+
+        return new Promise((resolve) => {
+            let settled = false;
+
+            navigator.locks.request(identityLockName, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
+                if (!lock) {
+                    // 🚨 CLONED / DUPLICATED TAB IDENTITY DETECTED!
+                    console.warn(`🛑 [REL] DUPLICATE TAB IDENTITY DETECTED: Session ID ${currentTabId} is held by another live tab.`);
+
+                    // 1. Generate NEW tabSessionId
+                    const newTabId = 'ts_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+                    try {
+                        sessionStorage.setItem('linesync_tab_session_id', newTabId);
+                    } catch (e) {}
+
+                    // 2. Remove copied lease & reset local lease state
+                    try {
+                        sessionStorage.removeItem('linesync_tab_lease_id');
+                    } catch (e) {}
+                    currentTabLeaseId = null;
+
+                    // 3. Remove copied active-job session fields
+                    sessionStorage.removeItem('linesync_jobid');
+                    sessionStorage.removeItem('linesync_uid');
+                    sessionStorage.removeItem('linesync_msg');
+                    sessionStorage.removeItem('linesync_type');
+                    sessionStorage.removeItem('linesync_img');
+                    sessionStorage.removeItem('linesync_link');
+
+                    console.log(`[REL] NEW TAB IDENTITY ASSIGNED: Reassigned identity to ${newTabId}. Becoming STANDBY.`);
+
+                    if (!settled) {
+                        settled = true;
+                        // Recursively claim identity lock for the new tabSessionId
+                        const ok = await ensureTabIdentity();
+                        resolve(ok);
+                    }
+                    return;
+                }
+
+                // Normal or Reassigned Tab Identity Lock Acquired Successfully
+                isTabIdentityVerified = true;
+
+                if (!settled) {
+                    settled = true;
+                    resolve(true);
+                }
+
+                // Hold identity lock for the lifetime of this document
+                return new Promise(() => {});
+            }).catch(() => {
+                isTabIdentityVerified = false;
+                if (!settled) {
+                    settled = true;
+                    console.warn("🛑 [REL] TAB IDENTITY UNVERIFIED: Exception during identity lock request.");
+                    resolve(false);
+                }
+            });
+        });
+    }
 
     // 🛡️ REL-WP001 / REL-WP001-R1 SINGLE WORKER LOCK SUBSYSTEM
     function readWorkerLeaderRecord() {
@@ -117,6 +192,7 @@
     }
 
     function hasValidWorkerLeadership() {
+        if (!isTabIdentityVerified) return false;
         if (!currentTabLeaseId) return false;
         const rec = readWorkerLeaderRecord();
         if (!rec) return false;
@@ -124,6 +200,11 @@
     }
 
     async function ensureWorkerLeadership(overrideLeaseMs = WORKER_LEASE_MS) {
+        if (!isTabIdentityVerified) {
+            const idOk = await ensureTabIdentity();
+            if (!idOk) return false;
+        }
+
         if (!navigator.locks || typeof navigator.locks.request !== 'function') {
             isCurrentTabLeader = false;
             if (!isLeadershipWarningShown) {
@@ -185,6 +266,11 @@
     }
 
     async function confirmWorkerLeadershipForSend() {
+        if (!isTabIdentityVerified) {
+            const idOk = await ensureTabIdentity();
+            if (!idOk) return false;
+        }
+
         if (!hasValidWorkerLeadership()) {
             isCurrentTabLeader = false;
             return false;
@@ -1301,6 +1387,7 @@
     window.addEventListener('load', () => {
         emitDiagnostic('BOT_START');
         flushPendingDiagnostics().catch(() => {});
+        ensureTabIdentity().catch(() => {});
 
         setTimeout(async () => {
             const savedJobId = sessionStorage.getItem('linesync_jobid');

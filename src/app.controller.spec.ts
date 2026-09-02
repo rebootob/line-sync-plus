@@ -545,6 +545,36 @@ describe('AppController', () => {
       expect(scriptContent).toContain('isTextLeaderConfirmed');
     });
   });
+
+  describe('REL-WP001-R2 — Duplicate-Tab Identity Clone Defense Security Tests', () => {
+    it('1. Document-lifetime tab identity lock prefix exists', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain('TAB_IDENTITY_LOCK_PREFIX');
+      expect(scriptContent).toContain('linesync_tab_identity_v1_');
+      expect(scriptContent).toContain('ensureTabIdentity');
+    });
+
+    it('2. Cloned tab detects duplicate identity, generates new tabSessionId, and clears copied lease/job state', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain('DUPLICATE TAB IDENTITY DETECTED');
+      expect(scriptContent).toContain('NEW TAB IDENTITY ASSIGNED');
+      expect(scriptContent).toContain("sessionStorage.removeItem('linesync_tab_lease_id')");
+      expect(scriptContent).toContain("sessionStorage.removeItem('linesync_jobid')");
+      expect(scriptContent).toContain("sessionStorage.removeItem('linesync_uid')");
+    });
+
+    it('3. Leadership and atomic send confirmation require verified document tab identity', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain('if (!isTabIdentityVerified) return false;');
+      expect(scriptContent).toContain('TAB IDENTITY UNVERIFIED');
+    });
+  });
 });
 
 

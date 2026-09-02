@@ -52,6 +52,7 @@ Key Operational Goals:
 |                      Tampermonkey Userscript (LineSyncApp.js v28.4)              |
 |                             Running in chat.line.biz                              |
 |                                                                                   |
+|  - Document-Lifetime Tab Identity Lock & Clone Defense (ensureTabIdentity)        |
 |  - Fail-Closed Lease Persistence (writeAndVerifyLeaderRecord)                     |
 |  - Complete Navigation Hold (navigateAsLeader: NAVIGATION_LEASE_MS = 45000)       |
 |  - Atomic Pre-Send Fencing (confirmWorkerLeadershipForSend under Web Locks)       |
@@ -86,7 +87,7 @@ Key Operational Goals:
 
 The LineSync Plus safety model operates on strict **fail-closed** principles to eliminate risks of context loss or misdirection:
 
-- **Single Worker Multi-Tab Lock (REL-WP001 / REL-WP001-R1)**: `ensureWorkerLeadership()` enforces that only ONE active worker tab claims jobs or executes DOM mutations within a browser profile/storage partition. `writeAndVerifyLeaderRecord()` guarantees fail-closed storage persistence, `navigateAsLeader()` enforces complete navigation holds across all full-page reloads, and `confirmWorkerLeadershipForSend()` provides atomic pre-send mutex confirmation.
+- **Single Worker Multi-Tab Lock & Clone Defense (REL-WP001 / R1 / R2)**: `ensureWorkerLeadership()` enforces that only ONE active worker tab claims jobs or executes DOM mutations within a browser profile/storage partition. `ensureTabIdentity()` prevents duplicate/cloned tabs from reusing copied session identities by assigning a new `tabSessionId` and clearing copied lease state. `writeAndVerifyLeaderRecord()` guarantees fail-closed storage persistence, `navigateAsLeader()` enforces complete navigation holds across all full-page reloads, and `confirmWorkerLeadershipForSend()` provides atomic pre-send mutex confirmation.
 - **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path (`/${botId}/chat/${expectedUserId}`) and DOM attribute validation before any text insertion or image send click.
 - **Fail-Closed Runtime Version Gate (OPS-WP001 / OPS-WP001-R1)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.4'` before querying or claiming any job. Client retries compatibility check via `setTimeout(..., CHECK_INTERVAL)` without fetching jobs while incompatible.
 - **Full-Lifecycle Execution Lock**: `isExecutingJob` remains active across the entire job lifecycle.
@@ -118,7 +119,7 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - Browser page reloads cancel in-flight HTTP requests unless spooled synchronously in `sessionStorage`.
 - Direct socket peer validation (`req.socket.remoteAddress`) is required to prevent proxy header spoofing on local UAT diagnostic endpoints.
 - LINE OA context IDs strictly adhere to `^U[0-9a-fA-F]{32}$`; short IDs or manager account strings must never be treated as valid chat contexts.
-- Multi-tab browser coordination requires `navigator.locks` election mutex combined with durable `localStorage` lease records (`writeAndVerifyLeaderRecord`) to maintain ownership across same-tab navigations (`navigateAsLeader`).
+- Multi-tab browser coordination requires document-lifetime identity locks (`ensureTabIdentity`) to prevent cloned-tab identity reuse, combined with `navigator.locks` election mutex and durable `localStorage` lease records (`writeAndVerifyLeaderRecord`) to maintain ownership across same-tab navigations (`navigateAsLeader`).
 
 ---
 
@@ -130,7 +131,7 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - **BUG-WP002**: **CLOSED**
 - **SEC-WP001**: **CLOSED**
 - **OPS-WP001 / OPS-WP001-R1**: **CLOSED**
-- **REL-WP001 / REL-WP001-R1**: **READY_FOR_CHATGPT_REVIEW**
+- **REL-WP001 / R1 / R2**: **READY_FOR_CHATGPT_REVIEW**
 - **83-recipient baseline UAT**: 83 targets / 80 success / 3 blocked / no observed 404
 - **UAT-1100 Campaign Evidence (LineSyncApp v28.2)**:
   - Target = 1,100, Processed = 473, Success = 69, Blocked = 402, 404 = 2 (safe retry exhaust), zero misdeliveries.
@@ -166,6 +167,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
   - `OPS-WP001-R1` (Runtime Retry + Fail-Closed Corrective): **COMPLETED / CLOSED**
   - `REL-WP001` (Single Worker / Multi-Tab Lock): **READY_FOR_CHATGPT_REVIEW**
   - `REL-WP001-R1` (Fail-Closed Lease Persistence + Complete Navigation Hold): **READY_FOR_CHATGPT_REVIEW**
+  - `REL-WP001-R2` (Duplicate-Tab Identity Clone Defense): **READY_FOR_CHATGPT_REVIEW**
   - `REL-WP002`: **NOT STARTED**
   - `REL-WP003`: **NOT STARTED**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
@@ -179,7 +181,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
-   - Single worker multi-tab lock (`REL-WP001` & `REL-WP001-R1` READY_FOR_CHATGPT_REVIEW).
+   - Single worker multi-tab lock (`REL-WP001` & `R1` & `R2` READY_FOR_CHATGPT_REVIEW).
    - Operational runtime version gate (`OPS-WP001` & `OPS-WP001-R1` COMPLETED / CLOSED).
    - Secret hygiene & test isolation (`SEC-WP001` COMPLETED / CLOSED).
    - Fail-closed recipient verification & OA context validation (Completed in WP001/WP002).
@@ -192,14 +194,14 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 13. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 -> v28.4 (REL-WP001 / REL-WP001-R1).
-- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, fail-closed runtime version gates, single-worker multi-tab election locks with read-back persistence verification, complete navigation holds, and atomic pre-send mutex confirmation.
+- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 -> v28.4 (REL-WP001 / R1 / R2).
+- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, fail-closed runtime version gates, single-worker multi-tab election locks with document-lifetime tab identity clone defense, read-back persistence verification, complete navigation holds, and atomic pre-send mutex confirmation.
 
 ---
 
 ## 14. Recommended Next Work Packages
 
-- **REL-WP001 / REL-WP001-R1**: Single-Worker Execution Lock / Multi-Tab Defense (**READY_FOR_CHATGPT_REVIEW**).
+- **REL-WP001 / R1 / R2**: Single-Worker Execution Lock / Multi-Tab Defense (**READY_FOR_CHATGPT_REVIEW**).
 - **REL-WP002**: Backend Worker Lease & Heartbeat (**NOT STARTED**).
 - **WP-UI-LOGS**: Implement browser diagnostic log viewer tab in single-page dashboard.
 
@@ -208,11 +210,11 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 15. Success Metrics
 
 - **Zero Misdeliveries**: 0% message delivery to wrong recipients.
-- **Zero Duplicate Tab Workers**: 0 competing `/campaign/next` calls or duplicate DOM automation from multiple open LINE OA tabs.
+- **Zero Duplicate Tab Workers**: 0 competing `/campaign/next` calls or duplicate DOM automation from multiple open or duplicated LINE OA tabs.
 - **Zero Incompatible Worker Claims**: 0 campaign jobs claimed by outdated browser workers.
 - **Zero Poisoning Loops**: 0 infinite 404 redirect loops on invalid bot IDs.
 - **100% Spool Integrity**: 0 lost navigation diagnostic events during page transitions.
-- **100% Test Pass Rate**: All Jest unit tests (36/36) passing cleanly.
+- **100% Test Pass Rate**: All Jest unit tests (39/39) passing cleanly.
 
 ---
 
@@ -227,5 +229,5 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-The project is currently at Phase 0 (Security & Reliability Foundation) with REL-WP001 and REL-WP001-R1 implemented and READY_FOR_CHATGPT_REVIEW.
-Next Action: Await ChatGPT Control Plane review of REL-WP001 / REL-WP001-R1 implementation.
+The project is currently at Phase 0 (Security & Reliability Foundation) with REL-WP001, REL-WP001-R1, and REL-WP001-R2 implemented and READY_FOR_CHATGPT_REVIEW.
+Next Action: Await ChatGPT Control Plane review of REL-WP001 / REL-WP001-R1 / REL-WP001-R2 implementation.
