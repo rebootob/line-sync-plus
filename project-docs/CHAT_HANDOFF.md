@@ -4,12 +4,12 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 3b07da0e0ea5563f68f9a907690b8f31eb43276e (ops: fix runtime gate retry and strict fail-closed handling)
-* Working Tree: Clean (OPS-WP001 documentation closure completed)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: a57ac6a042c37d7acdf86c0e0da25e76597bf5ca (docs: close OPS-WP001 after live runtime gate UAT)
+* Working Tree: Clean (REL-WP001 implementation completed)
 
 ## Project Purpose
 
-LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.3) running inside `chat.line.biz` to send multi-type messages, manage quotas, handle blocks/errors safely, report detailed summary reports to Telegram, and persist atomic, navigation-safe browser diagnostic events to local backend logs.
+LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.4) running inside `chat.line.biz` to send multi-type messages, manage quotas, handle blocks/errors safely, report detailed summary reports to Telegram, and persist atomic, navigation-safe browser diagnostic events to local backend logs.
 
 ## Technology Stack
 
@@ -19,44 +19,23 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
 - **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
-## Work Package Final Closure: OPS-WP001 & OPS-WP001-R1 (CLOSED / PASS)
+## Work Package Status: REL-WP001 — Single Worker / Multi-Tab Lock
 
-* **OPS-WP001 Status**: **CLOSED / PASS**
-* **OPS-WP001-R1 Status**: **CLOSED / PASS**
-* **Worker Version**: `28.3`
-* **Runtime Contract**: `1`
-* **Required Worker**: `28.3`
+* **Status**: `READY_FOR_CHATGPT_REVIEW`
+* **Key Implementation Details**:
+  1. Worker version upgraded to `28.4` (`run/LineSyncApp.js`, `src/runtime-version.ts`, `index.html`, `src/app.controller.spec.ts`).
+  2. Multi-tab leader election using `navigator.locks.request('linesync_worker_election_v1', ...)` as exclusive election mutex.
+  3. Shared durable leader lease record in `localStorage` under `linesync_worker_leader_v1`:
+     `{ ownerTabSessionId, leaseId, workerVersion, acquiredAt, expiresAt }`.
+  4. Lease duration: `WORKER_LEASE_MS = 20000` (20s), renewed every 4s (`WORKER_RENEW_INTERVAL_MS = 4000`).
+  5. Same-tab navigation continuity: `extendLeadershipForNavigation()` extends lease by 45s (`NAVIGATION_LEASE_MS = 45000`) before bot-controlled navigations.
+  6. Non-leader tabs remain STANDBY, retry election periodically, and NEVER fetch `/campaign/next`.
+  7. Pre-send fencing re-verifies leadership at 6 key checkpoints. Leadership loss routes to `handleLeadershipLost()`, clearing local active job session fields without calling `finishJob(false)` or incrementing counters.
+  8. All 33 Jest unit tests passing cleanly; `node --check run/LineSyncApp.js` PASS; Nest build PASS.
 
-### Key Verified UAT Results:
-1. **UAT-01 (Matched Version)**: Worker v28.3 matched required backend version 28.3. 1-recipient live campaign completed cleanly (Success: 1, Fail: 0).
-2. **UAT-02 (Incompatible Worker)**: Simulated worker header `X-LineSync-Worker-Version: 28.2` rejected with HTTP 409 Conflict. Job remained pending; no LINE send occurred. Real worker v28.3 claimed SAME pending job after Master Bot resumed (Success: 1, Fail: 0).
-3. **UAT-03 (Backend Offline / Auto Recovery)**: Worker emitted `RUNTIME VERSION BLOCKED` when backend was stopped. No navigation or send occurred. When backend restarted, worker automatically recovered without requiring manual browser page reloads (Success: 1, Fail: 0).
+## Scope Boundary
+REL-WP001 protects multi-tab execution within the SAME `chat.line.biz` browser profile/storage partition (`localStorage`). Cross-profile or cross-machine protection is NOT claimed and belongs to future work packages (REL-WP002/003).
 
-## Deployment Rollout Safety Order
+## Exact Recommended Next Step
 
-1. Pause / ensure no active campaign job.
-2. Deploy Backend runtime gate requiring worker 28.3.
-3. Update Tampermonkey worker to v28.3.
-4. Verify runtime compatibility PASS.
-5. Resume campaign operation.
-
-*Deployment Safety Note*: OPS-WP001 cannot retroactively stop a message send that an OLD worker already physically started before deployment.
-
-## Current State
-
-Fully functional, hardened, and secured. Verified via `npm test` (33/33 tests passed), `npm run build` (clean NestJS build), `node --check run/LineSyncApp.js` (clean syntax), `git diff --check` (clean exit code 0), and `git ls-files telegram-config.json` (NO OUTPUT).
-
-## Relevant Files
-
-- `src/runtime-version.ts`: Runtime contract constant declarations.
-- `src/app.controller.ts`: GET /api/runtime/version and GET /api/campaign/next fail-closed version gate.
-- `run/LineSyncApp.js`: v28.3 worker, WORKER_VERSION header, checkRuntimeCompatibility handshake with fail-closed retry loop.
-- `index.html`: Operator visibility badge.
-- `src/app.controller.spec.ts`: Unit test suite for version gate.
-- `project-docs/ACTIVE_TASK.md`, `project-docs/CHAT_HANDOFF.md`, `project-docs/CURRENT_STATE.md`, `project-docs/PROJECT_STATUS_ROADMAP.md`.
-
-## Next Work Package Assignment
-
-* **Next Work Package**: `REL-WP001 — Single Worker / Multi-Tab Lock`
-* **Status**: `READY / NOT STARTED`
-* **Authorization Required**: Await explicit Project Owner authorization before starting implementation.
+Await ChatGPT / Project Owner review of REL-WP001 implementation on GitHub repository `rebootob/line-sync-plus`.

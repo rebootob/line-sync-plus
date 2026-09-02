@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.3
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (OPS-WP001 Runtime Version Gate Active)
+// @version      28.4
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (REL-WP001 Single-Worker Multi-Tab Lock Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -11,7 +11,13 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.3';
+    const WORKER_VERSION = '28.4';
+    const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
+    const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
+    const WORKER_LEASE_MS = 20000;
+    const WORKER_RENEW_INTERVAL_MS = 4000;
+    const NAVIGATION_LEASE_MS = 45000;
+
     const API_BASE = 'http://localhost:3005/api';
     const CHECK_INTERVAL = 4000;
     const MAX_RETRIES = 2;
@@ -47,6 +53,127 @@
         }
         return id;
     }
+
+    let currentTabLeaseId = sessionStorage.getItem('linesync_tab_lease_id') || null;
+    let isCurrentTabLeader = false;
+    let isLeadershipWarningShown = false;
+
+    // 🛡️ REL-WP001 SINGLE WORKER LOCK SUBSYSTEM
+    function readWorkerLeaderRecord() {
+        try {
+            const raw = localStorage.getItem(WORKER_LEADER_KEY);
+            if (!raw) return null;
+            const rec = JSON.parse(raw);
+            if (!rec || typeof rec !== 'object' || !rec.ownerTabSessionId || !rec.leaseId || typeof rec.expiresAt !== 'number') {
+                return null;
+            }
+            if (Date.now() > rec.expiresAt) {
+                return null;
+            }
+            return rec;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function hasValidWorkerLeadership() {
+        if (!currentTabLeaseId) return false;
+        const rec = readWorkerLeaderRecord();
+        if (!rec) return false;
+        return (rec.ownerTabSessionId === getTabSessionId() && rec.leaseId === currentTabLeaseId);
+    }
+
+    async function ensureWorkerLeadership(overrideLeaseMs = WORKER_LEASE_MS) {
+        if (!navigator.locks || typeof navigator.locks.request !== 'function') {
+            isCurrentTabLeader = false;
+            if (!isLeadershipWarningShown) {
+                console.warn("🛑 [REL] WORKER LOCK UNSUPPORTED: Web Locks API unavailable in browser.");
+                isLeadershipWarningShown = true;
+            }
+            return false;
+        }
+
+        return new Promise((resolve) => {
+            navigator.locks.request(WORKER_ELECTION_LOCK, { mode: 'exclusive' }, async () => {
+                const now = Date.now();
+                const myTabId = getTabSessionId();
+                const existingRec = readWorkerLeaderRecord();
+
+                if (existingRec) {
+                    if (existingRec.ownerTabSessionId === myTabId && currentTabLeaseId && existingRec.leaseId === currentTabLeaseId) {
+                        existingRec.expiresAt = now + overrideLeaseMs;
+                        try {
+                            localStorage.setItem(WORKER_LEADER_KEY, JSON.stringify(existingRec));
+                        } catch (e) {}
+                        isCurrentTabLeader = true;
+                        isLeadershipWarningShown = false;
+                        resolve(true);
+                        return;
+                    } else {
+                        isCurrentTabLeader = false;
+                        if (!isLeadershipWarningShown) {
+                            console.log(`[REL] WORKER STANDBY: Tab ${myTabId} is standby. Active leader tab: ${existingRec.ownerTabSessionId}`);
+                            isLeadershipWarningShown = true;
+                        }
+                        resolve(false);
+                        return;
+                    }
+                } else {
+                    const isTakeover = (localStorage.getItem(WORKER_LEADER_KEY) !== null);
+                    const newLeaseId = 'lease_' + now + '_' + Math.random().toString(36).substring(2, 9);
+                    currentTabLeaseId = newLeaseId;
+                    try {
+                        sessionStorage.setItem('linesync_tab_lease_id', newLeaseId);
+                    } catch (e) {}
+
+                    const newRecord = {
+                        ownerTabSessionId: myTabId,
+                        leaseId: newLeaseId,
+                        workerVersion: WORKER_VERSION,
+                        acquiredAt: now,
+                        expiresAt: now + overrideLeaseMs
+                    };
+                    try {
+                        localStorage.setItem(WORKER_LEADER_KEY, JSON.stringify(newRecord));
+                    } catch (e) {}
+
+                    isCurrentTabLeader = true;
+                    isLeadershipWarningShown = false;
+                    console.log(`[REL] ${isTakeover ? 'WORKER LEADER TAKEOVER' : 'WORKER LEADER ACQUIRED'}: Tab ${myTabId} elected active worker (Lease: ${newLeaseId})`);
+                    resolve(true);
+                    return;
+                }
+            }).catch(() => {
+                isCurrentTabLeader = false;
+                resolve(false);
+            });
+        });
+    }
+
+    async function extendLeadershipForNavigation() {
+        if (!hasValidWorkerLeadership()) return false;
+        return await ensureWorkerLeadership(NAVIGATION_LEASE_MS);
+    }
+
+    function handleLeadershipLost(reason = 'UNKNOWN') {
+        console.warn(`🛑 [REL] WORKER LEADERSHIP LOST: Tab ${getTabSessionId()} lost worker lock (${reason}). Relinquishing local active job session.`);
+
+        isExecutingJob = false;
+
+        sessionStorage.removeItem('linesync_jobid');
+        sessionStorage.removeItem('linesync_uid');
+        sessionStorage.removeItem('linesync_msg');
+        sessionStorage.removeItem('linesync_type');
+        sessionStorage.removeItem('linesync_img');
+        sessionStorage.removeItem('linesync_link');
+    }
+
+    // 🛡️ Periodic Leadership Renewal Loop
+    setInterval(() => {
+        if (isCurrentTabLeader) {
+            ensureWorkerLeadership().catch(() => {});
+        }
+    }, WORKER_RENEW_INTERVAL_MS);
 
     // 🛡️ Helper: Safe Session Clear preserving diagnostic logs & session IDs
     function safeClearSessionStorage() {
@@ -462,6 +589,11 @@
             throw new Error('RECIPIENT_UNVERIFIED');
         }
 
+        if (!hasValidWorkerLeadership()) {
+            console.error("🛑 [REL] Leadership check failed immediately before clicking image Send button!");
+            throw new Error('WORKER_LEADERSHIP_LOST');
+        }
+
         emitDiagnostic('IMAGE_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
         console.log("🚀 [DEBUG] 2. พบป๊อปอัปแล้ว! สั่งกดปุ่ม [ส่ง] รูปภาพเพียง 1 ครั้งเท่านั้น (Single Fire)...");
@@ -488,6 +620,11 @@
     // 🛡️ ZERO-TOLERANCE TEXT SEND GUARD: Send chat text message with strict expectedUserId check
     function sendChatMessage(chatInput, expectedUserId) {
         console.log("🚀 [DEBUG] สั่งส่งข้อความในช่องแชท...");
+
+        if (!hasValidWorkerLeadership()) {
+            console.error("🛑 [REL] Leadership check failed immediately before text send!");
+            throw new Error('WORKER_LEADERSHIP_LOST');
+        }
 
         if (expectedUserId && !verifyCurrentRecipient(expectedUserId)) {
             console.error("🛑 [SAFETY] Zero-tolerance text send guard: Recipient unverified immediately before text send!");
@@ -687,6 +824,12 @@
             return;
         }
 
+        const isLeader = await ensureWorkerLeadership();
+        if (!isLeader) {
+            setTimeout(processQueue, WORKER_RENEW_INTERVAL_MS);
+            return;
+        }
+
         const isCompatible = await checkRuntimeCompatibility();
         if (!isCompatible) {
             setTimeout(processQueue, CHECK_INTERVAL);
@@ -696,6 +839,12 @@
         try {
             const job = await fetchAPI('/campaign/next');
             if (job && job.status === 'processing') {
+                if (!hasValidWorkerLeadership()) {
+                    console.warn("🛑 [REL] Leadership lost immediately after /campaign/next claim. Aborting execution.");
+                    handleLeadershipLost('LOST_AFTER_CLAIM');
+                    return;
+                }
+
                 console.log("📥 ได้คิวส่งหา User ID:", job.userId, "ประเภท:", job.messageType);
 
                 emitDiagnostic('JOB_RECEIVED', { jobId: job.jobId, userId: job.userId });
@@ -718,6 +867,10 @@
                     console.log("🔀 สลับไปยังหน้าแชต LINE OA ของผู้รับ:", targetUrl);
 
                     emitDiagnostic('NAVIGATE_TARGET', { jobId: job.jobId, userId: job.userId });
+
+                    if (hasValidWorkerLeadership()) {
+                        await extendLeadershipForNavigation();
+                    }
 
                     window.location.href = targetUrl;
                     return;
@@ -761,6 +914,11 @@
     }
 
     async function executeChatBot(jobData) {
+        if (!hasValidWorkerLeadership()) {
+            handleLeadershipLost('PRE_EXECUTE_CHECK');
+            return;
+        }
+
         if (isExecutingJob) {
             console.warn("⚠️ Job execution already in progress. Skipping re-entrant call for Job ID:", jobData.jobId);
             return;
@@ -802,6 +960,12 @@
         const findAndType = setInterval(async () => {
             attempts++;
 
+            if (!hasValidWorkerLeadership()) {
+                clearInterval(findAndType);
+                handleLeadershipLost('INPUT_SEARCH_CHECK');
+                return;
+            }
+
             if (checkIfErrorPage()) {
                 clearInterval(findAndType);
                 console.error("🛑 [SAFETY] ตรวจพบหน้า 404/Error Page ระหว่างค้นหาช่องพิมพ์! ยกเลิกส่งทันที");
@@ -821,6 +985,11 @@
             if (chatInput) {
                 clearInterval(findAndType);
 
+                if (!hasValidWorkerLeadership()) {
+                    handleLeadershipLost('PRE_TEXT_INSERT_CHECK');
+                    return;
+                }
+
                 if (!verifyCurrentRecipient(jobData.userId)) {
                     console.error("🛑 [SAFETY] ยืนยันผู้รับไม่ผ่านก่อนเริ่มพิมพ์! ยกเลิกการส่งทันที");
                     await handleSafeRecovery(jobData, 'RECIPIENT_UNVERIFIED');
@@ -839,6 +1008,10 @@
                     let hasImageToSend = (jobData.messageType === 'image_link' || jobData.messageType === 'image_only') && jobData.imageUrl;
 
                     if (hasImageToSend) {
+                        if (!hasValidWorkerLeadership()) {
+                            throw new Error('WORKER_LEADERSHIP_LOST');
+                        }
+
                         if (!verifyCurrentRecipient(jobData.userId)) {
                             throw new Error('RECIPIENT_UNVERIFIED');
                         }
@@ -886,6 +1059,10 @@
                     }
 
                     if (textToSend && textToSend.trim() !== '') {
+                        if (!hasValidWorkerLeadership()) {
+                            throw new Error('WORKER_LEADERSHIP_LOST');
+                        }
+
                         if (!verifyCurrentRecipient(jobData.userId)) {
                             throw new Error('RECIPIENT_UNVERIFIED');
                         }
@@ -920,8 +1097,10 @@
 
                 } catch (e) {
                     console.error("❌ เกิด Error ตอนส่ง:", e);
-                    const errReason = e.message || 'Error ในกระบวนการพิมพ์';
-                    if (errReason.includes('RECIPIENT_UNVERIFIED') || errReason.includes('NAVIGATION_404') || errReason.includes('RECIPIENT_MISMATCH')) {
+                    const errReason = e.message || String(e) || 'Error ในกระบวนการพิมพ์';
+                    if (errReason.includes('WORKER_LEADERSHIP_LOST')) {
+                        handleLeadershipLost('EXECUTE_CHATBOT_THROWN');
+                    } else if (errReason.includes('RECIPIENT_UNVERIFIED') || errReason.includes('NAVIGATION_404') || errReason.includes('RECIPIENT_MISMATCH')) {
                         await handleSafeRecovery(jobData, errReason);
                     } else {
                         await finishJob(jobData.jobId, jobData.userId, false, errReason);
@@ -991,9 +1170,21 @@
         }
     }
 
-    // 🛡️ SAVED ACTIVE JOB RECOVERY WITH FAIL-CLOSED RUNTIME RETRY (OPS-WP001-R1)
+    // 🛡️ SAVED ACTIVE JOB RECOVERY WITH FAIL-CLOSED RUNTIME RETRY & LEADER LOCK (REL-WP001)
     async function resumeSavedActiveJob(savedJobData) {
         if (!savedJobData) return;
+
+        const isLeader = await ensureWorkerLeadership();
+        if (!isLeader) {
+            console.warn(`🛑 [REL] WORKER STANDBY: Page-load saved job exists on non-leader tab ${getTabSessionId()}. Relinquishing local active job session.`);
+            sessionStorage.removeItem('linesync_jobid');
+            sessionStorage.removeItem('linesync_uid');
+            sessionStorage.removeItem('linesync_msg');
+            sessionStorage.removeItem('linesync_type');
+            sessionStorage.removeItem('linesync_img');
+            sessionStorage.removeItem('linesync_link');
+            return;
+        }
 
         const isCompatible = await checkRuntimeCompatibility();
         if (!isCompatible) {

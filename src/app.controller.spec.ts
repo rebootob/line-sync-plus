@@ -447,11 +447,11 @@ describe('AppController', () => {
       };
     });
 
-    it('1. GET /api/runtime/version returns contract version 1 and required worker version 28.3', () => {
+    it('1. GET /api/runtime/version returns contract version 1 and required worker version 28.4', () => {
       const res = appController.getRuntimeVersion();
       expect(res).toEqual({
         runtimeContractVersion: 1,
-        requiredWorkerVersion: '28.3',
+        requiredWorkerVersion: '28.4',
       });
     });
 
@@ -464,22 +464,22 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.3',
+        requiredWorkerVersion: '28.4',
       });
       // Prove version gate executes BEFORE job query/claim logic
       expect(findSpy).not.toHaveBeenCalled();
     });
 
-    it('3. GET /api/campaign/next with WRONG worker version ("28.2") -> BLOCKED / 409 Conflict', async () => {
+    it('3. GET /api/campaign/next with WRONG worker version ("28.3") -> BLOCKED / 409 Conflict', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find');
       findSpy.mockClear();
 
-      const res = await appController.getNextJob('28.2', mockRes);
+      const res = await appController.getNextJob('28.3', mockRes);
 
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.3',
+        requiredWorkerVersion: '28.4',
       });
       expect(findSpy).not.toHaveBeenCalled();
     });
@@ -501,10 +501,10 @@ describe('AppController', () => {
       expect(saveCampSpy).not.toHaveBeenCalled();
     });
 
-    it('5. GET /api/campaign/next with EXACT version ("28.3") -> reaches normal job claim logic', async () => {
+    it('5. GET /api/campaign/next with EXACT version ("28.4") -> reaches normal job claim logic', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
 
-      const res = await appController.getNextJob('28.3', mockRes);
+      const res = await appController.getNextJob('28.4', mockRes);
 
       expect(mockRes.statusCode).toBe(200);
       expect(findSpy).toHaveBeenCalled();

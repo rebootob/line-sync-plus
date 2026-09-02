@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-**LineSync Plus** is an automated customer contact synchronization, group segmentation, and broadcast campaign management platform operating against the **LINE Official Account (LINE OA)** Web Interface (`chat.line.biz`). The system consists of a NestJS backend REST API, a single-page HTML web dashboard, a PostgreSQL database, and a client-side Tampermonkey automation script (`run/LineSyncApp.js` v28.3).
+**LineSync Plus** is an automated customer contact synchronization, group segmentation, and broadcast campaign management platform operating against the **LINE Official Account (LINE OA)** Web Interface (`chat.line.biz`). The system consists of a NestJS backend REST API, a single-page HTML web dashboard, a PostgreSQL database, and a client-side Tampermonkey automation script (`run/LineSyncApp.js` v28.4).
 
 This document serves as the master source-of-truth for project architecture, safety models, complete 10-package incident corrective history, live UAT evidence, technical debt, secret hygiene mandates, and the Phase 0–5 development roadmap.
 
@@ -17,6 +17,7 @@ Key Operational Goals:
 - Provide real-time UI segmentation, tagging, and quick selection filters.
 - Automate multi-type message broadcasts (`text`, `image_only`, `link_only`, `text_link`, `image_link`).
 - Guarantee zero-tolerance recipient verification before every message send.
+- Guarantee single active worker execution across multiple open browser tabs.
 - Provide navigation-safe, confirmed-write diagnostic logging for UAT endurance analysis.
 
 ---
@@ -53,9 +54,11 @@ Key Operational Goals:
 
 +-----------------------------------------------------------------------------------+
 |                          Client Automation & Observability                        |
-|                      Tampermonkey Userscript (LineSyncApp.js v28.3)              |
+|                      Tampermonkey Userscript (LineSyncApp.js v28.4)              |
 |                             Running in chat.line.biz                              |
 |                                                                                   |
+|  - Single Worker Multi-Tab Lock (Web Locks API + localStorage lease v1)           |
+|  - Fail-Closed Runtime Version Gate (X-LineSync-Worker-Version: 28.4)             |
 |  - Strict OA Context Validator (isValidChatContextId)                             |
 |  - Full-Lifecycle Execution Lock (isExecutingJob)                                 |
 |  - Same-Job Safe Recovery & Preservation (handleSafeRecovery)                     |
@@ -86,8 +89,9 @@ Key Operational Goals:
 
 The LineSync Plus safety model operates on strict **fail-closed** principles to eliminate risks of context loss or misdirection:
 
+- **Single Worker Multi-Tab Lock (REL-WP001)**: `ensureWorkerLeadership()` enforces that only ONE active worker tab claims jobs or executes DOM mutations within a browser profile/storage partition. Non-leader tabs remain STANDBY.
 - **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path (`/${botId}/chat/${expectedUserId}`) and DOM attribute validation before any text insertion or image send click.
-- **Fail-Closed Runtime Version Gate (OPS-WP001 / OPS-WP001-R1)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.3'` before querying or claiming any job. Client retries compatibility check via `setTimeout(..., CHECK_INTERVAL)` without fetching jobs while incompatible. Only 2xx HTTP responses can pass compatibility check.
+- **Fail-Closed Runtime Version Gate (OPS-WP001 / OPS-WP001-R1)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.4'` before querying or claiming any job. Client retries compatibility check via `setTimeout(..., CHECK_INTERVAL)` without fetching jobs while incompatible.
 - **Full-Lifecycle Execution Lock**: `isExecutingJob` remains active across the entire job lifecycle (navigation verification -> input discovery -> payload preparation -> recipient re-verification -> send -> terminal job report) preventing re-entrant duplicate sends.
 - **Circuit Breaker**: Halts campaign execution automatically if 10 consecutive system errors occur (`sessionStorage.setItem('linesync_consecutive_errors', ...)`).
 - **Quota Limit Protection**: Detects LINE OA quota limit alerts on-screen and immediately stops campaign processing without recording system errors.
@@ -137,6 +141,7 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - Browser page reloads cancel in-flight HTTP requests unless spooled synchronously in `sessionStorage`.
 - Direct socket peer validation (`req.socket.remoteAddress`) is required to prevent proxy header spoofing on local UAT diagnostic endpoints.
 - LINE OA context IDs strictly adhere to `^U[0-9a-fA-F]{32}$`; short IDs or manager account strings must never be treated as valid chat contexts.
+- Multi-tab browser coordination requires `navigator.locks` election mutex combined with durable `localStorage` lease records to maintain ownership across same-tab navigations.
 
 ---
 
@@ -148,13 +153,12 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - **BUG-WP002**: **CLOSED**
 - **SEC-WP001**: **CLOSED**
 - **OPS-WP001 / OPS-WP001-R1**: **CLOSED**
+- **REL-WP001**: **READY_FOR_CHATGPT_REVIEW**
 - **83-recipient baseline UAT**: 83 targets / 80 success / 3 blocked / no observed 404
 - **UAT-1100 Campaign Evidence (LineSyncApp v28.2)**:
   - Target = 1,100, Processed = 473, Success = 69, Blocked = 402, 404 = 2 (safe retry exhaust), zero misdeliveries.
 - **OPS-WP001 Live UAT Evidence (LineSyncApp v28.3)**:
-  - **UAT-01 (Matched Version)**: Worker v28.3 matched backend version 28.3. Live campaign completed cleanly (Success: 1, Fail: 0).
-  - **UAT-02 (Incompatible Worker)**: Simulated worker header `X-LineSync-Worker-Version: 28.2` rejected with HTTP 409 Conflict. Job remained pending; no LINE send occurred. Real worker v28.3 claimed SAME job after resume (Success: 1, Fail: 0).
-  - **UAT-03 (Backend Offline / Auto Recovery)**: Worker emitted `RUNTIME VERSION BLOCKED` when backend stopped. No navigation or send occurred. When backend restarted, worker automatically recovered without requiring manual page reloads (Success: 1, Fail: 0).
+  - Passed UAT-01 (Matched Version), UAT-02 (Incompatible Worker Rejection), and UAT-03 (Backend Offline / Auto Recovery without manual page reloads).
 
 ---
 
@@ -165,9 +169,8 @@ Over the course of safety hardening, 10 corrective work packages were identified
 - **PROHIBITED**: Under no circumstances may `.env` files, API keys, passwords, database credentials, access tokens, refresh tokens, private keys, or LINE channel secrets be committed or pushed to Git.
 - **SEC-WP001 Status**: Untracked secret `telegram-config.json` from Git. Compromised token revoked and rotated via `@BotFather` by Project Owner. Live Telegram test after rotation = **PASS**.
 
-### Technical Debt Items
-- Database credentials currently reside in local `.env` (gitignored). Production setup requires secure environment secret injection.
-- Diagnostic log files (`uat-logs/`) must be rotated periodically to prevent disk bloat.
+### Multi-Part Message Residual Risk (REL-WP003)
+- For multi-part messages (`image_link`), if a browser process crashes after physical image send completes but before text send/finishJob completes, a future worker could re-send the image part without idempotency ledger protection. This is documented as residual risk for REL-WP003.
 
 ---
 
@@ -184,7 +187,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
   - `SEC-WP001` (Secret Hygiene): **COMPLETED / CLOSED**
   - `OPS-WP001` (Runtime Version Gate): **COMPLETED / CLOSED**
   - `OPS-WP001-R1` (Runtime Retry + Fail-Closed Corrective): **COMPLETED / CLOSED**
-  - `REL-WP001` (Single Worker / Multi-Tab Lock): **READY / NOT STARTED**
+  - `REL-WP001` (Single Worker / Multi-Tab Lock): **READY_FOR_CHATGPT_REVIEW**
   - `REL-WP002`: **NOT STARTED**
   - `REL-WP003`: **NOT STARTED**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
@@ -198,28 +201,28 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
+   - Single worker multi-tab lock (`REL-WP001` READY_FOR_CHATGPT_REVIEW).
    - Operational runtime version gate (`OPS-WP001` & `OPS-WP001-R1` COMPLETED / CLOSED).
    - Secret hygiene & test isolation (`SEC-WP001` COMPLETED / CLOSED).
    - Fail-closed recipient verification & OA context validation (Completed in WP001/WP002).
 2. **P1 (Observability & Operational Hardening)**:
-   - Multi-tab single worker defense (`REL-WP001` READY / NOT STARTED).
+   - Backend Job Lease & Heartbeat (`REL-WP002` NOT STARTED).
+   - Idempotent Send Ledger (`REL-WP003` NOT STARTED).
    - Real-time diagnostic event stream UI widget in Dashboard.
-3. **P2 (Analytics & Automation)**:
-   - Automated Telegram alert on session expiry / auth loss.
-   - Quota usage forecast and smart broadcast scheduling.
 
 ---
 
 ## 13. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 (OPS-WP001/R1).
-- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, and fail-closed runtime version gates with retry controls.
+- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 -> v28.4 (REL-WP001).
+- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, fail-closed runtime version gates, and single-worker multi-tab election locks.
 
 ---
 
 ## 14. Recommended Next Work Packages
 
-- **REL-WP001**: Single-Worker Execution Lock / Multi-Tab Defense (**READY / NOT STARTED**).
+- **REL-WP001**: Single-Worker Execution Lock / Multi-Tab Defense (**READY_FOR_CHATGPT_REVIEW**).
+- **REL-WP002**: Backend Worker Lease & Heartbeat (**NOT STARTED**).
 - **WP-UI-LOGS**: Implement browser diagnostic log viewer tab in single-page dashboard.
 
 ---
@@ -227,6 +230,7 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 15. Success Metrics
 
 - **Zero Misdeliveries**: 0% message delivery to wrong recipients.
+- **Zero Duplicate Tab Workers**: 0 competing `/campaign/next` calls or duplicate DOM automation from multiple open LINE OA tabs.
 - **Zero Incompatible Worker Claims**: 0 campaign jobs claimed by outdated browser workers.
 - **Zero Poisoning Loops**: 0 infinite 404 redirect loops on invalid bot IDs.
 - **100% Spool Integrity**: 0 lost navigation diagnostic events during page transitions.
@@ -245,5 +249,5 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-The project is currently at Phase 0 (Security & Reliability Foundation) with OPS-WP001 and OPS-WP001-R1 COMPLETED and CLOSED.
-Next Action: Await explicit Project Owner authorization before starting `REL-WP001 — Single Worker / Multi-Tab Lock`.
+The project is currently at Phase 0 (Security & Reliability Foundation) with REL-WP001 implemented and READY_FOR_CHATGPT_REVIEW.
+Next Action: Await ChatGPT Control Plane review of REL-WP001 implementation.

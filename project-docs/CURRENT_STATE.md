@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post OPS-WP001 Runtime Version Gate Final Closure)
+**Last Updated**: 2026-09-02 (Post REL-WP001 Single Worker Multi-Tab Lock Implementation)
 
 ---
 
@@ -28,15 +28,15 @@
 
 ---
 
-## 🛑 Runtime Version Gate (OPS-WP001 & OPS-WP001-R1 STATUS: CLOSED / PASS)
+## 🔒 Single Worker Multi-Tab Lock (REL-WP001 STATUS: READY_FOR_CHATGPT_REVIEW)
 
-- **Backend Runtime Contract**: Declared in `src/runtime-version.ts` (`RUNTIME_CONTRACT_VERSION = 1`, `REQUIRED_WORKER_VERSION = '28.3'`).
-- **Endpoint**: `GET /api/runtime/version` returns safe version contract info.
-- **Fail-Closed Queue Gate**: `GET /api/campaign/next` checks `X-LineSync-Worker-Version` header before any DB query or job claim. Returns HTTP 409 Conflict if header is missing or incompatible.
-- **Client Automation Worker v28.3**: `run/LineSyncApp.js` v28.3 sends `X-LineSync-Worker-Version: 28.3` header on all API calls and performs `checkRuntimeCompatibility()` before processing queue or resuming active jobs on page load.
-- **Strict Fail-Closed Retry Control**: Incompatible `processQueue()` or page-load active job recovery schedules compatibility retry via `setTimeout(..., CHECK_INTERVAL)` without fetching `/campaign/next` or altering job state. `fetchAPI()` only resolves HTTP 2xx responses.
-- **Live UAT Evidence**: Passed UAT-01 (Matched Version), UAT-02 (Incompatible Worker Rejection), and UAT-03 (Backend Offline / Auto Recovery without manual page reloads).
-- **Dashboard Operator Visibility**: Displays `Runtime Contract: v1 | Required Worker: v28.3` badge in dashboard header.
+- **Worker Version**: `28.4` (`run/LineSyncApp.js` v28.4).
+- **Backend Required Version**: `28.4` (`src/runtime-version.ts`).
+- **Leader Election Mutex**: `navigator.locks.request('linesync_worker_election_v1', { mode: 'exclusive' }, ...)`.
+- **Durable Leader Lease**: `localStorage.getItem('linesync_worker_leader_v1')` storing `{ ownerTabSessionId, leaseId, workerVersion, acquiredAt, expiresAt }`.
+- **Lease Timings**: 20s initial lease (`WORKER_LEASE_MS`), 4s renewal interval (`WORKER_RENEW_INTERVAL_MS`), 45s navigation hold (`NAVIGATION_LEASE_MS`).
+- **Pre-Send Fencing Integrity**: Leadership verified at 6 pre-send checkpoints before physical mutations. Leadership loss routes to `handleLeadershipLost()`.
+- **Dashboard Operator Visibility**: Displays `Runtime Contract: v1 | Required Worker: v28.4` badge in dashboard header.
 
 ---
 
@@ -50,9 +50,10 @@
 - REST API endpoints for customer list, grouping, multi-type campaign creation, job dispatch queue with fail-closed version gate (`GET /api/campaign/next`), Telegram setting APIs (secure shape), runtime info (`GET /api/runtime/version`), and trusted loopback browser diagnostic event logger (`POST /api/diagnostics/browser-event`).
 
 ### 3. Web Dashboard (`index.html`)
-- Interactive dashboard UI with toolbar search, status/name filters, quick selection shortcuts, schedule management, deep analytics, secure Telegram setting modal, and runtime version contract indicator.
+- Interactive dashboard UI with toolbar search, status/name filters, quick selection shortcuts, schedule management, deep analytics, secure Telegram setting modal, and runtime version contract indicator (`v28.4`).
 
-### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.3)
+### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.4)
+- Multi-tab single worker leader lock (`ensureWorkerLeadership()`, `hasValidWorkerLeadership()`).
 - Fail-closed runtime version handshake with retry loop (`checkRuntimeCompatibility()`, `resumeSavedActiveJob()`).
 - Strict OA context validation (`isValidChatContextId` testing `/^U[0-9a-fA-F]{32}$/`).
 - Fail-closed context navigation (`getOAContextUrl` returns `null` when context is missing/invalid).
@@ -67,10 +68,7 @@
 
 ## 🚀 Active / Next Work Packages
 
-- **Completed Work Packages**:
-  - `OPS-WP001`: `CLOSED / PASS`
-  - `OPS-WP001-R1`: `CLOSED / PASS`
+- **Active Work Package**: `REL-WP001 — Single Worker / Multi-Tab Lock` (`READY_FOR_CHATGPT_REVIEW`)
 - **Next Work Packages**:
-  - `REL-WP001 — Single Worker / Multi-Tab Lock`: `READY / NOT STARTED`
   - `REL-WP002`: `NOT STARTED`
   - `REL-WP003`: `NOT STARTED`
