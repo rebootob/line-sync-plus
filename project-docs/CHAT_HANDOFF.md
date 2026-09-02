@@ -4,8 +4,8 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 53bf4247307a798dbbc019583edf41be7ff947f9 (reliability: fail closed worker lease and navigation handoff)
-* Working Tree: Clean (REL-WP001-R2 implementation completed)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: 23feb247a165a4188e8fece685a160be70b80cd1 (reliability: prevent duplicate-tab worker identity cloning)
+* Working Tree: Clean (REL-WP001 / R1 / R2 CLOSED / PASS)
 
 ## Project Purpose
 
@@ -19,18 +19,33 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
 - **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
-## Work Package Status: REL-WP001-R2 — Duplicate-Tab Identity Clone Defense
+## Work Package Status: REL-WP001 / REL-WP001-R1 / REL-WP001-R2
 
-* **Status**: `READY_FOR_CHATGPT_REVIEW` (REL-WP001-R1: `READY_FOR_CHATGPT_REVIEW`, REL-WP001: `READY_FOR_CHATGPT_REVIEW`, NOT CLOSED)
+* **Status**: `CLOSED / PASS`
+* **Live UAT Evidence Accepted**:
+  - **UAT-01 (Multi-Tab Election)**: PASS (1 Leader, 1 Standby).
+  - **UAT-02 (Duplicate Tab Clone Defense)**: PASS (`[REL] DUPLICATE TAB IDENTITY DETECTED` -> new `tabSessionId` assigned, copied lease not reused).
+  - **UAT-03 (Leader Failover)**: PASS (Original leader closed -> `[REL] WORKER LEADER TAKEOVER`, only 1 Leader active).
+  - **UAT-04 (Live Single Consumption)**: PASS (2 tabs open -> 1-recipient campaign sent by Leader alone, Target=1, Success=1, Fail=0, Duplicate Send=0).
 * **Key Implementation Details**:
-  1. Document-lifetime tab identity lock `linesync_tab_identity_v1_<tabSessionId>` claimed via non-blocking Web Locks (`ifAvailable: true`).
-  2. Duplicate tab detection: If identity lock is already held by another live tab, logs `[REL] DUPLICATE TAB IDENTITY DETECTED`, reassigns a new `tabSessionId`, removes copied lease (`linesync_tab_lease_id`) and active-job session fields without altering `localStorage` leader record or reporting jobs, and logs `[REL] NEW TAB IDENTITY ASSIGNED`.
-  3. Leadership check (`hasValidWorkerLeadership`), election/renewal (`ensureWorkerLeadership`), and pre-send confirmation (`confirmWorkerLeadershipForSend`) strictly enforce `isTabIdentityVerified === true`.
-  4. 39/39 Jest unit tests passing cleanly; `node --check run/LineSyncApp.js` PASS; Nest build PASS.
+  1. Worker version `28.4`, Runtime Contract `1`, Required Worker `28.4`.
+  2. Document-lifetime tab identity lock (`ensureTabIdentity`) prevents duplicated tab identity cloning.
+  3. Fail-closed lease write-and-readback verification (`writeAndVerifyLeaderRecord`).
+  4. Complete navigation hold coverage across all full-page reloads (`navigateAsLeader`).
+  5. Atomic pre-send fencing under Web Locks election mutex (`confirmWorkerLeadershipForSend`).
 
-## Scope Boundary
-REL-WP001 / REL-WP001-R1 / REL-WP001-R2 protects multi-tab execution within the SAME `chat.line.biz` browser profile/storage partition (`localStorage`). Cross-profile or cross-machine protection is NOT claimed and belongs to future work packages (REL-WP002/003).
+## Accepted Safety Scope Boundary
+Single Worker / Multi-Tab protection applies strictly within the SAME `chat.line.biz` browser profile / storage partition. Cross-browser, cross-profile, or cross-machine protection is NOT claimed and remains future reliability scope (REL-WP002/003).
+
+## Next Candidate: OA-WP001 — OA Context Isolation & Controlled LINE OA Switch
+
+- **Status**: `READY / NOT STARTED`
+- **Discovered Database Truth**:
+  - Database contains customers under 2 real LINE OA bot IDs (OA #1: 9,737 total / OA #2: 2,153 total).
+  - Composite identity: `(botId, lineUserId)`.
+  - Repository `Customer` entity needs alignment against composite identity during `OA-WP001`.
+  - Do NOT implement `OA-WP001` without explicit authorization from Project Owner.
 
 ## Exact Recommended Next Step
 
-Await ChatGPT / Project Owner review of REL-WP001-R2 implementation on GitHub repository `rebootob/line-sync-plus`.
+Await authorization and prompt for `OA-WP001` or next work package from Project Owner / ChatGPT Control Plane.

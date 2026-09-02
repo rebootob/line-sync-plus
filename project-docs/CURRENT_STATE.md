@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post REL-WP001-R2 Duplicate-Tab Identity Clone Defense Corrective)
+**Last Updated**: 2026-09-02 (Post REL-WP001 / R1 / R2 Final Closure)
 
 ---
 
@@ -28,10 +28,15 @@
 
 ---
 
-## 🔒 Single Worker Multi-Tab Lock (REL-WP001-R2 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔒 Single Worker Multi-Tab Lock (REL-WP001 STATUS: CLOSED / PASS)
 
 - **Worker Version**: `28.4` (`run/LineSyncApp.js` v28.4).
 - **Backend Required Version**: `28.4` (`src/runtime-version.ts`).
+- **Live UAT Evidence (Passed)**:
+  - **UAT-01 (Multi-Tab Election)**: PASS (1 Leader, 1 Standby).
+  - **UAT-02 (Duplicate Tab Clone Defense)**: PASS (Detected copied session identity, assigned new `tabSessionId`, copied lease not reused).
+  - **UAT-03 (Leader Failover)**: PASS (Leader closed -> automatic takeover, 1 Leader active).
+  - **UAT-04 (Live Single Consumption)**: PASS (2 tabs open -> 1-recipient campaign sent by Leader alone, Target=1, Success=1, Fail=0, Duplicate Send=0).
 - **Document-Lifetime Tab Identity Lock**: `ensureTabIdentity()` claims `linesync_tab_identity_v1_<tabSessionId>` via non-blocking Web Locks (`ifAvailable: true`).
 - **Duplicate Tab Clone Defense**: Detects copied `sessionStorage` in duplicated/cloned tabs (`lock === null`), assigns a new `tabSessionId`, clears copied lease and active-job fields, logs `[REL] DUPLICATE TAB IDENTITY DETECTED` and `[REL] NEW TAB IDENTITY ASSIGNED`, and sets cloned tab to STANDBY.
 - **Fail-Closed Lease Persistence**: `writeAndVerifyLeaderRecord()` reads back raw `localStorage` record after every write and verifies exact equality of `ownerTabSessionId`, `leaseId`, `workerVersion`, and `expiresAt`.
@@ -69,10 +74,13 @@
 
 ---
 
-## 🚀 Active / Next Work Packages
+## 🚀 Work Packages Overview
 
-- **Active Work Package**: `REL-WP001-R2 — Duplicate-Tab Identity Clone Defense` (`READY_FOR_CHATGPT_REVIEW`)
-- **Parent Work Package**: `REL-WP001 — Single Worker / Multi-Tab Lock` (`READY_FOR_CHATGPT_REVIEW`, NOT CLOSED)
-- **Next Work Packages**:
-  - `REL-WP002`: `NOT STARTED`
-  - `REL-WP003`: `NOT STARTED`
+- **Closed Work Packages**:
+  - `BUG-WP001`, `BUG-WP001-R1`, `BUG-WP001-UATLOG`, `BUG-WP001-UATLOG-R1`, `R2`, `R3`, `R4`, `R5` (`CLOSED / PASS`)
+  - `BUG-WP002`, `BUG-WP002-R1` (`CLOSED / PASS`)
+  - `SEC-WP001` (`CLOSED / PASS`)
+  - `OPS-WP001`, `OPS-WP001-R1` (`CLOSED / PASS`)
+  - `REL-WP001`, `REL-WP001-R1`, `REL-WP001-R2` (`CLOSED / PASS`)
+- **Next Work Package Candidate**:
+  - `OA-WP001 — OA Context Isolation & Controlled LINE OA Switch` (`READY / NOT STARTED`)
