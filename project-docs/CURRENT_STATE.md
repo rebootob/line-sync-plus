@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post SEC-WP001 Secret Hygiene Implementation)
+**Last Updated**: 2026-09-02 (Post SEC-WP001 & SEC-WP001-R1 Secret Hygiene & Test Isolation Implementation)
 
 ---
 
@@ -28,13 +28,17 @@
 
 ---
 
-## 🔒 Security & Secret Hygiene (SEC-WP001 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔒 Security & Secret Hygiene (SEC-WP001 / SEC-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Untracked Secret File**: `telegram-config.json` removed from Git tracking (`git rm --cached`), gitignored by `.gitignore`, local runtime file preserved on disk.
 - **Safe Template**: `telegram-config.example.json` remains tracked without real credentials.
 - **API Token Shield**: `GET /api/telegram/settings` and `POST /api/telegram/settings` return `{ chatId, enabled, botTokenConfigured }` without exposing `botToken`.
 - **Blank Token Preservation**: Saving settings with empty `botToken` from UI preserves existing stored token on backend.
 - **Dashboard UI Protection**: `botToken` input is never preloaded. Displays placeholder `"Bot Token ตั้งค่าแล้ว — กรอกใหม่เฉพาะเมื่อต้องการเปลี่ยน"` when token is configured.
+- **SEC-WP001-R1 Test Isolation Corrective**:
+  - `TelegramService` unit tests use isolated temporary `os.tmpdir()` config files.
+  - `npm test` verified 100% non-destructive to real local `telegram-config.json` (SHA256 hash matched before and after test run).
+  - Mocked global `fetch` test proves preserved token works without real network calls.
 - **Audit Findings**:
   - Current tracked files contain **0** Telegram-token-like matches.
   - Historical check confirmed `telegram-config.json` existed in history from initial commit (`999c163`).
@@ -69,5 +73,5 @@
 
 ## 🚀 Active / Next Work Package
 
-- **Active Work Package**: `SEC-WP001 — Secret Hygiene`
+- **Active Work Package**: `SEC-WP001 — Secret Hygiene` (SEC-WP001-R1 test isolation corrective completed)
 - **Status**: `READY_FOR_CHATGPT_REVIEW`

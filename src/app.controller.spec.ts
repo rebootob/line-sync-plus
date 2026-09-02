@@ -8,6 +8,9 @@ import { Campaign } from './entities/campaign.entity';
 import { CampaignJob } from './entities/campaign-job.entity';
 
 import { TelegramService } from './telegram.service';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -301,9 +304,28 @@ describe('AppController', () => {
 
   describe('SEC-WP001 — Secret Hygiene & Telegram Token Security Tests', () => {
     let service: TelegramService;
+    let tmpConfigPath: string;
 
     beforeEach(() => {
+      tmpConfigPath = path.join(
+        os.tmpdir(),
+        `test-telegram-config-${Date.now()}-${Math.random().toString(36).substring(2)}.json`,
+      );
       service = new TelegramService();
+      // Override configPath to isolated temporary file path
+      (service as any).configPath = tmpConfigPath;
+      (service as any).config = { botToken: '', chatId: '', enabled: false };
+    });
+
+    afterEach(() => {
+      try {
+        if (fs.existsSync(tmpConfigPath)) {
+          fs.unlinkSync(tmpConfigPath);
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      jest.restoreAllMocks();
     });
 
     it('1. GET /api/telegram/settings MUST NOT return botToken', () => {
@@ -331,17 +353,24 @@ describe('AppController', () => {
       expect((res.config as any).botToken).toBeUndefined();
     });
 
-    it('3. blank/empty botToken MUST NOT overwrite existing stored token', () => {
+    it('3. blank/empty botToken MUST NOT overwrite existing stored token (Real blank-token flow)', () => {
+      // 1. Service initially has a configured token
       service.saveConfig({ botToken: 'INITIAL_SECRET_TOKEN', chatId: '111', enabled: true });
 
-      // Save with blank token
+      // 2. saveConfig is called with blank botToken and changed chatId / enabled
       const res = service.saveConfig({ botToken: '', chatId: '222', enabled: false });
 
+      // 3. Existing token is preserved internally
+      expect(service.getConfig().botToken).toBe('INITIAL_SECRET_TOKEN');
+
+      // 4. Returned response does NOT contain botToken
+      expect((res.config as any).botToken).toBeUndefined();
+
+      // 5. botTokenConfigured remains true and updated fields are returned
       expect(res.success).toBe(true);
       expect(res.config?.chatId).toBe('222');
       expect(res.config?.enabled).toBe(false);
       expect(res.config?.botTokenConfigured).toBe(true);
-      expect(service.getConfig().botToken).toBe('INITIAL_SECRET_TOKEN');
     });
 
     it('4. new non-empty botToken replaces existing token', () => {
@@ -353,7 +382,6 @@ describe('AppController', () => {
 
     it('5. botTokenConfigured reflects true when token exists and false when empty/blank', () => {
       service.saveConfig({ botToken: '', chatId: '111', enabled: false });
-      // Clear token manually for testing false condition
       (service as any).config.botToken = '';
       expect(service.getSafeConfig().botTokenConfigured).toBe(false);
 
@@ -367,6 +395,33 @@ describe('AppController', () => {
 
       expect(testRes.success).toBe(false);
       expect(testRes.message).toContain('กรุณาระบุ Bot Token และ Chat ID');
+    });
+
+    it('7. sendTestMessage proceeds using preserved stored token after blank-token save (Mocked fetch)', async () => {
+      // 1. Stored token already exists
+      service.saveConfig({ botToken: 'STORED_SECRET_TOKEN', chatId: '333333', enabled: true });
+
+      // 2. UI-equivalent saveConfig({ botToken: '', chatId: '333333', enabled: true })
+      const saveRes = service.saveConfig({ botToken: '', chatId: '333333', enabled: true });
+      expect((saveRes.config as any).botToken).toBeUndefined();
+      expect(saveRes.config?.botTokenConfigured).toBe(true);
+
+      // 3. Mock global fetch (never perform real Telegram network request)
+      const mockFetch = jest.fn().mockResolvedValue({
+        json: jest.fn().mockResolvedValue({ ok: true }),
+      });
+      global.fetch = mockFetch as any;
+
+      // 4. sendTestMessage() proceeds using preserved stored token
+      const testRes = await service.sendTestMessage();
+
+      expect(testRes.success).toBe(true);
+      expect(testRes.message).toContain('ส่งข้อความทดสอบเข้า Telegram เรียบร้อยแล้ว');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // Verify fetch was called with Telegram API endpoint containing stored token
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain('api.telegram.org/botSTORED_SECRET_TOKEN/sendMessage');
     });
   });
 });
