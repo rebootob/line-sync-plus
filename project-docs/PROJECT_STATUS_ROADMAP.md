@@ -1,6 +1,4 @@
-# LineSync Plus — Complete Approved Project Status & Development Roadmap
-
----
+# LineSync Plus — Project Status, Incident History & Development Roadmap
 
 ## 1. Executive Summary
 
@@ -143,8 +141,8 @@ Over the course of safety hardening, 10 corrective work packages were identified
 
 ## 8. UAT Evidence
 
-- **83-recipient baseline UAT**: Successfully completed with 100% recipient verification accuracy and zero misdeliveries.
-- **1,100-recipient endurance UAT**: Currently **RUNNING / RESULT PENDING**. Diagnostic logging is active in `uat-logs/browser-BUG-WP001-UAT.log` to record endurance stability across reloads, 404s, and recovery events.
+- **83-recipient baseline UAT**: 83 targets / 80 success / 3 blocked / no observed 404
+- **1,100-recipient endurance UAT**: RUNNING / RESULT PENDING
 
 ---
 
@@ -162,48 +160,18 @@ Over the course of safety hardening, 10 corrective work packages were identified
 
 ## 10. Target Vision
 
-To evolve LineSync Plus into a enterprise-grade, resilient, multi-tenant LINE OA broadcast orchestration platform featuring automated failover, dynamic rate-limiting, deep analytics, and multi-agent AI collaboration.
+To establish LineSync Plus as a robust, secure, and production-ready automated communication platform for LINE Official Account operations.
 
 ---
 
-## 11. Phase 0–5 Development Roadmap
+## 11. Development Roadmap
 
-```
-+-----------------------------------------------------------------------------------+
-| Phase 0: Emergency Safety & Recipient Isolation (COMPLETED)                      |
-| - Recipient verification, Same-Job safe recovery, zero-tolerance guards.          |
-+-----------------------------------------------------------------------------------+
-                                         |
-                                         v
-+-----------------------------------------------------------------------------------+
-| Phase 1: Observability & Diagnostic Persistence (COMPLETED)                      |
-| - Loopback diagnostic endpoint, navigation spooling, confirmed-write removal.    |
-+-----------------------------------------------------------------------------------+
-                                         |
-                                         v
-+-----------------------------------------------------------------------------------+
-| Phase 2: OA Context Poisoning Guard & Failure-Closed Architecture (COMPLETED)    |
-| - Strict U32hex validation, manager removal, active job preservation (WP002-R1).|
-+-----------------------------------------------------------------------------------+
-                                         |
-                                         v
-+-----------------------------------------------------------------------------------+
-| Phase 3: Endurance UAT Validation & Live Log Monitoring (CURRENT)                |
-| - Execution of 1,100-recipient endurance test, log visualization in Dashboard UI.|
-+-----------------------------------------------------------------------------------+
-                                         |
-                                         v
-+-----------------------------------------------------------------------------------+
-| Phase 4: Operational Automation & Multi-Account Support (PLANNED)                 |
-| - Multi-OA context switching, automated re-auth notifications, quota prediction.  |
-+-----------------------------------------------------------------------------------+
-                                         |
-                                         v
-+-----------------------------------------------------------------------------------+
-| Phase 5: Enterprise Analytics & AI Agent Integration (PLANNED)                    |
-| - Campaign engagement analytics, dynamic throttling, webhook AI handoffs.        |
-+-----------------------------------------------------------------------------------+
-```
+- **Phase 0 — Security & Reliability Foundation**: Core zero-tolerance recipient safety, full-lifecycle execution locking, OA context validation, and failure-closed recovery guards.
+- **Phase 1 — Operations & Monitoring**: Browser diagnostic persistence, direct-socket loopback event logging, and local diagnostic evidence audit trails.
+- **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
+- **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
+- **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
+- **Phase 5 — Analytics & Optimization**: Performance reporting, delivery throughput metrics, and campaign success analytics.
 
 ---
 
@@ -211,7 +179,7 @@ To evolve LineSync Plus into a enterprise-grade, resilient, multi-tenant LINE OA
 
 1. **P0 (Critical Safety & Security)**:
    - Secret hygiene enforcement (Zero secrets in public repo).
-   - Fail-closed recipient verification & OA context validation (Completed in WP001/WP002).
+   - Fail-closed recipient verification & OA context validation.
 2. **P1 (Observability & Operational Hardening)**:
    - Completion of 1,100-recipient endurance UAT run.
    - Real-time diagnostic event stream UI widget in Dashboard.
@@ -256,5 +224,5 @@ To evolve LineSync Plus into a enterprise-grade, resilient, multi-tenant LINE OA
 
 ## 17. Immediate Decision Gate
 
-The project is currently at **Phase 3 (Endurance UAT Validation)**.
+The project is currently at Phase 1 (Operations & Monitoring) completing the 1,100-recipient endurance UAT run.
 Next Action: Await ChatGPT Control Plane review of BUG-WP002-R1 and approval of next work package assignment.
