@@ -685,6 +685,177 @@ describe('AppController', () => {
       expect(scriptContent).toContain('OA_CONTEXT_MISMATCH');
     });
   });
+
+  describe('OA-WP001-R1 — Strict OA Identity Fencing & Regression Restore Tests', () => {
+    let mockRes: any;
+
+    beforeEach(() => {
+      mockRes = {
+        statusCode: 200,
+        status: jest.fn().mockImplementation(c => { mockRes.statusCode = c; return mockRes; })
+      };
+    });
+
+    it('1. userId-only success fallback without botId fails closed (400 Bad Request)', async () => {
+      const res = await appController.markSuccess({ userId: 'U12345' }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res).toEqual({ success: false, message: 'Missing or invalid botId for userId fallback' });
+    });
+
+    it('2. userId-only fail fallback without botId fails closed (400 Bad Request)', async () => {
+      const res = await appController.markFail({ userId: 'U12345' }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res).toEqual({ success: false, message: 'Missing or invalid botId for userId fallback' });
+    });
+
+    it('3. valid botId + lineUserId fallback uses composite identity query', async () => {
+      const findSpy = jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValueOnce({
+        id: 'j1',
+        campaignId: 'c1',
+        botId: 'U09d6b978fcbfb5275e533ca9b788eb22',
+        lineUserId: 'U12345',
+        status: 'processing',
+      } as any);
+
+      const res = await appController.markSuccess({
+        userId: 'U12345',
+        botId: 'U09d6b978fcbfb5275e533ca9b788eb22',
+      }, mockRes);
+
+      expect(res).toEqual({ success: true });
+      expect(findSpy).toHaveBeenCalledWith({
+        where: {
+          botId: 'U09d6b978fcbfb5275e533ca9b788eb22',
+          lineUserId: 'U12345',
+          status: 'processing',
+        },
+        order: { updatedAt: 'DESC' },
+      });
+    });
+
+    it('4. blocked customer mutation requires valid job.botId + lineUserId', async () => {
+      // Mock job without valid botId
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValueOnce({
+        id: 'j2',
+        campaignId: 'c1',
+        botId: null,
+        lineUserId: 'U12345',
+        status: 'processing',
+      } as any);
+
+      const custFindSpy = jest.spyOn(mockCustomerRepo, 'findOne');
+      custFindSpy.mockClear();
+
+      await appController.markFail({ jobId: 'j2', isBlocked: true, reason: 'บล็อก' }, mockRes);
+
+      expect(custFindSpy).not.toHaveBeenCalled();
+    });
+
+    it('5. missing expected job botId cannot pass physical OA fence in script', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain("if (!expectedBotId || !isValidChatContextId(expectedBotId) || !verifyCurrentOAContext(expectedBotId))");
+    });
+
+    it('6. page-load saved job restores linesync_job_botid', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain("sessionStorage.getItem('linesync_job_botid')");
+      expect(scriptContent).toContain("botId: savedJobBotId");
+    });
+
+    it('7. legacy saved job with missing job_botid cannot send', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain("Unverifiable saved active job (missing or invalid linesync_job_botid");
+      expect(scriptContent).toContain("clearLocalActiveJobState()");
+    });
+
+    it('8. clearLocalActiveJobState clears linesync_job_botid', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain("function clearLocalActiveJobState()");
+      expect(scriptContent).toContain("sessionStorage.removeItem('linesync_job_botid')");
+    });
+
+    it('9. duplicate-tab cleanup clears linesync_job_botid via clearLocalActiveJobState', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      const dupBlock = scriptContent.substring(
+        scriptContent.indexOf('DUPLICATE TAB IDENTITY DETECTED'),
+        scriptContent.indexOf('NEW TAB IDENTITY ASSIGNED')
+      );
+      expect(dupBlock).toContain('clearLocalActiveJobState()');
+    });
+
+    it('10. leadership-loss cleanup clears linesync_job_botid via clearLocalActiveJobState', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      const lossBlock = scriptContent.substring(
+        scriptContent.indexOf('function handleLeadershipLost'),
+        scriptContent.indexOf('Periodic Leadership Renewal Loop')
+      );
+      expect(lossBlock).toContain('clearLocalActiveJobState()');
+    });
+
+    it('11. success/fail worker payload contains botId', () => {
+      const fs = require('fs');
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+
+      expect(scriptContent).toContain("fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId })");
+      expect(scriptContent).toContain("fetchAPI('/campaign/fail', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId");
+    });
+
+    it('12. /campaign/next has no activeBotId fallback for job.botId', async () => {
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValueOnce({ id: 'global', activeBotId: 'U09d6b978fcbfb5275e533ca9b788eb22' } as any);
+      appController.toggleBotStatus({ enabled: true });
+
+      // Mock job with matching botId
+      jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValueOnce([
+        { id: 'j1', campaignId: 'c1', botId: 'U09d6b978fcbfb5275e533ca9b788eb22', lineUserId: 'U12345', status: 'pending', createdAt: new Date() }
+      ] as any);
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValueOnce({
+        id: 'c1',
+        botId: 'U09d6b978fcbfb5275e533ca9b788eb22',
+        status: 'pending',
+        messageType: 'text',
+        message: 'Hello'
+      } as any);
+
+      const jobRes: any = await appController.getNextJob('28.5', 'U09d6b978fcbfb5275e533ca9b788eb22', mockRes);
+      expect(jobRes.botId).toBe('U09d6b978fcbfb5275e533ca9b788eb22');
+    });
+
+    it('13. group detail/delete require botId query parameter', async () => {
+      // Group detail without botId
+      const detailRes = await appController.getGroupDetail('g1', undefined, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(detailRes).toEqual({ success: false, message: 'Missing or invalid botId query parameter' });
+
+      // Group delete without botId
+      const deleteRes = await appController.deleteGroup('g1', undefined, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(deleteRes).toEqual({ success: false, message: 'Missing or invalid botId query parameter' });
+    });
+
+    it('14. image upload response contract remains data.url compatible', async () => {
+      const uploadRes = await appController.uploadImage({
+        base64: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        filename: 'test.png'
+      });
+
+      expect(uploadRes.success).toBe(true);
+      expect(uploadRes.url).toBeDefined();
+      expect(uploadRes.filename).toBeDefined();
+      expect(uploadRes.url).toContain('/api/uploads/');
+    });
+  });
 });
 
 

@@ -164,34 +164,37 @@ export class AppController {
 
   // 1.1 อัปโหลดรูปภาพจากเครื่องคอมพิวเตอร์ Local บันทึกลงเซิร์ฟเวอร์
   @Post('upload/image')
-  async uploadImage(@Body() body: { base64: string; filename?: string }) {
+  async uploadImage(@Body() body: { base64: string; filename?: string }, @Req() req?: any) {
     if (!body.base64) {
-      return { success: false, message: 'ไม่มีข้อมูลไฟล์รูปภาพ' };
+      return { success: false, message: 'ไม่มีข้อมูลรูปภาพ' };
     }
 
     try {
-      const matches = body.base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      if (!matches || matches.length !== 3) {
-        return { success: false, message: 'รูปแบบ Base64 รูปภาพไม่ถูกต้อง' };
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
       }
 
-      const imageBuffer = Buffer.from(matches[2], 'base64');
-      const filename = body.filename || `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.png`;
+      const base64Data = body.base64.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
 
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
+      const rawFilename = body.filename || 'local_image.png';
+      const cleanFilename = rawFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const savedFilename = `${Date.now()}_${cleanFilename}`;
+      const filePath = path.join(uploadsDir, savedFilename);
 
-      const filePath = path.join(uploadDir, filename);
-      fs.writeFileSync(filePath, imageBuffer);
+      fs.writeFileSync(filePath, buffer);
 
-      const imageUrl = `/uploads/${filename}`;
-      console.log(`🖼️ อัปโหลดรูปภาพสำเร็จ: ${imageUrl}`);
+      const protocol = req?.protocol || 'http';
+      const host = req?.get ? req.get('host') : (req?.headers?.host || 'localhost:3005');
+      const fileUrl = `${protocol}://${host}/api/uploads/${savedFilename}`;
+
+      console.log(`🖼️ อัปโหลดรูปภาพสำเร็จ: ${fileUrl}`);
 
       return {
         success: true,
-        imageUrl: imageUrl,
+        url: fileUrl,
+        filename: savedFilename,
       };
     } catch (e) {
       console.error('❌ ไม่สามารถอัปโหลดรูปภาพได้:', e);
@@ -202,7 +205,7 @@ export class AppController {
   // 1.2 ให้บริการดึงไฟล์รูปภาพ Local
   @Get('uploads/:filename')
   serveUpload(@Param('filename') filename: string, @Res() res: Response) {
-    const filePath = path.join(process.cwd(), 'public', 'uploads', filename);
+    const filePath = path.join(process.cwd(), 'uploads', filename);
     if (!fs.existsSync(filePath)) {
       throw new NotFoundException('ไม่พบไฟล์รูปภาพที่ระบุ');
     }
@@ -245,16 +248,29 @@ export class AppController {
     return result;
   }
 
-  // ดึงรายชื่อสมาชิกในกลุ่มเฉพาะ ID
+  // ดึงรายชื่อสมาชิกในกลุ่มเฉพาะ ID (OA-WP001 Scoped)
   @Get('groups/:id')
-  async getGroupDetail(@Param('id') id: string) {
-    const group = await this.groupRepository.findOne({ where: { id } });
-    if (!group) {
-      throw new NotFoundException('ไม่พบกลุ่มลูกค้าที่ระบุ');
+  async getGroupDetail(
+    @Param('id') id: string,
+    @Query('botId') botId: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!botId || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId query parameter' };
     }
+
+    const cleanBotId = botId.trim();
+    const group = await this.groupRepository.findOne({ where: { id, botId: cleanBotId } });
+    if (!group) {
+      res.status(HttpStatus.NOT_FOUND);
+      return { success: false, message: 'ไม่พบกลุ่มลูกค้าที่ระบุ' };
+    }
+
     const members = await this.groupMemberRepository.find({
-      where: { groupId: id },
+      where: { groupId: id, botId: cleanBotId },
     });
+
     return {
       group,
       targetIds: members.map(m => m.lineUserId),
@@ -311,11 +327,28 @@ export class AppController {
     };
   }
 
-  // ลบกลุ่มลูกค้า
+  // ลบกลุ่มลูกค้า (OA-WP001 Scoped)
   @Delete('groups/:id')
-  async deleteGroup(@Param('id') id: string) {
-    await this.groupMemberRepository.delete({ groupId: id });
-    await this.groupRepository.delete(id);
+  async deleteGroup(
+    @Param('id') id: string,
+    @Query('botId') botId: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!botId || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId query parameter' };
+    }
+
+    const cleanBotId = botId.trim();
+    const group = await this.groupRepository.findOne({ where: { id, botId: cleanBotId } });
+    if (!group) {
+      res.status(HttpStatus.NOT_FOUND);
+      return { success: false, message: 'ไม่พบกลุ่มลูกค้าที่ระบุ' };
+    }
+
+    await this.groupMemberRepository.delete({ groupId: id, botId: cleanBotId });
+    await this.groupRepository.delete({ id, botId: cleanBotId });
+
     return { success: true };
   }
 
@@ -518,8 +551,9 @@ export class AppController {
     const readyCandidates: { job: CampaignJob; campaign: Campaign }[] = [];
 
     for (const j of pendingJobs) {
+      if (!j.botId || j.botId !== activeBotId) continue;
       const camp = await this.campaignRepository.findOne({ where: { id: j.campaignId, botId: activeBotId } });
-      if (!camp) continue;
+      if (!camp || !camp.botId || camp.botId !== activeBotId) continue;
 
       // หากแคมเปญถูกสั่งหยุด หรือ หยุดชั่วคราว ให้ข้าม
       if (['stopped_limit', 'stopped_error', 'stopped_user', 'paused', 'failed', 'completed'].includes(camp.status)) continue;
@@ -560,8 +594,10 @@ export class AppController {
       });
 
       for (const j of processingJobs) {
+        if (!j.botId || j.botId !== activeBotId) continue;
         const camp = await this.campaignRepository.findOne({ where: { id: j.campaignId, botId: activeBotId } });
-        if (!camp || ['stopped_limit', 'stopped_error', 'stopped_user', 'paused', 'failed', 'completed'].includes(camp.status)) continue;
+        if (!camp || !camp.botId || camp.botId !== activeBotId) continue;
+        if (['stopped_limit', 'stopped_error', 'stopped_user', 'paused', 'failed', 'completed'].includes(camp.status)) continue;
         if (camp.scheduledAt && new Date(camp.scheduledAt).getTime() > nowMs) continue;
 
         selectedJob = j;
@@ -570,7 +606,7 @@ export class AppController {
       }
     }
 
-    if (!selectedJob || !targetCampaign) {
+    if (!selectedJob || !selectedJob.botId || selectedJob.botId !== activeBotId || !targetCampaign || !targetCampaign.botId || targetCampaign.botId !== activeBotId) {
       return { status: 'empty' };
     }
 
@@ -586,7 +622,7 @@ export class AppController {
     return {
       jobId: selectedJob.id,
       campaignId: selectedJob.campaignId,
-      botId: selectedJob.botId || activeBotId,
+      botId: selectedJob.botId,
       userId: selectedJob.lineUserId,
       messageType: targetCampaign.messageType || 'text',
       message: targetCampaign.message || '',
@@ -598,119 +634,127 @@ export class AppController {
 
   // API สำหรับ Tampermonkey มารายงานว่าส่งเสร็จแล้ว
   @Post('campaign/success')
-  async markSuccess(@Body() body: { jobId?: string; userId?: string; botId?: string }) {
+  async markSuccess(
+    @Body() body: { jobId?: string; userId?: string; botId?: string },
+    @Res({ passthrough: true }) res?: Response,
+  ) {
     let job: CampaignJob | null = null;
 
     if (body.jobId) {
       job = await this.campaignJobRepository.findOne({ where: { id: body.jobId } });
     } else if (body.userId) {
-      const whereClause: any = { lineUserId: body.userId, status: 'processing' };
-      if (body.botId) {
-        whereClause.botId = body.botId;
+      if (!body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+        if (res) res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Missing or invalid botId for userId fallback' };
       }
       job = await this.campaignJobRepository.findOne({
-        where: whereClause,
+        where: { botId: body.botId.trim(), lineUserId: body.userId, status: 'processing' },
         order: { updatedAt: 'DESC' },
       });
     }
 
-    if (job) {
-      job.status = 'success';
-      job.sentAt = new Date();
-      await this.campaignJobRepository.save(job);
-
-      // อัปเดตตัวนับสำเร็จในแคมเปญหลัก
-      const campaign = await this.campaignRepository.findOne({ where: { id: job.campaignId } });
-      if (campaign) {
-        campaign.successCount += 1;
-        
-        // เช็คว่าคิวงานทั้งหมดเสร็จหรือยัง
-        const remainingPending = await this.campaignJobRepository.count({
-          where: [
-            { campaignId: campaign.id, status: 'pending' },
-            { campaignId: campaign.id, status: 'processing' },
-          ],
-        });
-
-        if (remainingPending === 0) {
-          campaign.status = 'completed';
-          await this.campaignRepository.save(campaign);
-          await this.checkAndSendTelegramReport(campaign);
-        } else {
-          await this.campaignRepository.save(campaign);
-        }
-      }
-
-      console.log(`✅ ส่งข้อความสำเร็จ: ${job.lineUserId}`);
+    if (!job) {
+      if (res) res.status(HttpStatus.NOT_FOUND);
+      return { success: false, message: 'Job not found' };
     }
+
+    job.status = 'success';
+    job.sentAt = new Date();
+    await this.campaignJobRepository.save(job);
+
+    // อัปเดตตัวนับสำเร็จในแคมเปญหลัก
+    const campaign = await this.campaignRepository.findOne({ where: { id: job.campaignId } });
+    if (campaign) {
+      campaign.successCount += 1;
+
+      // เช็คว่าคิวงานทั้งหมดเสร็จหรือยัง
+      const remainingPending = await this.campaignJobRepository.count({
+        where: [
+          { campaignId: campaign.id, status: 'pending' },
+          { campaignId: campaign.id, status: 'processing' },
+        ],
+      });
+
+      if (remainingPending === 0) {
+        campaign.status = 'completed';
+        await this.campaignRepository.save(campaign);
+        await this.checkAndSendTelegramReport(campaign);
+      } else {
+        await this.campaignRepository.save(campaign);
+      }
+    }
+
+    console.log(`✅ ส่งข้อความสำเร็จ: ${job.lineUserId}`);
 
     return { success: true };
   }
 
   // API สำหรับ Tampermonkey มารายงานว่าส่งล้มเหลว (พร้อมอัปเดตปิดสถานะผู้ใช้บล็อก/ส่งไม่ได้)
   @Post('campaign/fail')
-  async markFail(@Body() body: { jobId?: string; userId?: string; botId?: string; reason?: string; isBlocked?: boolean }) {
+  async markFail(
+    @Body() body: { jobId?: string; userId?: string; botId?: string; reason?: string; isBlocked?: boolean },
+    @Res({ passthrough: true }) res?: Response,
+  ) {
     let job: CampaignJob | null = null;
 
     if (body.jobId) {
       job = await this.campaignJobRepository.findOne({ where: { id: body.jobId } });
     } else if (body.userId) {
-      const whereClause: any = { lineUserId: body.userId, status: 'processing' };
-      if (body.botId) {
-        whereClause.botId = body.botId;
+      if (!body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+        if (res) res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Missing or invalid botId for userId fallback' };
       }
       job = await this.campaignJobRepository.findOne({
-        where: whereClause,
+        where: { botId: body.botId.trim(), lineUserId: body.userId, status: 'processing' },
         order: { updatedAt: 'DESC' },
       });
     }
 
-    if (job) {
-      job.status = 'failed';
-      job.errorReason = body.reason || 'ส่งล้มเหลว / หาช่องพิมพ์ไม่เจอ';
-      await this.campaignJobRepository.save(job);
-
-      const campaign = await this.campaignRepository.findOne({ where: { id: job.campaignId } });
-      if (campaign) {
-        campaign.failedCount += 1;
-        const remainingPending = await this.campaignJobRepository.count({
-          where: [
-            { campaignId: campaign.id, status: 'pending' },
-            { campaignId: campaign.id, status: 'processing' },
-          ],
-        });
-
-        if (remainingPending === 0) {
-          campaign.status = 'completed';
-          await this.campaignRepository.save(campaign);
-          await this.checkAndSendTelegramReport(campaign);
-        } else {
-          await this.campaignRepository.save(campaign);
-        }
-      }
-
-      // 🚫 ถ้าพบเหตุผลการบล็อก/ส่งไม่ได้ ให้ปิดสถานะผู้ใช้คนนี้ลงในตาราง customers ด้วย
-      const isUserBlocked = body.isBlocked || (body.reason && (body.reason.includes('บล็อก') || body.reason.includes('ไม่สามารถส่งข้อความ')));
-      if (isUserBlocked && job.lineUserId) {
-        try {
-          const custWhere: any = { lineUserId: job.lineUserId };
-          if (job.botId) {
-            custWhere.botId = job.botId;
-          }
-          const customer = await this.customerRepository.findOne({ where: custWhere });
-          if (customer) {
-            customer.isBlocked = true;
-            customer.blockReason = body.reason || '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว';
-            await this.customerRepository.save(customer);
-            console.log(`🚫 ปิดสถานะผู้ใช้ในตาราง Customers เป็น "บล็อก/ส่งไม่ได้แล้ว": ${job.lineUserId} (OA: ${job.botId})`);
-          }
-        } catch(e) {
-          console.error(`⚠️ ไม่สามารถอัปเดตสถานะบล็อกให้ผู้ใช้ ${job.lineUserId}:`, e);
-        }
-      }
-
-      console.log(`❌ ส่งข้อความล้มเหลว: ${job.lineUserId} (${body.reason})`);
+    if (!job) {
+      if (res) res.status(HttpStatus.NOT_FOUND);
+      return { success: false, message: 'Job not found' };
     }
+
+    job.status = 'failed';
+    job.errorReason = body.reason || 'ส่งล้มเหลว / หาช่องพิมพ์ไม่เจอ';
+    await this.campaignJobRepository.save(job);
+
+    const campaign = await this.campaignRepository.findOne({ where: { id: job.campaignId } });
+    if (campaign) {
+      campaign.failedCount += 1;
+      const remainingPending = await this.campaignJobRepository.count({
+        where: [
+          { campaignId: campaign.id, status: 'pending' },
+          { campaignId: campaign.id, status: 'processing' },
+        ],
+      });
+
+      if (remainingPending === 0) {
+        campaign.status = 'completed';
+        await this.campaignRepository.save(campaign);
+        await this.checkAndSendTelegramReport(campaign);
+      } else {
+        await this.campaignRepository.save(campaign);
+      }
+    }
+
+    // 🚫 ถ้าพบเหตุผลการบล็อก/ส่งไม่ได้ ให้ปิดสถานะผู้ใช้คนนี้ลงในตาราง customers ด้วย
+    const isUserBlocked = body.isBlocked || (body.reason && (body.reason.includes('บล็อก') || body.reason.includes('ไม่สามารถส่งข้อความ')));
+    if (isUserBlocked && job.lineUserId && job.botId && /^U[0-9a-fA-F]{32}$/.test(job.botId)) {
+      try {
+        const customer = await this.customerRepository.findOne({ where: { botId: job.botId, lineUserId: job.lineUserId } });
+        if (customer) {
+          customer.isBlocked = true;
+          customer.blockReason = body.reason || '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว';
+          await this.customerRepository.save(customer);
+          console.log(`🚫 ปิดสถานะผู้ใช้ในตาราง Customers เป็น "บล็อก/ส่งไม่ได้แล้ว": ${job.lineUserId} (OA: ${job.botId})`);
+        }
+      } catch(e) {
+        console.error(`⚠️ ไม่สามารถอัปเดตสถานะบล็อกให้ผู้ใช้ ${job.lineUserId}:`, e);
+      }
+    }
+
+    console.log(`❌ ส่งข้อความล้มเหลว: ${job.lineUserId} (${body.reason})`);
 
     return { success: true };
   }

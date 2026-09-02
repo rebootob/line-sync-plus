@@ -94,12 +94,7 @@
                     currentTabLeaseId = null;
 
                     // 3. Remove copied active-job session fields
-                    sessionStorage.removeItem('linesync_jobid');
-                    sessionStorage.removeItem('linesync_uid');
-                    sessionStorage.removeItem('linesync_msg');
-                    sessionStorage.removeItem('linesync_type');
-                    sessionStorage.removeItem('linesync_img');
-                    sessionStorage.removeItem('linesync_link');
+                    clearLocalActiveJobState();
 
                     console.log(`[REL] NEW TAB IDENTITY ASSIGNED: Reassigned identity to ${newTabId}. Becoming STANDBY.`);
 
@@ -329,17 +324,24 @@
         return true;
     }
 
+    // 🛡️ Helper: Clear local active job session storage fields
+    function clearLocalActiveJobState() {
+        try {
+            sessionStorage.removeItem('linesync_jobid');
+            sessionStorage.removeItem('linesync_uid');
+            sessionStorage.removeItem('linesync_msg');
+            sessionStorage.removeItem('linesync_type');
+            sessionStorage.removeItem('linesync_img');
+            sessionStorage.removeItem('linesync_link');
+            sessionStorage.removeItem('linesync_job_botid');
+        } catch (e) {}
+    }
+
     function handleLeadershipLost(reason = 'UNKNOWN') {
         console.warn(`🛑 [REL] WORKER LEADERSHIP LOST: Tab ${getTabSessionId()} lost worker lock (${reason}). Relinquishing local active job session.`);
 
         isExecutingJob = false;
-
-        sessionStorage.removeItem('linesync_jobid');
-        sessionStorage.removeItem('linesync_uid');
-        sessionStorage.removeItem('linesync_msg');
-        sessionStorage.removeItem('linesync_type');
-        sessionStorage.removeItem('linesync_img');
-        sessionStorage.removeItem('linesync_link');
+        clearLocalActiveJobState();
     }
 
     // 🛡️ Periodic Leadership Renewal Loop
@@ -822,8 +824,8 @@
             throw new Error('RECIPIENT_UNVERIFIED');
         }
 
-        if (expectedBotId && !verifyCurrentOAContext(expectedBotId)) {
-            console.error("🛑 [OA] Zero-tolerance image send guard: OA context unverified immediately before clicking image Send button!");
+        if (!expectedBotId || !isValidChatContextId(expectedBotId) || !verifyCurrentOAContext(expectedBotId)) {
+            console.error("🛑 [OA] Zero-tolerance image send guard: Expected job botId missing, invalid, or unverified immediately before clicking image Send button!");
             throw new Error('OA_CONTEXT_MISMATCH');
         }
 
@@ -871,8 +873,8 @@
             throw new Error('RECIPIENT_UNVERIFIED');
         }
 
-        if (expectedBotId && !verifyCurrentOAContext(expectedBotId)) {
-            console.error("🛑 [OA] Zero-tolerance text send guard: OA context unverified immediately before text send!");
+        if (!expectedBotId || !isValidChatContextId(expectedBotId) || !verifyCurrentOAContext(expectedBotId)) {
+            console.error("🛑 [OA] Zero-tolerance text send guard: Expected job botId missing, invalid, or unverified immediately before text send!");
             throw new Error('OA_CONTEXT_MISMATCH');
         }
 
@@ -1172,9 +1174,10 @@
             return;
         }
 
-        const expectedJobBotId = jobData.botId || sessionStorage.getItem('linesync_job_botid');
-        if (expectedJobBotId && !verifyCurrentOAContext(expectedJobBotId)) {
-            console.error(`🛑 [OA] Zero-tolerance executeChatBot guard: OA mismatch (Expected: ${expectedJobBotId}, Current: ${getBotId()})`);
+        const expectedJobBotId = (jobData && jobData.botId) || sessionStorage.getItem('linesync_job_botid');
+        if (!expectedJobBotId || !isValidChatContextId(expectedJobBotId) || !verifyCurrentOAContext(expectedJobBotId)) {
+            console.error(`🛑 [OA] Zero-tolerance executeChatBot guard: Expected job botId missing, invalid, or unverified against current OA (Expected: ${expectedJobBotId}, Current: ${getBotId()})`);
+            clearLocalActiveJobState();
             isExecutingJob = false;
             return;
         }
@@ -1240,9 +1243,10 @@
                 return;
             }
 
-            if (expectedJobBotId && !verifyCurrentOAContext(expectedJobBotId)) {
+            if (!expectedJobBotId || !isValidChatContextId(expectedJobBotId) || !verifyCurrentOAContext(expectedJobBotId)) {
                 clearInterval(findAndType);
                 console.error("🛑 [OA] ตรวจพบ OA Context Mismatch ระหว่างค้นหาช่องพิมพ์! ยกเลิกส่งทันที");
+                clearLocalActiveJobState();
                 isExecutingJob = false;
                 return;
             }
@@ -1263,8 +1267,9 @@
                     return;
                 }
 
-                if (expectedJobBotId && !verifyCurrentOAContext(expectedJobBotId)) {
+                if (!expectedJobBotId || !isValidChatContextId(expectedJobBotId) || !verifyCurrentOAContext(expectedJobBotId)) {
                     console.error("🛑 [OA] ยืนยัน OA Context ไม่ผ่านก่อนเริ่มพิมพ์! ยกเลิกการส่งทันที");
+                    clearLocalActiveJobState();
                     isExecutingJob = false;
                     return;
                 }
@@ -1289,7 +1294,7 @@
                             throw new Error('RECIPIENT_UNVERIFIED');
                         }
 
-                        if (expectedJobBotId && !verifyCurrentOAContext(expectedJobBotId)) {
+                        if (!expectedJobBotId || !isValidChatContextId(expectedJobBotId) || !verifyCurrentOAContext(expectedJobBotId)) {
                             throw new Error('OA_CONTEXT_MISMATCH');
                         }
 
@@ -1344,7 +1349,7 @@
                             throw new Error('RECIPIENT_UNVERIFIED');
                         }
 
-                        if (expectedJobBotId && !verifyCurrentOAContext(expectedJobBotId)) {
+                        if (!expectedJobBotId || !isValidChatContextId(expectedJobBotId) || !verifyCurrentOAContext(expectedJobBotId)) {
                             throw new Error('OA_CONTEXT_MISMATCH');
                         }
 
@@ -1369,11 +1374,11 @@
 
                         await sleep(3000);
                         console.log("✅ ส่งแคมเปญสำเร็จ 100%!");
-                        await finishJob(jobData.jobId, jobData.userId, true);
+                        await finishJob(jobData.jobId, jobData.userId, true, '', false, expectedJobBotId);
                     } else {
                         await sleep(2000);
                         console.log("✅ ส่งแคมเปญรูปภาพอย่างเดียวสำเร็จ 100%!");
-                        await finishJob(jobData.jobId, jobData.userId, true);
+                        await finishJob(jobData.jobId, jobData.userId, true, '', false, expectedJobBotId);
                     }
 
                 } catch (e) {
@@ -1383,19 +1388,13 @@
                         handleLeadershipLost('EXECUTE_CHATBOT_THROWN');
                     } else if (errReason.includes('OA_CONTEXT_MISMATCH')) {
                         console.error("🛑 [OA] Physical send phase aborted due to OA_CONTEXT_MISMATCH.");
-                        sessionStorage.removeItem('linesync_jobid');
-                        sessionStorage.removeItem('linesync_uid');
-                        sessionStorage.removeItem('linesync_msg');
-                        sessionStorage.removeItem('linesync_type');
-                        sessionStorage.removeItem('linesync_img');
-                        sessionStorage.removeItem('linesync_link');
-                        sessionStorage.removeItem('linesync_job_botid');
+                        clearLocalActiveJobState();
                         isExecutingJob = false;
                         return;
                     } else if (errReason.includes('RECIPIENT_UNVERIFIED') || errReason.includes('NAVIGATION_404') || errReason.includes('RECIPIENT_MISMATCH')) {
                         await handleSafeRecovery(jobData, errReason);
                     } else {
-                        await finishJob(jobData.jobId, jobData.userId, false, errReason);
+                        await finishJob(jobData.jobId, jobData.userId, false, errReason, false, expectedJobBotId);
                     }
                 }
             } else if (attempts > maxAttempts) {
@@ -1408,17 +1407,19 @@
         }, 1000);
     }
 
-    async function finishJob(jobId, userId, success, reason = '', isBlocked = false) {
+    async function finishJob(jobId, userId, success, reason = '', isBlocked = false, botId = '') {
         try {
             sessionStorage.removeItem(`linesync_retry_${jobId}`);
 
+            const expectedJobBotId = botId || sessionStorage.getItem('linesync_job_botid') || '';
+
             if (success) {
-                emitDiagnostic('JOB_SUCCESS', { jobId: jobId, userId: userId });
+                emitDiagnostic('JOB_SUCCESS', { jobId: jobId, userId: userId, botId: expectedJobBotId });
                 consecutiveErrorCount = 0;
                 sessionStorage.setItem('linesync_consecutive_errors', '0');
-                await fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId });
+                await fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId });
             } else {
-                emitDiagnostic('JOB_FAIL', { jobId: jobId, userId: userId, reason: reason });
+                emitDiagnostic('JOB_FAIL', { jobId: jobId, userId: userId, botId: expectedJobBotId, reason: reason });
 
                 const isUserBlocked = isBlocked || (reason && (reason.includes('บล็อก') || reason.includes('ไม่สามารถส่งข้อความ')));
 
@@ -1430,7 +1431,7 @@
                     console.warn(`⚠️ เกิด Error สะสมติดต่อกันแล้ว ${consecutiveErrorCount}/10 รายการ (${reason})`);
                 }
 
-                await fetchAPI('/campaign/fail', 'POST', { jobId: jobId, userId: userId, reason: reason, isBlocked: isBlocked });
+                await fetchAPI('/campaign/fail', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, reason: reason, isBlocked: isBlocked });
 
                 if (consecutiveErrorCount >= 10) {
                     console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! สั่งหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
@@ -1448,12 +1449,7 @@
         } catch(e) {
             console.error("❌ ส่งรายงานไม่สำเร็จ");
         } finally {
-            sessionStorage.removeItem('linesync_jobid');
-            sessionStorage.removeItem('linesync_msg');
-            sessionStorage.removeItem('linesync_uid');
-            sessionStorage.removeItem('linesync_type');
-            sessionStorage.removeItem('linesync_img');
-            sessionStorage.removeItem('linesync_link');
+            clearLocalActiveJobState();
 
             isExecutingJob = false;
 
@@ -1466,15 +1462,16 @@
     async function resumeSavedActiveJob(savedJobData) {
         if (!savedJobData) return;
 
+        if (!savedJobData.botId || !isValidChatContextId(savedJobData.botId)) {
+            console.warn(`🛑 [OA] Saved active job has missing or invalid linesync_job_botid (${savedJobData.botId}). Relinquishing local active job state.`);
+            clearLocalActiveJobState();
+            return;
+        }
+
         const isLeader = await ensureWorkerLeadership();
         if (!isLeader) {
             console.warn(`🛑 [REL] WORKER STANDBY: Page-load saved job exists on non-leader tab ${getTabSessionId()}. Relinquishing local active job session.`);
-            sessionStorage.removeItem('linesync_jobid');
-            sessionStorage.removeItem('linesync_uid');
-            sessionStorage.removeItem('linesync_msg');
-            sessionStorage.removeItem('linesync_type');
-            sessionStorage.removeItem('linesync_img');
-            sessionStorage.removeItem('linesync_link');
+            clearLocalActiveJobState();
             return;
         }
 
@@ -1485,7 +1482,7 @@
             return;
         }
 
-        emitDiagnostic('PAGE_LOAD_ACTIVE_JOB', { jobId: savedJobData.jobId, userId: savedJobData.userId });
+        emitDiagnostic('PAGE_LOAD_ACTIVE_JOB', { jobId: savedJobData.jobId, userId: savedJobData.userId, botId: savedJobData.botId });
 
         if (checkIfErrorPage()) {
             console.warn("🛑 [SAFETY] โหลดหน้าเจอ 404 / Error Page พร้อมมีคิวค้าง -> ส่งเข้า Same-Job Safe Recovery...");
@@ -1511,22 +1508,31 @@
 
         setTimeout(async () => {
             const savedJobId = sessionStorage.getItem('linesync_jobid');
+            const savedJobBotId = sessionStorage.getItem('linesync_job_botid');
             const savedMsg = sessionStorage.getItem('linesync_msg');
             const savedUid = sessionStorage.getItem('linesync_uid');
             const savedType = sessionStorage.getItem('linesync_type');
             const savedImg = sessionStorage.getItem('linesync_img');
             const savedLink = sessionStorage.getItem('linesync_link');
 
-            const savedJobData = savedJobId && savedUid ? {
-                jobId: savedJobId,
-                userId: savedUid,
-                messageType: savedType,
-                message: savedMsg,
-                imageUrl: savedImg,
-                linkUrl: savedLink
-            } : null;
+            if (savedJobId || savedUid || savedJobBotId) {
+                if (!savedJobBotId || !isValidChatContextId(savedJobBotId) || !savedJobId || !savedUid) {
+                    console.warn(`🛑 [OA] Unverifiable saved active job (missing or invalid linesync_job_botid: "${savedJobBotId}"). Relinquishing local active job state.`);
+                    clearLocalActiveJobState();
+                    processQueue();
+                    return;
+                }
 
-            if (savedJobData) {
+                const savedJobData = {
+                    jobId: savedJobId,
+                    userId: savedUid,
+                    botId: savedJobBotId,
+                    messageType: savedType,
+                    message: savedMsg,
+                    imageUrl: savedImg,
+                    linkUrl: savedLink
+                };
+
                 resumeSavedActiveJob(savedJobData);
             } else {
                 if (checkIfErrorPage()) {

@@ -770,7 +770,7 @@
             btnDelete.style.display = 'inline-block';
 
             try {
-                const res = await fetch(`${API_BASE}/groups/${groupId}`);
+                const res = await fetch(`${API_BASE}/groups/${groupId}?botId=${encodeURIComponent(currentActiveBotId)}`);
                 const data = await res.json();
 
                 if (data && data.targetIds) {
@@ -845,7 +845,7 @@
             }
 
             try {
-                const res = await fetch(`${API_BASE}/groups/${groupId}`, { method: 'DELETE' });
+                const res = await fetch(`${API_BASE}/groups/${groupId}?botId=${encodeURIComponent(currentActiveBotId)}`, { method: 'DELETE' });
                 const data = await res.json();
                 if (data.success) {
                     alert('✅ ลบกลุ่มเรียบร้อย');

@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post REL-WP001 / R1 / R2 Final Closure)
+**Last Updated**: 2026-09-02 (Post OA-WP001-R1 Strict OA Identity Fencing & Regression Restore)
 
 ---
 
@@ -28,49 +28,58 @@
 
 ---
 
+## 🔒 Multi-OA Identity Fencing & Context Isolation (OA-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
+
+- **Worker Version**: `28.5` (`run/LineSyncApp.js` v28.5).
+- **Backend Required Version**: `28.5` (`src/runtime-version.ts`).
+- **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
+- **Active OA Identity Fencing**:
+  - `POST /api/campaign/success` and `POST /api/campaign/fail` enforce composite identity fallback (`botId` + `lineUserId` + `status: 'processing'`) when `jobId` is absent. `userId`-only fallbacks without `botId` fail closed with `400 Bad Request`.
+  - Customer block status updates require `job.botId` + `job.lineUserId`.
+  - Pre-physical send guards in worker script require valid `expectedBotId` and fail closed (`OA_CONTEXT_MISMATCH`) if missing or unverified against current OA.
+  - Page-load active job recovery requires `linesync_job_botid`. If missing/invalid, `clearLocalActiveJobState()` clears local session without triggering send or navigation.
+  - `/campaign/next` enforces `selectedJob.botId === activeBotId` and `targetCampaign.botId === activeBotId` without fallbacks.
+  - `GET /api/groups/:id` and `DELETE /api/groups/:id` require valid `botId` query parameter (`?botId=...`) and scope queries by `botId`.
+  - Restored image upload endpoint contract (`POST /api/upload/image` and `GET /api/uploads/:filename`) to exact parent baseline (`process.cwd()/uploads`, returning `{ success: true, url, filename }`).
+
+---
+
 ## 🔒 Single Worker Multi-Tab Lock (REL-WP001 STATUS: CLOSED / PASS)
 
-- **Worker Version**: `28.4` (`run/LineSyncApp.js` v28.4).
-- **Backend Required Version**: `28.4` (`src/runtime-version.ts`).
+- **Worker Version**: `28.5` (`run/LineSyncApp.js` v28.5).
+- **Backend Required Version**: `28.5` (`src/runtime-version.ts`).
 - **Live UAT Evidence (Passed)**:
   - **UAT-01 (Multi-Tab Election)**: PASS (1 Leader, 1 Standby).
   - **UAT-02 (Duplicate Tab Clone Defense)**: PASS (Detected copied session identity, assigned new `tabSessionId`, copied lease not reused).
   - **UAT-03 (Leader Failover)**: PASS (Leader closed -> automatic takeover, 1 Leader active).
   - **UAT-04 (Live Single Consumption)**: PASS (2 tabs open -> 1-recipient campaign sent by Leader alone, Target=1, Success=1, Fail=0, Duplicate Send=0).
-- **Document-Lifetime Tab Identity Lock**: `ensureTabIdentity()` claims `linesync_tab_identity_v1_<tabSessionId>` via non-blocking Web Locks (`ifAvailable: true`).
-- **Duplicate Tab Clone Defense**: Detects copied `sessionStorage` in duplicated/cloned tabs (`lock === null`), assigns a new `tabSessionId`, clears copied lease and active-job fields, logs `[REL] DUPLICATE TAB IDENTITY DETECTED` and `[REL] NEW TAB IDENTITY ASSIGNED`, and sets cloned tab to STANDBY.
-- **Fail-Closed Lease Persistence**: `writeAndVerifyLeaderRecord()` reads back raw `localStorage` record after every write and verifies exact equality of `ownerTabSessionId`, `leaseId`, `workerVersion`, and `expiresAt`.
-- **Complete Navigation Hold**: `navigateAsLeader()` extends navigation lease (`NAVIGATION_LEASE_MS = 45000`) and verifies read-back persistence before executing `window.location.href = targetUrl`.
-- **Atomic Pre-Send Fencing**: `confirmWorkerLeadershipForSend()` executes under Web Locks election mutex (`WORKER_ELECTION_LOCK`) immediately before irreversible image send clicks or text send button / Enter fallback clicks.
-- **Dashboard Operator Visibility**: Displays `Runtime Contract: v1 | Required Worker: v28.4` badge in dashboard header.
 
 ---
 
 ## ✅ What Currently Works (Confirmed Working & Tested)
 
 ### 1. Database & Entities (`PostgreSQL` / `TypeORM`)
-- Schema synchronization & migrations for `Customer`, `CustomerGroup`, `CustomerGroupMember`, `Campaign`, and `CampaignJob`.
-- Timezone-safe local timestamp handling using `TIMESTAMP WITHOUT TIME ZONE` and epoch millisecond comparison (`Date.now()`).
+- Composite primary key `(botId, lineUserId)` on `Customer` entity.
+- Nullable `botId` column on `CustomerGroup`, `CustomerGroupMember`, `Campaign`, and `CampaignJob`.
+- `OaRuntimeState` singleton (`id = 'global'`) storing active LINE OA identity.
+- Safe additive database migrations in `DatabaseInitService`.
 
 ### 2. NestJS REST API (`src/app.controller.ts`)
-- REST API endpoints for customer list, grouping, multi-type campaign creation, job dispatch queue with fail-closed version gate (`GET /api/campaign/next`), Telegram setting APIs (secure shape), runtime info (`GET /api/runtime/version`), and trusted loopback browser diagnostic event logger (`POST /api/diagnostics/browser-event`).
+- Active OA context management (`GET /api/oa/contexts`, `GET/POST /api/oa/active`).
+- Hard OA fencing in queue processor (`GET /api/campaign/next`).
+- Composite customer query (`GET /api/customers?botId=...`).
+- Scoped group management (`GET /api/groups/:id?botId=...`, `DELETE /api/groups/:id?botId=...`).
+- Image upload API (`POST /api/upload/image` and `GET /api/uploads/:filename`) serving files from `process.cwd()/uploads`.
 
 ### 3. Web Dashboard (`index.html`)
-- Interactive dashboard UI with toolbar search, status/name filters, quick selection shortcuts, schedule management, deep analytics, secure Telegram setting modal, and runtime version contract indicator (`v28.4`).
+- Active OA selector dropdown with status indicators and switching guards.
+- Scoped group detail and delete requests forwarding `?botId=...`.
 
-### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.4)
-- Document-lifetime tab identity lock & clone defense (`ensureTabIdentity`).
-- Multi-tab single worker leader lock with fail-closed lease persistence (`writeAndVerifyLeaderRecord`).
-- Complete navigation hold (`navigateAsLeader`) and atomic pre-send fencing (`confirmWorkerLeadershipForSend`).
-- Fail-closed runtime version handshake with retry loop (`checkRuntimeCompatibility()`, `resumeSavedActiveJob()`).
-- Strict OA context validation (`isValidChatContextId` testing `/^U[0-9a-fA-F]{32}$/`).
-- Fail-closed context navigation (`getOAContextUrl` returns `null` when context is missing/invalid).
-- Active job preservation during missing context (`handleSafeRecovery` preserves session parameters without calling `finishJob` or incrementing `retryCount`).
-- Quota limit auto-stop detection (`checkQuotaLimitExceeded`).
-- Circuit Breaker safety: Emergency stop when encountering 10 consecutive non-blocked errors.
-- Blocked user exclusion: `isBlocked = true` users do not increment the consecutive error counter.
-- Exact Recipient Verification Guard (`verifyCurrentRecipient`).
-- Confirmed-Write Diagnostic Spooling (`enqueueSpool`, `flushPendingDiagnostics`).
+### 4. Client Automation Userscript (`run/LineSyncApp.js` v28.5)
+- Active OA context header `X-LineSync-OA-Context`.
+- Controlled OA switch detection and main URL redirect (`checkAndExecuteControlledOaSwitch()`).
+- Strict pre-physical send OA fence (`OA_CONTEXT_MISMATCH`).
+- Centralized active job state cleanup helper (`clearLocalActiveJobState()`).
 
 ---
 
@@ -82,5 +91,6 @@
   - `SEC-WP001` (`CLOSED / PASS`)
   - `OPS-WP001`, `OPS-WP001-R1` (`CLOSED / PASS`)
   - `REL-WP001`, `REL-WP001-R1`, `REL-WP001-R2` (`CLOSED / PASS`)
-- **Next Work Package Candidate**:
-  - `OA-WP001 — OA Context Isolation & Controlled LINE OA Switch` (`READY / NOT STARTED`)
+- **Active Work Package**:
+  - `OA-WP001-R1 — Strict OA Identity Fencing & Regression Restore` (`READY_FOR_CHATGPT_REVIEW`)
+  - `OA-WP001 — OA Context Isolation & Controlled LINE OA Switch` (`READY_FOR_CHATGPT_REVIEW / NOT CLOSED`)
