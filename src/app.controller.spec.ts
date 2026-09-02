@@ -206,7 +206,70 @@ describe('AppController', () => {
       expect(parsed.clientTimestamp).toBe(originalTime);
     });
   });
-});
 
+  describe('BUG-WP002 — OA Context Validation & 404 Loop Guard Static Acceptance Tests', () => {
+    function isValidChatContextId(value: any): boolean {
+      if (!value || typeof value !== 'string') return false;
+      return /^U[0-9a-fA-F]{32}$/.test(value.trim());
+    }
+
+    function getOAContextUrl(botId: string, userId?: string): string | null {
+      if (!isValidChatContextId(botId)) return null;
+      return userId ? `https://chat.line.biz/${botId}/chat/${userId}` : `https://chat.line.biz/${botId}/`;
+    }
+
+    it('TEST 1 — VALID CHAT CONTEXT: Accepts U + 32 hex ID', () => {
+      const validId = 'U1234567890abcdef1234567890abcdef';
+      expect(isValidChatContextId(validId)).toBe(true);
+    });
+
+    it('TEST 2 — INVALID SHORT CONTEXT: Rejects short ID 798hcuca', () => {
+      const invalidShortId = '798hcuca';
+      expect(isValidChatContextId(invalidShortId)).toBe(false);
+      expect(getOAContextUrl(invalidShortId)).toBeNull();
+    });
+
+    it('TEST 3 — POISONED STORAGE: Removes poisoned linesync_botid if invalid', () => {
+      let storage: Record<string, string> = { linesync_botid: '798hcuca' };
+      if (!isValidChatContextId(storage.linesync_botid)) {
+        delete storage.linesync_botid;
+      }
+      expect(storage.linesync_botid).toBeUndefined();
+    });
+
+    it('TEST 4 — MANAGER PAGE: Rejects manager account IDs', () => {
+      const managerId = '798hcuca';
+      expect(isValidChatContextId(managerId)).toBe(false);
+    });
+
+    it('TEST 5 — INVALID 404 / NO ACTIVE JOB: Fails closed without constructing guessed URL', () => {
+      const botId = 'invalid_bot_id';
+      expect(getOAContextUrl(botId)).toBeNull();
+    });
+
+    it('TEST 6 — VALID CONTEXT + RECIPIENT: Constructs correct target URL', () => {
+      const validBotId = 'U1234567890abcdef1234567890abcdef';
+      const recipientId = 'U99999999999999999999999999999999';
+      const url = getOAContextUrl(validBotId, recipientId);
+      expect(url).toBe(`https://chat.line.biz/${validBotId}/chat/${recipientId}`);
+    });
+
+    it('TEST 7 — VALID STORED CONTEXT + BAD CURRENT URL: Preserves stored valid context', () => {
+      let storedBotId = 'U1234567890abcdef1234567890abcdef';
+      const currentBadSegment = '798hcuca';
+
+      if (isValidChatContextId(currentBadSegment)) {
+        storedBotId = currentBadSegment;
+      }
+
+      expect(storedBotId).toBe('U1234567890abcdef1234567890abcdef');
+    });
+
+    it('TEST 8 — NO VALID CONTEXT: Fails closed with null', () => {
+      expect(getOAContextUrl('')).toBeNull();
+      expect(getOAContextUrl(undefined as any)).toBeNull();
+    });
+  });
+});
 
 

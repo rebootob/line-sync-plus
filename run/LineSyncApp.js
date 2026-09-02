@@ -1,10 +1,9 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.1
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP001-UATLOG-R4 Atomic Spool Flush & Safe Session Cleanup)
+// @version      28.2
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (BUG-WP002 Strict OA Context Validation & 404 Loop Guard)
 // @match        https://chat.line.biz/*
-// @match        https://manager.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
 // ==/UserScript==
@@ -30,7 +29,14 @@
     let isExecutingJob = false;
     let isFlushingSpool = false;
 
-    console.log("🤖 LineSync Plus Bot v28.1: พร้อมทำงาน (BUG-WP001-UATLOG-R4 Active)...");
+    console.log("🤖 LineSync Plus Bot v28.2: พร้อมทำงาน (BUG-WP002 Active)...");
+
+    // 🛡️ Strict LINE Chat OA Context ID Validator (^U + 32 hex chars)
+    function isValidChatContextId(value) {
+        if (!value || typeof value !== 'string') return false;
+        const trimmed = value.trim();
+        return /^U[0-9a-fA-F]{32}$/.test(trimmed);
+    }
 
     function getTabSessionId() {
         let id = sessionStorage.getItem('linesync_tab_session_id');
@@ -51,7 +57,7 @@
 
         if (pendingDiagnostics) sessionStorage.setItem('linesync_pending_diagnostics', pendingDiagnostics);
         if (tabSessionId) sessionStorage.setItem('linesync_tab_session_id', tabSessionId);
-        if (botId) sessionStorage.setItem('linesync_botid', botId);
+        if (botId && isValidChatContextId(botId)) sessionStorage.setItem('linesync_botid', botId);
     }
 
     // 🛡️ Bounded Diagnostic Spool in sessionStorage for Navigation Safety
@@ -82,7 +88,7 @@
                 _sqId: sqId,
                 clientTimestamp: payload.clientTimestamp || new Date().toISOString(),
                 event: String(payload.event || 'UNKNOWN').slice(0, 50),
-                scriptVersion: '28.1',
+                scriptVersion: '28.2',
                 tabSessionId: getTabSessionId(),
                 jobId: String(payload.jobId || '').slice(0, 100),
                 expectedUserId: String(payload.expectedUserId || payload.userId || '').slice(0, 100),
@@ -104,14 +110,12 @@
         isFlushingSpool = true;
 
         try {
-            // Snapshot initial spool at start of flush (bounded work)
             const initialSnapshot = getSpool();
             if (initialSnapshot.length === 0) return;
 
             for (let i = 0; i < initialSnapshot.length; i++) {
                 const item = initialSnapshot[i];
 
-                // Safely discard malformed spool entries that can never be flushed
                 if (!item || typeof item !== 'object' || !item.event || !item._sqId) {
                     const currentSpool = getSpool();
                     const indexToRemove = currentSpool.findIndex(el => !el || el._sqId === item?._sqId);
@@ -122,13 +126,11 @@
                     continue;
                 }
 
-                // Strip internal matching key _sqId before sending to backend
                 const { _sqId, ...backendPayload } = item;
 
                 try {
                     const result = await fetchAPI('/diagnostics/browser-event', 'POST', backendPayload);
 
-                    // REMOVE FROM SPOOL ONLY IF BACKEND CONFIRMED SUCCESSFUL WRITE ({ success: true })
                     if (result && result.success === true) {
                         const currentSpool = getSpool();
                         const indexToRemove = currentSpool.findIndex(el => el._sqId === _sqId);
@@ -138,11 +140,9 @@
                             saveSpool(currentSpool);
                         }
                     } else {
-                        // Backend returned { success: false } or rejection: retain event and stop current flush
                         break;
                     }
                 } catch (err) {
-                    // Transport failure: retain event and stop current flush
                     break;
                 }
             }
@@ -160,7 +160,7 @@
             const payload = {
                 clientTimestamp: context.clientTimestamp || new Date().toISOString(),
                 event: eventName,
-                scriptVersion: '28.1',
+                scriptVersion: '28.2',
                 tabSessionId: getTabSessionId(),
                 jobId: jobId,
                 expectedUserId: context.expectedUserId || context.userId || sessionStorage.getItem('linesync_uid') || '',
@@ -171,7 +171,6 @@
             };
 
             if (NAVIGATION_EVENTS.has(eventName)) {
-                // Synchronously enqueue navigation-critical events into spool BEFORE window.location.href occurs
                 enqueueSpool(payload);
             } else {
                 fetchAPI('/diagnostics/browser-event', 'POST', payload).catch(() => {
@@ -233,31 +232,42 @@
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    // 🛡️ Helper: Derive & Persist Current LINE OA Bot Identifier
+    // 🛡️ Safe getBotId(): Strictly validates and returns ONLY valid LINE Chat OA context IDs
     function getBotId() {
-        let botId = sessionStorage.getItem('linesync_botid') || '';
-        const match = window.location.pathname.match(/^\/([a-zA-Z0-9_-]+)(?:\/chat|\/|$)/);
-        if (match && match[1] && match[1] !== 'error' && match[1] !== 'tagaudience' && match[1] !== 'tag' && match[1] !== 'account') {
-            botId = match[1];
-            sessionStorage.setItem('linesync_botid', botId);
+        let stored = sessionStorage.getItem('linesync_botid') || '';
+        if (stored && !isValidChatContextId(stored)) {
+            console.warn(`🛡️ [SAFETY] Removing invalid linesync_botid from sessionStorage: ${stored}`);
+            sessionStorage.removeItem('linesync_botid');
+            stored = '';
         }
-        const managerMatch = window.location.pathname.match(/account\/@?([a-zA-Z0-9_-]+)/);
-        if (managerMatch && managerMatch[1]) {
-            botId = managerMatch[1];
-            sessionStorage.setItem('linesync_botid', botId);
+
+        if (window.location.hostname === 'chat.line.biz') {
+            const match = window.location.pathname.match(/^\/([a-zA-Z0-9_-]+)(?:\/|$)/);
+            if (match && match[1]) {
+                const currentSegment = match[1];
+                if (isValidChatContextId(currentSegment) && !checkIfErrorPage()) {
+                    if (stored !== currentSegment) {
+                        sessionStorage.setItem('linesync_botid', currentSegment);
+                    }
+                    return currentSegment;
+                }
+            }
         }
-        return botId;
+
+        return isValidChatContextId(stored) ? stored : '';
     }
 
+    // 🛡️ Safe getOAContextUrl(): Fails closed (returns null) if no valid OA context exists
     function getOAContextUrl(userId) {
         const botId = getBotId();
-        if (botId) {
-            return userId ? `https://chat.line.biz/${botId}/chat/${userId}` : `https://chat.line.biz/${botId}/`;
+        if (!isValidChatContextId(botId)) {
+            console.warn(`🛡️ [SAFETY] getOAContextUrl failed closed: Invalid or missing OA context ID (${botId})`);
+            return null;
         }
-        return userId ? `https://chat.line.biz/` : `https://chat.line.biz/`;
+        return userId ? `https://chat.line.biz/${botId}/chat/${userId}` : `https://chat.line.biz/${botId}/`;
     }
 
-    // 🛡️ 1. Explicit 404 & LINE Error Page Detector (Low Noise - No inner diagnostic logging)
+    // 🛡️ 1. Explicit 404 & LINE Error Page Detector
     function checkIfErrorPage() {
         const path = window.location.pathname.toLowerCase();
         if (path.includes('/error') || path.includes('/404') || path.includes('/not-found')) {
@@ -282,18 +292,25 @@
         return !!errorBanners;
     }
 
-    // 🛡️ 2. Exact Recipient Verification Guard (Low Noise - Failure logging only)
+    // 🛡️ 2. Exact Recipient Verification Guard (Checks both OA Context ID & Recipient User ID)
     function verifyCurrentRecipient(expectedUserId) {
         if (!expectedUserId) return false;
 
         if (checkIfErrorPage()) return false;
 
+        const currentBotId = getBotId();
+        if (!isValidChatContextId(currentBotId)) {
+            console.warn(`🛡️ [SAFETY] Recipient verification failed: Invalid or missing OA context ID (${currentBotId})`);
+            emitDiagnostic('RECIPIENT_VERIFY_FAIL', { expectedUserId: expectedUserId, reason: 'Invalid OA context ID' });
+            return false;
+        }
+
         const pathname = window.location.pathname;
-        const expectedPattern = new RegExp(`/chat/${expectedUserId}(?:/|$)`, 'i');
+        const expectedPattern = new RegExp(`/${currentBotId}/chat/${expectedUserId}(?:/|$)`, 'i');
         const urlMatchesRecipient = expectedPattern.test(pathname);
 
         if (!urlMatchesRecipient) {
-            console.warn(`🛡️ [SAFETY] URL path does not match expected recipient: Expected ${expectedUserId}, got URL: ${pathname}`);
+            console.warn(`🛡️ [SAFETY] URL path does not match expected recipient: Expected /${currentBotId}/chat/${expectedUserId}, got URL: ${pathname}`);
             emitDiagnostic('RECIPIENT_VERIFY_FAIL', { expectedUserId: expectedUserId, reason: 'URL path mismatch' });
             return false;
         }
@@ -528,7 +545,7 @@
         });
     }
 
-    // 🛡️ SAME-JOB SAFE RECOVERY: Retries the EXACT SAME jobData up to MAX_RETRIES
+    // 🛡️ SAME-JOB SAFE RECOVERY: Retries the EXACT SAME jobData up to MAX_RETRIES using ONLY validated OA context
     async function handleSafeRecovery(jobData, reason = 'RECIPIENT_UNVERIFIED', isBlocked = false) {
         console.warn(`🛡️ [SAME-JOB RECOVERY] Triggered recovery for Job ID: ${jobData.jobId}, User ID: ${jobData.userId}, Reason: ${reason}`);
 
@@ -554,6 +571,13 @@
             isExecutingJob = false;
 
             const targetUrl = getOAContextUrl(jobData.userId);
+            if (!targetUrl) {
+                console.error(`🛑 [SAFETY] Same-job recovery failed closed: Cannot construct valid target URL (Invalid OA context). Failing job ${jobData.jobId}.`);
+                sessionStorage.removeItem(retryKey);
+                await finishJob(jobData.jobId, jobData.userId, false, 'INVALID_OA_CONTEXT', isBlocked);
+                return;
+            }
+
             if (window.location.href !== targetUrl) {
                 console.log(`🌐 [SAME-JOB RECOVERY] Navigating to SAME user chat URL: ${targetUrl}`);
                 window.location.href = targetUrl;
@@ -571,19 +595,36 @@
         }
     }
 
+    // 🛡️ PROCESS QUEUE GATE: Validates hostname and trusted OA context BEFORE fetching /campaign/next
     async function processQueue() {
         if (isExecutingJob) {
             console.log("⚠️ ProcessQueue skipped: Job execution currently active.");
             return;
         }
 
+        if (window.location.hostname !== 'chat.line.biz') {
+            console.warn("⚠️ [SAFETY] ProcessQueue skipped: Not running on chat.line.biz.");
+            return;
+        }
+
         if (checkIfErrorPage() || window.location.href.includes('/tagaudience') || window.location.href.includes('/error')) {
-            console.log("🔀 เด้งกลับจากหน้า 404/error เข้าสู่หน้าหลัก LINE OA Chat...");
-            emitDiagnostic('NAVIGATION_404', { reason: 'Returned to main chat from 404/error page' });
+            console.log("🔀 404 / Error page detected during queue check...");
+            emitDiagnostic('NAVIGATION_404', { reason: '404/error page detected during processQueue' });
+
             const mainUrl = getOAContextUrl(null);
-            if (window.location.href !== mainUrl) {
+            if (mainUrl && window.location.href !== mainUrl) {
+                console.log(`🌐 [RECOVERY] Navigating to known valid OA chat main URL: ${mainUrl}`);
                 window.location.href = mainUrl;
+                return;
+            } else {
+                console.warn("🛑 [SAFETY] Cannot recover from 404 automatically: No valid trusted OA context ID. Failing closed.");
+                return;
             }
+        }
+
+        const validBotId = getBotId();
+        if (!isValidChatContextId(validBotId)) {
+            console.warn("🛑 [SAFETY] ProcessQueue blocked: Missing or invalid LINE Chat OA context. Waiting for user to open valid OA chat page.");
             return;
         }
 
@@ -608,6 +649,12 @@
                 sessionStorage.setItem('linesync_link', job.linkUrl || '');
 
                 const targetUrl = getOAContextUrl(job.userId);
+                if (!targetUrl) {
+                    console.error("🛑 [SAFETY] Cannot construct recipient URL: Invalid OA context. Failing job.");
+                    await finishJob(job.jobId, job.userId, false, 'INVALID_OA_CONTEXT');
+                    return;
+                }
+
                 if (window.location.href !== targetUrl) {
                     console.log("🔀 สลับไปยังหน้าแชต LINE OA ของผู้รับ:", targetUrl);
 
@@ -647,7 +694,7 @@
 
         if (window.location.pathname.includes('/chat/U') || window.location.pathname.includes('/chat/u')) {
             const targetMainUrl = getOAContextUrl(null);
-            if (window.location.href !== targetMainUrl) {
+            if (targetMainUrl && window.location.href !== targetMainUrl) {
                 console.log(`🌐 เปลี่ยนเส้นทางกลับหน้าแชทหลัก: ${targetMainUrl}`);
                 window.location.href = targetMainUrl;
             }
@@ -926,9 +973,17 @@
                 }
             } else {
                 if (checkIfErrorPage()) {
-                    console.warn("🛑 [SAFETY] โหลดหน้าเจอ 404 / Error Page (ไม่มีคิวค้าง) -> สลับกลับหน้าหลัก...");
+                    console.warn("🛑 [SAFETY] โหลดหน้าเจอ 404 / Error Page (ไม่มีคิวค้าง)...");
                     emitDiagnostic('NAVIGATION_404', { reason: 'Page load 404 error page without active job' });
-                    closeUserChatAndReturnToMain();
+                    const mainUrl = getOAContextUrl(null);
+                    if (mainUrl && window.location.href !== mainUrl) {
+                        console.log(`🌐 [RECOVERY] Navigating to known valid OA chat main URL: ${mainUrl}`);
+                        window.location.href = mainUrl;
+                        return;
+                    } else {
+                        console.warn("🛑 [SAFETY] Cannot recover from 404 automatically: No valid trusted OA context ID. Failing closed.");
+                        return;
+                    }
                 }
                 processQueue();
             }
