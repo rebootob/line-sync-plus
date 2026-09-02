@@ -53,8 +53,7 @@ Key Operational Goals:
 |                      Tampermonkey Userscript (LineSyncApp.js v28.5)              |
 |                             Running in chat.line.biz                              |
 |                                                                                   |
-|  - Strict OA Identity Fencing (OA-WP001-R1 READY_FOR_CHATGPT_REVIEW)              |
-|  - Multi-OA Context Isolation & Controlled Switch (OA-WP001 READY_FOR_REVIEW)    |
+|  - Multi-OA Context Isolation & Identity Fencing (OA-WP001 / R1 CLOSED / PASS)     |
 |  - Single Worker Multi-Tab Lock (REL-WP001 / R1 / R2 CLOSED / PASS)               |
 |  - Document-Lifetime Tab Identity Lock & Clone Defense (ensureTabIdentity)        |
 |  - Fail-Closed Lease Persistence (writeAndVerifyLeaderRecord)                     |
@@ -91,7 +90,7 @@ Key Operational Goals:
 
 The LineSync Plus safety model operates on strict **fail-closed** principles:
 
-- **Strict OA Identity Fencing (OA-WP001-R1 READY_FOR_CHATGPT_REVIEW)**: Terminal fallback reporting requires valid `botId` + `lineUserId` + `status: 'processing'`. Physical send guards in worker require valid `expectedBotId` matching current OA. Saved job recovery reads `linesync_job_botid` and calls `clearLocalActiveJobState()` if missing/invalid. Queue processor enforces `selectedJob.botId === activeBotId` and `targetCampaign.botId === activeBotId`. Group endpoints require valid `?botId=...`.
+- **Strict OA Identity Fencing (OA-WP001 / OA-WP001-R1 CLOSED / PASS)**: Terminal fallback reporting requires valid `botId` + `lineUserId` + `status: 'processing'`. Physical send guards in worker require valid `expectedBotId` matching current OA. Saved job recovery reads `linesync_job_botid` and calls `clearLocalActiveJobState()` if missing/invalid. Queue processor enforces `selectedJob.botId === activeBotId` and `targetCampaign.botId === activeBotId`. Group endpoints require valid `?botId=...`.
 - **Single Worker Multi-Tab Lock & Clone Defense (REL-WP001 CLOSED / PASS)**: `ensureWorkerLeadership()` enforces that only ONE active worker tab claims jobs or executes DOM mutations within a browser profile/storage partition.
 - **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path (`/${botId}/chat/${expectedUserId}`) and DOM attribute validation before any text insertion or image send click.
 - **Fail-Closed Runtime Version Gate (OPS-WP001 CLOSED / PASS)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.5'` before querying or claiming any job.
@@ -104,7 +103,7 @@ The LineSync Plus safety model operates on strict **fail-closed** principles:
 
 ## 6. Problems Found & Work Packages
 
-Over the course of safety hardening, 12 work packages were identified, implemented, verified, and updated:
+Over the course of safety hardening, 12 work packages were identified, implemented, verified, and **CLOSED**:
 
 1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard (CLOSED)**
 2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard (CLOSED)**
@@ -117,7 +116,7 @@ Over the course of safety hardening, 12 work packages were identified, implement
 9. **BUG-WP002 — OA Context Poisoning / Invalid BotId 404 Loop (CLOSED)**
 10. **BUG-WP002-R1 — Preserve Active Job When OA Context Is Unknown (CLOSED)**
 11. **REL-WP001 / REL-WP001-R1 / REL-WP001-R2 — Single Worker / Multi-Tab Lock (CLOSED)**
-12. **OA-WP001 / OA-WP001-R1 — OA Context Isolation & Strict OA Identity Fencing (READY_FOR_CHATGPT_REVIEW / NOT CLOSED)**
+12. **OA-WP001 / OA-WP001-R1 — OA Context Isolation & Strict OA Identity Fencing (CLOSED / PASS)**
 
 ---
 
@@ -127,6 +126,7 @@ Over the course of safety hardening, 12 work packages were identified, implement
 - Direct socket peer validation (`req.socket.remoteAddress`) is required to prevent proxy header spoofing on local UAT diagnostic endpoints.
 - LINE OA context IDs strictly adhere to `^U[0-9a-fA-F]{32}$`; short IDs or manager account strings must never be treated as valid chat contexts.
 - Multi-tab browser coordination requires document-lifetime identity locks (`ensureTabIdentity`) to prevent cloned-tab identity reuse, combined with `navigator.locks` election mutex and durable `localStorage` lease records (`writeAndVerifyLeaderRecord`) to maintain ownership across same-tab navigations (`navigateAsLeader`).
+- Multi-OA environments require hard identity fencing at both backend queue endpoints and browser physical send guards to guarantee that workers never claim or execute jobs belonging to another OA context.
 
 ---
 
@@ -143,7 +143,13 @@ Over the course of safety hardening, 12 work packages were identified, implement
   - **UAT-02 (Duplicate Tab Clone Defense)**: PASS (`[REL] DUPLICATE TAB IDENTITY DETECTED` -> new `tabSessionId` assigned, copied lease not reused).
   - **UAT-03 (Leader Failover)**: PASS (Original leader closed -> `[REL] WORKER LEADER TAKEOVER`, 1 Leader active).
   - **UAT-04 (Live Single Consumption)**: PASS (2 tabs open -> 1-recipient campaign sent by Leader alone, Target=1, Success=1, Fail=0, Duplicate Send=0).
-- **OA-WP001 / OA-WP001-R1**: **READY_FOR_CHATGPT_REVIEW (Live UAT pending)**
+- **OA-WP001 / OA-WP001-R1**: **CLOSED / PASS** (Passed 2026-09-02)
+  - **UAT-01 (Database Migration / OA Discovery)**: PASS (Dashboard discovered 2 real LINE OA contexts: OA #1 with 9,737 total / 9,176 active / 561 blocked; OA #2 with 2,153 total / 2,151 active / 2 blocked).
+  - **UAT-02 (Dashboard OA Isolation)**: PASS (OA #1 displayed only OA #1 customers; OA #2 displayed only OA #2 customers; no combined or unselected list).
+  - **UAT-03 (Controlled Dashboard OA Switch)**: PASS (Master Bot must be PAUSED before switch; attempted switch while Bot running rejected with HTTP 409 Conflict; `activeBotId` persisted cleanly).
+  - **UAT-04 (Controlled Physical LINE OA Switch)**: PASS (Worker v28.5 aligned physical `chat.line.biz` OA with `activeBotId` before queue execution; initial OA #1 `U09d6...` -> after switch OA #2 `U07f7...`; no job claimed before alignment).
+  - **UAT-05 (OA #2 Live Send Path)**: PASS (`JOB_RECEIVED` -> `NAVIGATE_TARGET` -> `PAGE_LOAD_ACTIVE_JOB` -> `RECIPIENT_VERIFY_OK` -> `TEXT_PRE_SEND_VERIFIED` -> `JOB_SUCCESS`; wrong OA send = 0).
+  - **UAT-06 (Cross-OA Queue Isolation)**: PASS (OA #2 worker did NOT claim OA #1 pending jobs; OA #2 campaign processed; switching back to OA #1 resumed OA #1 pending jobs cleanly).
 - **83-recipient baseline UAT**: 83 targets / 80 success / 3 blocked / no observed 404
 - **UAT-1100 Campaign Evidence (LineSyncApp v28.2)**:
   - Target = 1,100, Processed = 473, Success = 69, Blocked = 402, 404 = 2 (safe retry exhaust), zero misdeliveries.
@@ -176,8 +182,8 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
   - `OPS-WP001` (Runtime Version Gate): **COMPLETED / CLOSED**
   - `OPS-WP001-R1` (Runtime Retry + Fail-Closed Corrective): **COMPLETED / CLOSED**
   - `REL-WP001 / REL-WP001-R1 / REL-WP001-R2` (Single Worker / Multi-Tab Lock): **COMPLETED / CLOSED**
-  - `OA-WP001 / OA-WP001-R1` (OA Context Isolation & Strict Identity Fencing): **READY_FOR_CHATGPT_REVIEW**
-  - `REL-WP002`: **NOT STARTED**
+  - `OA-WP001 / OA-WP001-R1` (OA Context Isolation & Strict Identity Fencing): **COMPLETED / CLOSED**
+  - `REL-WP002` (Job Lease + Heartbeat): **READY / NOT STARTED** (AUTHORIZATION REQUIRED)
   - `REL-WP003`: **NOT STARTED**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
 - **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
@@ -190,12 +196,12 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 ## 12. Proposed Feature Priority
 
 1. **P0 (Critical Safety & Security)**:
-   - OA Context Isolation & Strict Identity Fencing (`OA-WP001 / OA-WP001-R1` READY_FOR_CHATGPT_REVIEW).
+   - OA Context Isolation & Strict Identity Fencing (`OA-WP001 / OA-WP001-R1` COMPLETED / CLOSED).
    - Single worker multi-tab lock (`REL-WP001 / R1 / R2` COMPLETED / CLOSED).
    - Operational runtime version gate (`OPS-WP001 / R1` COMPLETED / CLOSED).
    - Secret hygiene & test isolation (`SEC-WP001` COMPLETED / CLOSED).
 2. **P1 (Observability & Operational Hardening)**:
-   - Backend Job Lease & Heartbeat (`REL-WP002` NOT STARTED).
+   - Backend Job Lease & Heartbeat (`REL-WP002` READY / NOT STARTED).
    - Idempotent Send Ledger (`REL-WP003` NOT STARTED).
    - Real-time diagnostic event stream UI widget in Dashboard.
 
@@ -203,14 +209,14 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 13. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 -> v28.4 -> v28.5 (OA-WP001 / R1).
-- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, fail-closed runtime version gates, single-worker multi-tab election locks with document-lifetime tab identity clone defense, read-back persistence verification, complete navigation holds, atomic pre-send mutex confirmation, and strict multi-OA identity fencing.
+- **Script Versioning**: Evolved from v27.0 -> v28.1 -> v28.2 -> v28.3 -> v28.4 -> v28.5 (OA-WP001 / R1 CLOSED / PASS).
+- **Architecture Maturity**: Shifted from unvalidated DOM polling to strict schema-validated context gates, atomic spooling, fail-closed state preservation, fail-closed runtime version gates, single-worker multi-tab election locks with document-lifetime tab identity clone defense, read-back persistence verification, complete navigation holds, atomic pre-send mutex confirmation, and strict multi-OA identity fencing with cross-OA queue isolation.
 
 ---
 
 ## 14. Recommended Next Work Package Candidate
 
-- **OA-WP001 / OA-WP001-R1**: OA Context Isolation & Strict OA Identity Fencing (**READY_FOR_CHATGPT_REVIEW**).
+- **REL-WP002**: Job Lease + Heartbeat (**READY / NOT STARTED** — Project Owner authorization required).
 
 ---
 
@@ -236,7 +242,8 @@ To establish LineSync Plus as a robust, secure, and production-ready automated c
 
 ## 17. Immediate Decision Gate
 
-Phase 0 OA-WP001-R1 is READY_FOR_CHATGPT_REVIEW.
+Phase 0 OA-WP001 / OA-WP001-R1 is CLOSED / PASS.
 Worker Version: 28.5 | Runtime Contract: 2 | Required Worker: 28.5
 REL-WP001 is CLOSED / PASS.
-Do NOT claim Live UAT PASS until Live UAT evidence is accepted.
+Next Candidate: `REL-WP002 — Job Lease + Heartbeat` (READY / NOT STARTED — Project Owner authorization required).
+Do NOT start `REL-WP002` automatically.

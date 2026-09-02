@@ -4,8 +4,8 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* LAST_REVIEWED_IMPLEMENTATION_BASELINE: a89db460e5d519084ceacf2fcf354f438dbbe6ae (oa: implement multi-OA context isolation, DB schema updates, and controlled switch)
-* Working Tree: Clean (OA-WP001-R1 READY_FOR_CHATGPT_REVIEW)
+* LAST_REVIEWED_IMPLEMENTATION_BASELINE: b0286e513ae314fcb1eca5a0044c96a72750b46b (oa: preserve same-job OA identity and restore roadmap)
+* Working Tree: Clean (OA-WP001 / OA-WP001-R1 CLOSED / PASS)
 
 ## Project Purpose
 
@@ -19,29 +19,27 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
 - **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
 
-## Work Package Status: OA-WP001 / OA-WP001-R1
+## Work Package Status: OA-WP001 / OA-WP001-R1 (CLOSED / PASS)
 
-* **OA-WP001-R1**: `READY_FOR_CHATGPT_REVIEW`
-* **OA-WP001**: `READY_FOR_CHATGPT_REVIEW` (NOT CLOSED)
+* **OA-WP001**: `CLOSED / PASS`
+* **OA-WP001-R1**: `CLOSED / PASS`
 * **REL-WP001**: `CLOSED / PASS`
-* **REL-WP002**: `NOT STARTED`
+* **REL-WP002**: `READY / NOT STARTED` (AUTHORIZATION REQUIRED)
 * **REL-WP003**: `NOT STARTED`
 * **Version Contracts**:
   - Worker Version: `28.5`
   - Runtime Contract Version: `2`
   - Required Worker Version: `28.5`
 
-## Key Implementation Details (OA-WP001-R1)
+## Accepted Live UAT Evidence (Passed 2026-09-02)
 
-1. **Terminal Fallback**: `POST /api/campaign/success` & `POST /api/campaign/fail` enforce valid `botId` + `lineUserId` + `status: 'processing'` fallback when `jobId` is absent. Blocked customer update requires `job.botId` + `job.lineUserId`.
-2. **Mandatory Job OA Fence**: Pre-physical send guards require valid `expectedBotId` matching current OA.
-3. **Saved Job Recovery**: Saved job recovery reads `linesync_job_botid` and calls `clearLocalActiveJobState()` if missing or malformed.
-4. **Central Active Job Cleanup**: `clearLocalActiveJobState()` helper cleans all local active job session storage fields.
-5. **Worker Reporting Payload**: `/campaign/success` & `/campaign/fail` carry expected job `botId`.
-6. **Queue OA Gate**: `/campaign/next` enforces strict matching of `selectedJob.botId === activeBotId` without fallbacks.
-7. **Group Scope**: `GET /api/groups/:id` & `DELETE /api/groups/:id` enforce valid `botId` query param (`?botId=...`).
-8. **Restored Image Upload**: Restored image upload endpoint contract to parent baseline (`process.cwd()/uploads`, returning `{ success: true, url, filename }`).
+1. **Database Migration / OA Discovery**: PASS (OA #1: 9,737 total / 9,176 active / 561 blocked; OA #2: 2,153 total / 2,151 active / 2 blocked).
+2. **Dashboard OA Isolation**: PASS (OA #1 displayed only OA #1 customers; OA #2 displayed only OA #2 customers; no unselected list).
+3. **Controlled Dashboard OA Switch**: PASS (Master Bot paused before switch; HTTP 409 Conflict rejection when active; activeBotId persisted cleanly).
+4. **Controlled Physical LINE OA Switch**: PASS (Worker v28.5 aligned physical chat.line.biz OA with activeBotId before queue execution).
+5. **OA #2 Live Send Path**: PASS (`JOB_RECEIVED` -> `NAVIGATE_TARGET` -> `PAGE_LOAD_ACTIVE_JOB` -> `RECIPIENT_VERIFY_OK` -> `TEXT_PRE_SEND_VERIFIED` -> `JOB_SUCCESS`; Wrong OA send = 0).
+6. **Cross-OA Queue Isolation**: PASS (OA #2 worker does not claim OA #1 pending jobs; pending jobs remain owned by original OA until active again).
 
 ## Exact Recommended Next Step
 
-Await independent ChatGPT Control Plane code review and Project Owner instructions for Live UAT or next work package.
+Await Project Owner authorization before starting `REL-WP002 — Job Lease + Heartbeat`.

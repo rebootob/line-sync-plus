@@ -1,69 +1,72 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: OA-WP001-R1 — Strict OA Identity Fencing & Regression Restore
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: OA-WP001 — OA Context Isolation & Controlled LINE OA Switch (Final Closure)
+STATUS: CLOSED / PASS
 AUTHORIZED_BY: Project Owner & ChatGPT Control Plane
-TASK_TYPE: IMPLEMENTATION_CORRECTIVE
+TASK_TYPE: DOCUMENTATION_CLOSURE
 ```
 
 ---
 
-## 📋 Work Package Summary: OA-WP001 / OA-WP001-R1
+## 📋 Work Package Summary: OA-WP001 / OA-WP001-R1 (CLOSED / PASS)
 
-### Status Summary
-- **OA-WP001-R1**: `READY_FOR_CHATGPT_REVIEW`
-- **OA-WP001**: `READY_FOR_CHATGPT_REVIEW` (NOT CLOSED)
+### Accepted Live UAT Evidence (Passed 2026-09-02)
+
+1. **UAT-01 — Database Migration / OA Discovery (PASS)**:
+   - Database initialization completed successfully.
+   - Dashboard discovered 2 real LINE OA contexts:
+     - **OA #1**: 9,737 total / 9,176 active / 561 blocked
+     - **OA #2**: 2,153 total / 2,151 active / 2 blocked
+
+2. **UAT-02 — Dashboard OA Isolation (PASS)**:
+   - OA #1 displayed only OA #1 customers.
+   - OA #2 displayed only OA #2 customers.
+   - No combined customer list.
+   - No active OA selected => customer list remained fail-closed.
+
+3. **UAT-03 — Controlled Dashboard OA Switch (PASS)**:
+   - Master Bot had to be PAUSED before OA switch.
+   - Attempted switch while Bot running was rejected with HTTP 409 Conflict.
+   - `activeBotId` persisted correctly in database (`oa_runtime_state`).
+   - OA #1 -> OA #2 switching worked cleanly.
+   - OA #2 -> OA #1 switching worked cleanly.
+
+4. **UAT-04 — Controlled Physical LINE OA Switch (PASS)**:
+   - Worker v28.5 successfully aligned physical `chat.line.biz` OA with persisted `activeBotId` before queue execution.
+   - Observed worker transition: initially OA #1 (`U09d6...`) -> after controlled switch: OA #2 (`U07f7...`).
+   - No job was claimed before OA context alignment.
+
+5. **UAT-05 — OA #2 Live Send Path (PASS)**:
+   - Observed live execution sequence under OA #2:
+     `JOB_RECEIVED` -> `NAVIGATE_TARGET` -> `PAGE_LOAD_ACTIVE_JOB` -> `RECIPIENT_VERIFY_OK` -> `TEXT_PRE_SEND_VERIFIED` -> `JOB_SUCCESS`
+   - Same OA #2 `botId` preserved across queue claim, navigation, recipient verification, pre-send verification, and terminal success.
+   - Wrong OA send = 0.
+
+6. **UAT-06 — Cross-OA Queue Isolation (PASS)**:
+   - Campaign created under OA #1.
+   - Active OA switched to OA #2 and worker executed under OA #2.
+   - OA #1 campaign remained pending; OA #2 worker did NOT claim OA #1 job.
+   - OA #2 campaign processed normally.
+   - Master Bot paused, active OA switched back to OA #1, bot resumed.
+   - Previously pending OA #1 campaign processed successfully.
+   - Confirms OA #2 worker cannot consume OA #1 jobs; pending jobs remain owned by original OA until active again.
+
+---
+
+## 🔒 Final Accepted Versions & Status
+
+- **OA-WP001**: `CLOSED / PASS`
+- **OA-WP001-R1**: `CLOSED / PASS`
 - **REL-WP001**: `CLOSED / PASS`
-- **REL-WP002**: `NOT STARTED`
-- **REL-WP003**: `NOT STARTED`
-
-### Version Contracts
 - **Worker Version**: `28.5`
 - **Runtime Contract Version**: `2`
 - **Required Worker Version**: `28.5`
 
 ---
 
-## 🛡️ OA-WP001-R1 Corrective Actions Implemented
+## 🎯 Next Work Package Candidate: REL-WP002
 
-1. **BLOCKER 1 — Fail-Closed Terminal Fallback**:
-   - `POST /api/campaign/success` and `POST /api/campaign/fail` reject `userId`-only fallback requests without a valid `botId` with `400 Bad Request`.
-   - Primary lookup remains `jobId`. Fallback lookup requires `botId` + `lineUserId` + `status: 'processing'`.
-   - Customer block status update in `markFail` strictly requires `job.botId` + `job.lineUserId`. If `job.botId` is missing/invalid, no customer record is modified.
-
-2. **BLOCKER 2 — Mandatory Expected Job OA Fence**:
-   - Pre-physical send guards (`executeChatBot`, `confirmAndCloseImageModal`, `sendChatMessage`) evaluate `!expectedBotId || !isValidChatContextId(expectedBotId) || !verifyCurrentOAContext(expectedBotId)`.
-   - Aborts immediately with `OA_CONTEXT_MISMATCH` if `expectedBotId` is missing, invalid, or unverified.
-
-3. **BLOCKER 3 — Saved Job OA Identity Recovery**:
-   - Page-load active job recovery reads `linesync_job_botid`.
-   - If `linesync_job_botid` is missing, empty, or invalid, local active job state is cleared without sending, navigating, reporting, or incrementing error counts.
-
-4. **BLOCKER 4 — Central Active Job Cleanup**:
-   - Centralized helper `clearLocalActiveJobState()` clears `linesync_jobid`, `linesync_uid`, `linesync_msg`, `linesync_type`, `linesync_img`, `linesync_link`, `linesync_job_botid`.
-   - Invoked across duplicate tab identity clone, `handleLeadershipLost`, non-leader standby, `OA_CONTEXT_MISMATCH`, and normal completed job cleanup.
-
-5. **BLOCKER 5 — Terminal Report Payload**:
-   - `/campaign/success` and `/campaign/fail` include `botId` payload (`{ jobId, userId, botId }`) using expected job `botId`.
-
-6. **BLOCKER 6 — Queue Claim OA Isolation**:
-   - `GET /api/campaign/next` removed `|| activeBotId` fallback for `selectedJob.botId`.
-   - Requires `selectedJob.botId === activeBotId` and `targetCampaign.botId === activeBotId`.
-
-7. **BLOCKER 7 — Group Detail & Delete OA Scope**:
-   - `GET /api/groups/:id` and `DELETE /api/groups/:id` require valid `botId` query parameter (`?botId=...`). Fails with `400 Bad Request` if missing.
-   - Dashboard (`index.html`) appends `?botId=${encodeURIComponent(currentActiveBotId)}` on detail and delete calls.
-
-8. **BLOCKER 8 — Image Upload Contract Restored**:
-   - `POST /api/upload/image` and `GET /api/uploads/:filename` restored exact parent baseline behavior.
-   - Files saved to `process.cwd()/uploads`, returning `{ success: true, url: fileUrl, filename: savedFilename }`.
-
----
-
-## 🧪 Verification Results
-
-- **Unit Tests**: 59 passed (`npm test`)
-- **Build**: Clean (`npm run build`)
-- **Script Check**: Valid (`node --check run/LineSyncApp.js`)
-- **Diff Check**: Clean (`git diff --check`)
+- **Candidate**: `REL-WP002 — Job Lease + Heartbeat`
+- **Status**: `READY / NOT STARTED`
+- **Policy**: Project Owner authorization required before starting execution. Do NOT start `REL-WP002` automatically.

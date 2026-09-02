@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-02 (Post OA-WP001-R1 Strict OA Identity Fencing & Regression Restore)
+**Last Updated**: 2026-09-02 (Post OA-WP001 / OA-WP001-R1 Final Documentation Closure)
 
 ---
 
@@ -28,11 +28,18 @@
 
 ---
 
-## 🔒 Multi-OA Identity Fencing & Context Isolation (OA-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔒 Multi-OA Identity Fencing & Context Isolation (OA-WP001 STATUS: CLOSED / PASS)
 
 - **Worker Version**: `28.5` (`run/LineSyncApp.js` v28.5).
 - **Backend Required Version**: `28.5` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
+- **Live UAT Evidence (Passed 2026-09-02)**:
+  - **UAT-01 (Database Migration / OA Discovery)**: PASS (OA #1: 9,737 total / 9,176 active / 561 blocked; OA #2: 2,153 total / 2,151 active / 2 blocked).
+  - **UAT-02 (Dashboard OA Isolation)**: PASS (OA #1 displayed only OA #1 customers, OA #2 displayed only OA #2 customers, no unselected list).
+  - **UAT-03 (Controlled Dashboard OA Switch)**: PASS (Master Bot must be paused before switch, activeBotId persisted correctly).
+  - **UAT-04 (Controlled Physical LINE OA Switch)**: PASS (Worker v28.5 aligned physical chat.line.biz OA with activeBotId before queue execution).
+  - **UAT-05 (OA #2 Live Send Path)**: PASS (`JOB_RECEIVED` -> `NAVIGATE_TARGET` -> `PAGE_LOAD_ACTIVE_JOB` -> `RECIPIENT_VERIFY_OK` -> `TEXT_PRE_SEND_VERIFIED` -> `JOB_SUCCESS`; Wrong OA send = 0).
+  - **UAT-06 (Cross-OA Queue Isolation)**: PASS (OA #2 worker does not claim OA #1 pending jobs; pending jobs remain owned by original OA until active again).
 - **Active OA Identity Fencing**:
   - `POST /api/campaign/success` and `POST /api/campaign/fail` enforce composite identity fallback (`botId` + `lineUserId` + `status: 'processing'`) when `jobId` is absent. `userId`-only fallbacks without `botId` fail closed with `400 Bad Request`.
   - Customer block status updates require `job.botId` + `job.lineUserId`.
@@ -91,6 +98,6 @@
   - `SEC-WP001` (`CLOSED / PASS`)
   - `OPS-WP001`, `OPS-WP001-R1` (`CLOSED / PASS`)
   - `REL-WP001`, `REL-WP001-R1`, `REL-WP001-R2` (`CLOSED / PASS`)
-- **Active Work Package**:
-  - `OA-WP001-R1 — Strict OA Identity Fencing & Regression Restore` (`READY_FOR_CHATGPT_REVIEW`)
-  - `OA-WP001 — OA Context Isolation & Controlled LINE OA Switch` (`READY_FOR_CHATGPT_REVIEW / NOT CLOSED`)
+  - `OA-WP001`, `OA-WP001-R1` (`CLOSED / PASS`)
+- **Next Work Package Candidate**:
+  - `REL-WP002 — Job Lease + Heartbeat` (`READY / NOT STARTED` — Project Owner authorization required)
