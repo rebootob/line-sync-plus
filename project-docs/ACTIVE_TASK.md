@@ -4,19 +4,18 @@
 ACTIVE_WORK_PACKAGE: NONE
 STATUS: AWAITING_AUTHORIZATION
 AUTHORIZED_BY: Project Owner
-NEXT_CANDIDATE: REL-WP002-R3 Review / REL-WP003
-NEXT_CANDIDATE_STATUS: NOT STARTED
+NEXT_CANDIDATE: REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety
+NEXT_CANDIDATE_STATUS: READY / NOT STARTED / AUTHORIZATION REQUIRED
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
-- **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `NOT CLOSED`
-  - *Notes*: Lease infrastructure implemented; R1/R2/R3 correctives implemented; awaiting independent review
-- **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED BY R2-R3`
-- **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / NOT PASS`
-- **REL-WP002-R3 — Complete R2 Corrective Exactly**: `READY_FOR_CHATGPT_REVIEW`
+- **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
+- **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
+- **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
+- **REL-WP002-R3 — Complete R2 Corrective Exactly**: `CLOSED / PASS`
 - **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `CLOSED / PASS`
   - **SAFE-WP001-R1**: `CLOSED / PASS`
   - **SAFE-WP001-R2**: `CLOSED / PASS`
@@ -24,12 +23,117 @@ NEXT_CANDIDATE_STATUS: NOT STARTED
 - **SYNC-WP001 — LINE OA Customer Directory Sync**: `CLOSED / PASS` (Accepted on Worker v28.8)
 - **OA-WP001 — OA Context Isolation & Strict Identity Fencing**: `CLOSED / PASS` (Accepted on Worker v28.5)
 - **REL-WP001 — Single Worker Multi-Tab Lock**: `CLOSED / PASS`
-- **REL-WP003**: `NOT STARTED`
+- **REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety**: `NOT STARTED`
 
 ### Version Contracts
 - **Worker Version**: `28.15`
 - **Runtime Contract Version**: `2`
 - **Required Worker Version**: `28.15`
+
+---
+
+## 📜 Accepted Live UAT Evidence (REL-WP002)
+
+### Precheck
+- Dashboard Runtime Contract v2
+- Required Worker v28.15
+- Master Bot PAUSED before campaign creation
+- Active OA remained aligned
+- Tampermonkey Worker v28.15 loaded successfully
+
+### Campaign
+- Campaign name: `"แคมเปญ 3/9/2026 8:6"`
+- Type: text
+- Test text: `"1111"`
+- Targets: 2
+- Campaign created while Master Bot was PAUSED
+- Initial status: pending
+- Exactly 2 jobs queued
+
+### Execution
+- Master Bot was enabled only after pending campaign was prepared
+- Worker v28.15 claimed and processed both jobs
+- Recipient verification occurred before physical send
+- LINE messages/send observed for both recipients
+- Both jobs returned success
+- Worker returned to OA main page between/after jobs
+- No visible `JOB_LEASE_LOST`
+- No visible `lease_lost`
+- No visible `OA_CONTEXT_MISMATCH`
+- No visible `RECIPIENT_UNVERIFIED`
+
+### Final Campaign History
+- Target = 2
+- Success = 2
+- Failed = 0
+- Campaign overall status = success/completed
+- Individual success timestamps:
+  - `08:10:18`
+  - `08:10:30`
+
+### Post-run
+- Master Bot returned to PAUSED
+- Account Protection remained ON
+- 10m = 2 / 60
+- 1h = 2 / 300
+- Next Send = now
+- Cooling = none
+
+---
+
+## 🔒 REL-WP002 Accepted Safety Contract
+
+- **CampaignJob Durable Lease Fields**:
+  - `leaseToken` (varchar 64)
+  - `leaseOwner` (varchar 128)
+  - `leaseExpiresAt` (timestamp)
+  - `leaseHeartbeatAt` (timestamp)
+- **60-Second Backend Job Lease**: Granted on atomic job claim (`GET /api/campaign/next`).
+- **~10-Second Active-Job Heartbeat**: `POST /api/campaign/heartbeat` extends active lease by 60s while running.
+- **Strict Worker-Instance Identity**: Header `X-LineSync-Worker-Instance` validated against `^ts_[0-9]{10,17}_[a-z0-9]{4,32}$`.
+- **Atomic / Restricted Job Claim**: Only pending or expired processing jobs can be claimed; active leases cannot be stolen.
+- **Expired Lease Reclaim**: May be reclaimed by eligible worker generating a NEW `leaseToken`.
+- **Stale Lease Self-Revival Blocked**: Stale or expired leases cannot revive themselves.
+- **Page-Load Recovery**: Renews/validates saved lease before resuming active job.
+- **Transient Network Error**: Preserves same job only while known lease remains valid; does not prematurely fail closed.
+- **Explicit `lease_lost`**: Immediately strips stale Worker authority without calling `/campaign/fail` and without incrementing error count.
+- **Final Authoritative Lease Renewal**: Executed immediately prior to irreversible physical LINE send (clicks / Enter).
+- **Intact Upstream Fencing**: Worker leadership, target recipient, OA context, and SAFE reservation checks remain fully enforced.
+- **Fenced Finalization**: `markSuccess` and `markFail` require valid, unexpired matching lease.
+- **Serialized Campaign Counters**: Pessimistic row locking (`SELECT FOR UPDATE` / `pessimistic_write`) on `Campaign` prevents lost updates.
+- **Fenced Worker-Driven Stop**: Requires locked current `processing` lease; recent-failed and historical stop bypasses removed.
+- **Integrated Circuit Breaker in `markFail`**: 10 consecutive errors finalized atomically via `/campaign/fail` with `errorOverflow: true`, setting `campaign.status = 'stopped_error'` and clearing remaining job leases without calling `/campaign/stop`.
+- **Customer Block DB Rollback**: DB failure when saving blocked customer propagates and rolls back the transaction.
+- **Post-Commit Telegram**: Notifications dispatched only after DB transaction commit.
+- **Same-Job Finalization Retry**: Network failure after physical send retries finalization with same credentials without re-executing physical send.
+
+---
+
+## ⚠️ Non-Destructive UAT Limitation
+
+Intentional Live UAT of:
+- lease expiration takeover
+- stale-worker competing finalization
+- forced backend/network outage during finalization
+- forced heartbeat failure
+- forced circuit-breaker 10-error sequence
+
+was **NOT** performed against Live LINE OA.
+
+**Reason**: These scenarios would introduce unnecessary operational/send risk to live LINE OA accounts. They are fully covered by 236 reviewed, focused behavioral and unit tests.
+
+---
+
+## 🚧 Known REL-WP003 Boundary
+
+REL-WP002 does **NOT** fully solve:
+- Physical LINE send succeeds → browser/process crashes before backend success acknowledgement.
+
+This post-send crash/idempotency window belongs to:
+**REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety**
+
+REL-WP003 remains:
+**READY / NOT STARTED / AUTHORIZATION REQUIRED**
 
 ---
 
@@ -40,7 +144,6 @@ NEXT_CANDIDATE_STATUS: NOT STARTED
 - Exactly 2 jobs queued and processed to completion.
 - LINE messages/send physically observed and verified.
 - Zero recipient mismatch, zero OA mismatch, and zero `ACCOUNT_PROTECTION_STATE_UNAVAILABLE` errors.
-- Initial post-run telemetry became `unknown` after 30s due to missing idle heartbeat.
 
 ### Worker v28.12 Telemetry Heartbeat Verification
 - Worker v28.12 introduced active-worker telemetry heartbeat in `processQueue()`.
@@ -50,31 +153,12 @@ NEXT_CANDIDATE_STATUS: NOT STARTED
   - 1h: **2 / 300**
   - Next Send: **now**
   - Cooling: **none**
-- **UAT Interpretation & Validation**:
-  - The 2 previously accepted send reservations correctly aged out of the rolling 10-minute window while remaining inside the rolling 1-hour window.
-  - Telemetry heartbeat maintains freshness while Worker is idle without creating fake timestamps.
-  - Rolling-window telemetry accurately reflects persisted reservation history.
-  - Dashboard no longer falls back to stale `unknown` status while active Worker is healthy and polling.
-
----
-
-## 🛡️ Final SAFE-WP001 Protection & Safety Contract
-
-- **Per-OA Protection State**: Scoped by `botId`.
-- **Send Rate Limits**: Minimum send gap = 10 seconds; Rolling 10-minute cap = 60 send actions; Rolling 1-hour cap = 300 send actions.
-- **Fail-Closed Protection Storage**: Strict schema validation (`ACCOUNT_PROTECTION_STATE_UNAVAILABLE` on malformed data).
-- **Exact Reservation Verification**: Exact array length/order/value read-back before returning reservation object `{ botId, reservedAt }`. Final reservation revalidated immediately before physical clicks/keydowns.
-- **Context Revalidation**: Worker leadership, target recipient, and active OA revalidated post-wait.
-- **Target Hygiene**: Excludes blocked recipients (`isBlocked === true`) and deduplicates target IDs on `POST /api/campaign/add`.
-- **Adaptive Error Cooldown**: 30s / 60s / 120s / max 300s. 10 consecutive errors triggers circuit breaker stop.
-- **Observational Telemetry**: Heartbeat runs via `processQueue()` (~4s cadence) without mutating timestamps or claiming jobs. Stale telemetry (> 30s) displays `unknown` (never fake zero).
-
-> ⚠️ **Compliance Notice**: SAFE-WP001 reduces operational risk. It does NOT guarantee LINE will never restrict or suspend an OA. Internal thresholds are LineSync Plus safety defaults, NOT official LINE API limits. No detection-evasion functionality is included.
+- Proves 2 send reservations correctly aged out of 10m window while remaining inside 1h window.
 
 ---
 
 ## 🚀 Next Candidate Work Package
 
-- **Candidate**: `REL-WP002-R1 Independent Review` / `REL-WP003`
-- **Status**: `AWAITING_AUTHORIZATION`
+- **Candidate**: `REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety`
+- **Status**: `READY / NOT STARTED / AUTHORIZATION REQUIRED`
 - **Note**: Awaits explicit Project Owner authorization before starting. Do NOT start automatically.

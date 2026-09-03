@@ -145,10 +145,10 @@ Over the course of safety hardening, 26 work packages were identified, implement
 12. **SAFE-WP001-R1 — Fail-Closed Protection State + Truthful Dashboard Telemetry (CLOSED / PASS)**
 13. **SAFE-WP001-R2 — Reservation Integrity + Truthful Protection Telemetry (CLOSED / PASS)**
 14. **SAFE-WP001-R3 — Active Worker Telemetry Heartbeat (CLOSED / PASS)**
-15. **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing (NOT CLOSED)**
-16. **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing (CORRECTED / SUPERSEDED BY R2-R3)**
-17. **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop (CORRECTIVE REQUIRED / NOT PASS)**
-18. **REL-WP002-R3 — Complete R2 Corrective Exactly (READY_FOR_CHATGPT_REVIEW)**
+15. **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing (CLOSED / PASS)**
+16. **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing (CORRECTED / SUPERSEDED)**
+17. **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop (CORRECTIVE REQUIRED / SUPERSEDED)**
+18. **REL-WP002-R3 — Complete R2 Corrective Exactly (CLOSED / PASS)**
 
 ---
 
@@ -162,6 +162,15 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - Telemetry heartbeat verified on idle worker.
   - Dashboard telemetry displayed `Protection: ON`, `10m: 0 / 60`, `1h: 2 / 300`, `Next Send: now`, `Cooling: none`.
   - Proves 2 send reservations correctly aged out of 10m window while remaining inside 1h window. Heartbeat maintains telemetry freshness without creating fake timestamps.
+- **Worker v28.15 Live UAT Evidence (REL-WP002)**:
+  - 2-recipient text campaign (`"แคมเปญ 3/9/2026 8:6"`, test text `"1111"`) prepared while Master Bot was PAUSED.
+  - Master Bot enabled only after preparation; Worker claimed both jobs with valid 60s durable leases.
+  - Recipient verification verified prior to send; LINE send physically observed.
+  - Both jobs completed successfully (`08:10:18`, `08:10:30`); 0 failed; overall campaign completed.
+  - Zero visible `JOB_LEASE_LOST`, `lease_lost`, `OA_CONTEXT_MISMATCH`, or `RECIPIENT_UNVERIFIED`.
+  - Post-run Account Protection: ON, 10m: 2/60, 1h: 2/300, Next Send: now, Cooling: none.
+  - *Non-Destructive UAT Limitation*: Destructive failure modes (lease takeover, competing stale worker, forced outage during finalization, 10-error circuit breaker) were NOT run against live LINE OA; covered by 236 unit tests.
+  - *Known REL-WP003 Boundary*: Post-send crash window (send succeeds in LINE but browser crashes before backend response) is deferred to REL-WP003.
 
 ---
 
@@ -177,10 +186,10 @@ Over the course of safety hardening, 26 work packages were identified, implement
 - **OA-WP001 / OA-WP001-R1**: **CLOSED / PASS** (Accepted on Worker v28.5)
 - **SYNC-WP001 / R1..R5**: **CLOSED / PASS** (Accepted on Worker v28.8)
 - **SAFE-WP001 / R1..R3**: **CLOSED / PASS** (Accepted on Worker v28.12)
-- **REL-WP002**: **NOT CLOSED** (Lease infrastructure implemented; R1/R2/R3 correctives implemented; awaiting independent review)
-- **REL-WP002-R1**: **CORRECTED / SUPERSEDED BY R2-R3**
-- **REL-WP002-R2**: **CORRECTIVE REQUIRED / NOT PASS**
-- **REL-WP002-R3**: **READY_FOR_CHATGPT_REVIEW**
+- **REL-WP002**: **CLOSED / PASS**
+- **REL-WP002-R1**: **CORRECTED / SUPERSEDED**
+- **REL-WP002-R2**: **CORRECTIVE REQUIRED / SUPERSEDED**
+- **REL-WP002-R3**: **CLOSED / PASS**
 
 ---
 
@@ -202,11 +211,11 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `OA-WP001 / R1` (OA Context Isolation & Strict Identity Fencing): **COMPLETED / CLOSED**
   - `SYNC-WP001 / R1 / R2 / R3 / R4 / R5` (LINE OA Customer Directory Sync): **COMPLETED / CLOSED / PASS**
   - `SAFE-WP001 / R1 / R2 / R3` (LINE OA Account Protection & Send Compliance Guard): **CLOSED / PASS**
-  - `REL-WP002` (Job Lease + Heartbeat + Stale Worker Fencing): **NOT CLOSED**
-  - `REL-WP002-R1` (Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing): **CORRECTED / SUPERSEDED BY R2-R3**
-  - `REL-WP002-R2` (Serialize Lease Finalization and Circuit Breaker Stop): **CORRECTIVE REQUIRED / NOT PASS**
-  - `REL-WP002-R3` (Complete R2 Corrective Exactly): **READY_FOR_CHATGPT_REVIEW**
-  - `REL-WP003`: **NOT STARTED**
+  - `REL-WP002` (Job Lease + Heartbeat + Stale Worker Fencing): **CLOSED / PASS**
+  - `REL-WP002-R1` (Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing): **CORRECTED / SUPERSEDED**
+  - `REL-WP002-R2` (Serialize Lease Finalization and Circuit Breaker Stop): **CORRECTIVE REQUIRED / SUPERSEDED**
+  - `REL-WP002-R3` (Complete R2 Corrective Exactly): **CLOSED / PASS**
+  - `REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety`: **READY / NOT STARTED / AUTHORIZATION REQUIRED**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
 - **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
@@ -217,15 +226,15 @@ Over the course of safety hardening, 26 work packages were identified, implement
 
 ## 11. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 (REL-WP002-R3 READY_FOR_CHATGPT_REVIEW).
+- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 (REL-WP002 CLOSED / PASS).
 - **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, customer DB rollback, circuit breaker inside markFail, and 236 unit tests.
 
 ---
 
 ## 12. Immediate Decision Gate
 
-Phase 0 REL-WP002 is NOT CLOSED; REL-WP002-R3 is READY_FOR_CHATGPT_REVIEW.
+Phase 0 REL-WP002 is CLOSED / PASS; REL-WP002-R3 is CLOSED / PASS.
 Worker Version: 28.15 | Runtime Contract: 2 | Required Worker: 28.15
-SYNC-WP001 is CLOSED / PASS. OA-WP001 is CLOSED / PASS. REL-WP001 is CLOSED / PASS. SAFE-WP001 is CLOSED / PASS.
-Next Candidate: `REL-WP002-R3 Review` / `REL-WP003` (NOT STARTED — Project Owner authorization required).
-Do NOT perform Live LINE UAT. Do NOT start `REL-WP003` automatically.
+SYNC-WP001 is CLOSED / PASS. OA-WP001 is CLOSED / PASS. REL-WP001 is CLOSED / PASS. SAFE-WP001 is CLOSED / PASS. REL-WP002 is CLOSED / PASS.
+Next Candidate: `REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety` (READY / NOT STARTED / AUTHORIZATION REQUIRED).
+Do NOT perform Live LINE UAT. Do NOT send any additional LINE messages. Do NOT start `REL-WP003` automatically.

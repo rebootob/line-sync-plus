@@ -28,21 +28,31 @@
 
 ---
 
-## 🔒 Durable Job Lease + Heartbeat + Stale Worker Fencing (REL-WP002 STATUS: NOT CLOSED; REL-WP002-R3 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔒 Durable Job Lease + Heartbeat + Stale Worker Fencing (REL-WP002 STATUS: CLOSED / PASS; REL-WP002-R3 STATUS: CLOSED / PASS)
 
 - **Worker Version**: `28.15` (`run/LineSyncApp.js` v28.15).
 - **Backend Required Version**: `28.15` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
-- **Implementation Overview**:
+- **Accepted Live UAT (Worker v28.15)**:
+  - 2-recipient text campaign (`"แคมเปญ 3/9/2026 8:6"`, test text `"1111"`) created while Master Bot was PAUSED.
+  - Exactly 2 jobs queued and processed to completion after bot was enabled.
+  - Recipient verification verified prior to send; LINE send physically observed.
+  - Both jobs completed successfully (`08:10:18`, `08:10:30`); 0 failed; overall campaign completed.
+  - Zero visible `JOB_LEASE_LOST`, `lease_lost`, `OA_CONTEXT_MISMATCH`, or `RECIPIENT_UNVERIFIED`.
+  - Post-run Account Protection: ON, 10m: 2/60, 1h: 2/300, Next Send: now, Cooling: none.
+- **Accepted Safety Contract**:
   - Nullable job lease columns on `CampaignJob`: `leaseToken` (varchar 64), `leaseOwner` (varchar 128), `leaseExpiresAt` (timestamp), `leaseHeartbeatAt` (timestamp). Added index `idx_campaign_jobs_bot_status_lease` on `(botId, status, leaseExpiresAt)`.
   - Atomic claim on `GET /api/campaign/next`: requires `X-LineSync-Worker-Instance` header (`^ts_[0-9]{10,17}_[a-z0-9]{4,32}$`), generates UUID `leaseToken`, sets 60s lease expiry (`NOW() + 60s`).
   - Active heartbeat loop: `POST /api/campaign/heartbeat` extends active leases by 60s every 10s. Distinguishes renewed, explicit `lease_lost`, and transient error.
   - Final pre-send lease renewal fencing: `renewJobLeaseOrThrow` invoked before image confirm (`confirmAndCloseImageModal(expectedUserId, expectedBotId)`), text send click, and Enter keydown.
   - Transactional finalization with Pessimistic Locking: `/campaign/success`, `/campaign/fail`, and `/campaign/stop` execute TypeORM transactions locking `Campaign` row with `pessimistic_write` after fenced job status transition.
   - Customer Failure Rollback: DB failures when updating blocked customers in `markFail` propagate and rollback the transaction.
-  - Same-Job Finalization Retry: After physical send, transient network failure retries finalization with same credentials while lease is valid; explicit lease loss relinquishes execution without marking fail.
+  - Same-Job Finalization Retry: After physical send, transient network failure retries finalization with same credentials while lease is valid; explicit lease loss relinquishes execution without marking fail; physical send is never repeated.
   - Integrated Circuit Breaker inside `markFail` (R3): When 10 consecutive errors occur, the worker calls `/campaign/fail` with `errorOverflow: true`. The transaction increments `failedCount`, sets `campaign.status = 'stopped_error'`, clears all remaining leases, and commits atomically without calling `/campaign/stop`.
   - Strict Worker-Driven Stop Fencing: `/campaign/stop` with `jobId` locks the calling `CampaignJob` with `pessimistic_write` and strictly enforces active processing lease before stopping the campaign; recent-failed and historical fallbacks are removed.
+  - Post-Commit Telegram: Notifications dispatched only after DB transaction resolves.
+- **Non-Destructive UAT Limitation**: Intentional testing of destructive failure modes (lease expiration takeover, stale-worker competing finalization, forced outage during finalization, forced heartbeat failure, forced 10-error circuit breaker) was NOT run against live LINE OA to avoid operational/send risk; covered by 236 unit tests.
+- **Known REL-WP003 Boundary**: Post-send crash window (send succeeds in LINE but browser/node crashes before backend finalization response) is explicitly bounded and deferred to `REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety`.
 
 ---
 
@@ -81,11 +91,11 @@
 
 ## 🚀 Work Packages Overview
 
-- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001` (`CLOSED / PASS`).
+- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002` (`CLOSED / PASS`).
 - **Active Work Package**: `NONE`.
 - **Work Package Status**:
-  - `REL-WP002`: `NOT CLOSED` (Lease infrastructure implemented; R1/R2/R3 correctives implemented; awaiting independent review).
-  - `REL-WP002-R1`: `CORRECTED / SUPERSEDED BY R2-R3`.
-  - `REL-WP002-R2`: `CORRECTIVE REQUIRED / NOT PASS`.
-  - `REL-WP002-R3`: `READY_FOR_CHATGPT_REVIEW`.
-- **Next Candidate**: `REL-WP003` (`NOT STARTED`).
+  - `REL-WP002`: `CLOSED / PASS`.
+  - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
+  - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
+  - `REL-WP002-R3`: `CLOSED / PASS`.
+- **Next Candidate**: `REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety` (`READY / NOT STARTED / AUTHORIZATION REQUIRED`).
