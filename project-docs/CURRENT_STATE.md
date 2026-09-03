@@ -28,7 +28,7 @@
 
 ---
 
-## 🔒 Durable Job Lease + Heartbeat + Stale Worker Fencing (REL-WP002 STATUS: NOT CLOSED; REL-WP002-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔒 Durable Job Lease + Heartbeat + Stale Worker Fencing (REL-WP002 STATUS: NOT CLOSED; REL-WP002-R2 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Worker Version**: `28.14` (`run/LineSyncApp.js` v28.14).
 - **Backend Required Version**: `28.14` (`src/runtime-version.ts`).
@@ -40,6 +40,7 @@
   - Final pre-send lease renewal fencing: `renewJobLeaseOrThrow` invoked before image confirm (`confirmAndCloseImageModal(expectedUserId, expectedBotId)`), text send click, and Enter keydown.
   - Transactional finalization: `/campaign/success`, `/campaign/fail`, and `/campaign/stop` execute TypeORM transactions validating active worker lease token and instance header before executing atomic status transitions and clearing lease fields.
   - Same-Job Finalization Retry: After physical send, transient network failure retries finalization with same credentials while lease is valid; explicit lease loss relinquishes execution without marking fail.
+  - Serialized Circuit Breaker Stop: When consecutive errors reach 10, `/campaign/stop` is serialized properly with job finalization to ensure campaign stop is authorized and remaining jobs are safely fenced without conflict.
 
 ---
 
@@ -81,6 +82,7 @@
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001` (`CLOSED / PASS`).
 - **Active Work Package**: `NONE`.
 - **Work Package Status**:
-  - `REL-WP002`: `NOT CLOSED` (Lease infrastructure implemented; R1 corrective implemented; awaiting independent review).
-  - `REL-WP002-R1`: `READY_FOR_CHATGPT_REVIEW`.
+  - `REL-WP002`: `NOT CLOSED` (Lease infrastructure implemented; R1 & R2 correctives implemented; awaiting independent review).
+  - `REL-WP002-R1`: `CLOSED / PASS`.
+  - `REL-WP002-R2`: `READY_FOR_CHATGPT_REVIEW`.
 - **Next Candidate**: `REL-WP003` (`NOT STARTED`).

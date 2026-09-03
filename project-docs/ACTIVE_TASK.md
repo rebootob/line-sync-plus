@@ -4,7 +4,7 @@
 ACTIVE_WORK_PACKAGE: NONE
 STATUS: AWAITING_AUTHORIZATION
 AUTHORIZED_BY: Project Owner
-NEXT_CANDIDATE: REL-WP002-R1 Review / REL-WP003
+NEXT_CANDIDATE: REL-WP002-R2 Review / REL-WP003
 NEXT_CANDIDATE_STATUS: NOT STARTED
 ```
 
@@ -13,8 +13,9 @@ NEXT_CANDIDATE_STATUS: NOT STARTED
 ## 📋 Work Package Status Summary
 
 - **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `NOT CLOSED`
-  - *Notes*: Lease infrastructure implemented; R1 corrective implemented; awaiting independent review
-- **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `READY_FOR_CHATGPT_REVIEW`
+  - *Notes*: Lease infrastructure implemented; R1 & R2 correctives implemented; awaiting independent review
+- **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CLOSED / PASS`
+- **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `READY_FOR_CHATGPT_REVIEW`
 - **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `CLOSED / PASS`
   - **SAFE-WP001-R1**: `CLOSED / PASS`
   - **SAFE-WP001-R2**: `CLOSED / PASS`

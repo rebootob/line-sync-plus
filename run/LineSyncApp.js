@@ -1933,6 +1933,21 @@
             }
         }
 
+        if (!success && consecutiveErrorCount >= 10) {
+            console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! สั่งหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
+            try {
+                await fetchLeaseAPI('/campaign/stop', 'POST', {
+                    jobId: jobId,
+                    botId: expectedJobBotId,
+                    leaseToken: leaseToken,
+                    reason: '🚨 สคริปต์หยุดทำงานอัตโนมัติเนื่องจากพบ Error ติดต่อกันเกิน 10 รายการ',
+                    errorOverflow: true
+                });
+            } catch (e) {
+                console.warn('⚠️ [REL] Error triggering pre-finalization circuit breaker stop:', e);
+            }
+        }
+
         await attemptFinalization(jobId, userId, success, reason, isBlocked, expectedJobBotId, leaseToken);
     }
 
@@ -1960,14 +1975,16 @@
             isExecutingJob = false;
 
             if (consecutiveErrorCount >= 10) {
-                console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! สั่งหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
-                await fetchLeaseAPI('/campaign/stop', 'POST', {
-                    jobId: jobId,
-                    botId: expectedJobBotId,
-                    leaseToken: leaseToken,
-                    reason: '🚨 สคริปต์หยุดทำงานอัตโนมัติเนื่องจากพบ Error ติดต่อกันเกิน 10 รายการ',
-                    errorOverflow: true
-                });
+                console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! ยืนยันหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
+                try {
+                    await fetchLeaseAPI('/campaign/stop', 'POST', {
+                        jobId: jobId,
+                        botId: expectedJobBotId,
+                        leaseToken: leaseToken,
+                        reason: '🚨 สคริปต์หยุดทำงานอัตโนมัติเนื่องจากพบ Error ติดต่อกันเกิน 10 รายการ',
+                        errorOverflow: true
+                    });
+                } catch (e) {}
                 safeClearSessionStorage();
                 alert('🚨 ระบบเซฟตี้หยุดสคริปต์อัตโนมัติ เนื่องจากพบ Error ติดต่อกันเกิน 10 รายการเพื่อความปลอดภัยของบัญชี LINE OA');
                 return;

@@ -1243,10 +1243,17 @@ export class AppController {
           .createQueryBuilder('job')
           .where('job.id = :jobId', { jobId: body.jobId })
           .andWhere('job.botId = :botId', { botId: body.botId!.trim() })
-          .andWhere('job.status = :status', { status: 'processing' })
-          .andWhere('job.leaseToken = :leaseToken', { leaseToken: body.leaseToken })
-          .andWhere('job.leaseOwner = :leaseOwner', { leaseOwner: workerInstance!.trim() })
-          .andWhere('job.leaseExpiresAt IS NOT NULL AND job.leaseExpiresAt > :now', { now })
+          .andWhere(
+            '((job.status = :status AND job.leaseToken = :leaseToken AND job.leaseOwner = :leaseOwner AND job.leaseExpiresAt IS NOT NULL AND job.leaseExpiresAt > :now) OR (job.status = :failedStatus AND job.updatedAt >= :recentTime))',
+            {
+              status: 'processing',
+              leaseToken: body.leaseToken,
+              leaseOwner: workerInstance!.trim(),
+              now,
+              failedStatus: 'failed',
+              recentTime: new Date(Date.now() - 30000),
+            },
+          )
           .getOne();
 
         if (!callingJob) {

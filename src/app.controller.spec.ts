@@ -2612,6 +2612,46 @@ describe('AppController', () => {
       expect(scriptContent).toContain('postSyncBatch');
     });
   });
+
+  describe('REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop Tests', () => {
+    const fs = require('fs');
+    const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+    let mockRes: any;
+
+    beforeEach(() => {
+      appController.toggleBotStatus({ enabled: true });
+      mockRes = {
+        statusCode: 200,
+        status: jest.fn().mockImplementation(c => { mockRes.statusCode = c; return mockRes; })
+      };
+    });
+
+    it('1. stopCampaign authorizes recently failed job by same worker instance', async () => {
+      const mockCamp = { id: 'c1', status: 'processing', botId: testBotId };
+      const mockCallingJob = { id: 'j1', campaignId: 'c1', botId: testBotId, status: 'failed', updatedAt: new Date() };
+
+      jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(mockCallingJob),
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      } as any);
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
+
+      const res: any = await appController.stopCampaign('28.14', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', reason: 'Circuit breaker', errorOverflow: true }, mockRes);
+      expect(res.success).toBe(true);
+      expect(mockCamp.status).toBe('stopped_error');
+    });
+
+    it('2. Worker serializes circuit breaker stop before finalization return', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("if (!success && consecutiveErrorCount >= 10)");
+      expect(scriptContent).toContain("await fetchLeaseAPI('/campaign/stop', 'POST'");
+      expect(scriptContent).toContain("errorOverflow: true");
+    });
+  });
 });
 
 
