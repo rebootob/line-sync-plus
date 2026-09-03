@@ -28,19 +28,21 @@
 
 ---
 
-## 🔒 Durable Job Lease + Heartbeat + Stale Worker Fencing (REL-WP002 STATUS: NOT CLOSED; REL-WP002-R2 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🔒 Durable Job Lease + Heartbeat + Stale Worker Fencing (REL-WP002 STATUS: NOT CLOSED; REL-WP002-R3 STATUS: READY_FOR_CHATGPT_REVIEW)
 
-- **Worker Version**: `28.14` (`run/LineSyncApp.js` v28.14).
-- **Backend Required Version**: `28.14` (`src/runtime-version.ts`).
+- **Worker Version**: `28.15` (`run/LineSyncApp.js` v28.15).
+- **Backend Required Version**: `28.15` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
 - **Implementation Overview**:
   - Nullable job lease columns on `CampaignJob`: `leaseToken` (varchar 64), `leaseOwner` (varchar 128), `leaseExpiresAt` (timestamp), `leaseHeartbeatAt` (timestamp). Added index `idx_campaign_jobs_bot_status_lease` on `(botId, status, leaseExpiresAt)`.
   - Atomic claim on `GET /api/campaign/next`: requires `X-LineSync-Worker-Instance` header (`^ts_[0-9]{10,17}_[a-z0-9]{4,32}$`), generates UUID `leaseToken`, sets 60s lease expiry (`NOW() + 60s`).
   - Active heartbeat loop: `POST /api/campaign/heartbeat` extends active leases by 60s every 10s. Distinguishes renewed, explicit `lease_lost`, and transient error.
   - Final pre-send lease renewal fencing: `renewJobLeaseOrThrow` invoked before image confirm (`confirmAndCloseImageModal(expectedUserId, expectedBotId)`), text send click, and Enter keydown.
-  - Transactional finalization: `/campaign/success`, `/campaign/fail`, and `/campaign/stop` execute TypeORM transactions validating active worker lease token and instance header before executing atomic status transitions and clearing lease fields.
+  - Transactional finalization with Pessimistic Locking: `/campaign/success`, `/campaign/fail`, and `/campaign/stop` execute TypeORM transactions locking `Campaign` row with `pessimistic_write` after fenced job status transition.
+  - Customer Failure Rollback: DB failures when updating blocked customers in `markFail` propagate and rollback the transaction.
   - Same-Job Finalization Retry: After physical send, transient network failure retries finalization with same credentials while lease is valid; explicit lease loss relinquishes execution without marking fail.
-  - Serialized Circuit Breaker Stop: When consecutive errors reach 10, `/campaign/stop` is serialized properly with job finalization to ensure campaign stop is authorized and remaining jobs are safely fenced without conflict.
+  - Integrated Circuit Breaker inside `markFail` (R3): When 10 consecutive errors occur, the worker calls `/campaign/fail` with `errorOverflow: true`. The transaction increments `failedCount`, sets `campaign.status = 'stopped_error'`, clears all remaining leases, and commits atomically without calling `/campaign/stop`.
+  - Strict Worker-Driven Stop Fencing: `/campaign/stop` with `jobId` locks the calling `CampaignJob` with `pessimistic_write` and strictly enforces active processing lease before stopping the campaign; recent-failed and historical fallbacks are removed.
 
 ---
 
@@ -72,8 +74,8 @@
 
 1. **Database & Entities (`PostgreSQL` / `TypeORM`)**: Composite primary key `(botId, lineUserId)` on `Customer`. Job lease schema on `CampaignJob`.
 2. **NestJS REST API (`src/app.controller.ts`)**: Atomic job claim, active job lease heartbeat, fenced finalization (`/campaign/success`, `/campaign/fail`, `/campaign/stop`).
-3. **Web Dashboard (`index.html`)**: Contract v2 badge, Required Worker v28.14.
-4. **Client Automation Userscript (`run/LineSyncApp.js` v28.14)**: Worker instance header `X-LineSync-Worker-Instance`, active job heartbeat timer, pre-send lease renewal fencing.
+3. **Web Dashboard (`index.html`)**: Contract v2 badge, Required Worker v28.15.
+4. **Client Automation Userscript (`run/LineSyncApp.js` v28.15)**: Worker instance header `X-LineSync-Worker-Instance`, active job heartbeat timer, pre-send lease renewal fencing.
 
 ---
 
@@ -82,7 +84,8 @@
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001` (`CLOSED / PASS`).
 - **Active Work Package**: `NONE`.
 - **Work Package Status**:
-  - `REL-WP002`: `NOT CLOSED` (Lease infrastructure implemented; R1 & R2 correctives implemented; awaiting independent review).
-  - `REL-WP002-R1`: `CLOSED / PASS`.
-  - `REL-WP002-R2`: `READY_FOR_CHATGPT_REVIEW`.
+  - `REL-WP002`: `NOT CLOSED` (Lease infrastructure implemented; R1/R2/R3 correctives implemented; awaiting independent review).
+  - `REL-WP002-R1`: `CORRECTED / SUPERSEDED BY R2-R3`.
+  - `REL-WP002-R2`: `CORRECTIVE REQUIRED / NOT PASS`.
+  - `REL-WP002-R3`: `READY_FOR_CHATGPT_REVIEW`.
 - **Next Candidate**: `REL-WP003` (`NOT STARTED`).

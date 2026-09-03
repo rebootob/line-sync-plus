@@ -1026,7 +1026,7 @@ export class AppController {
       return { success: false, status: 'oa_context_mismatch' };
     }
 
-    return await this.campaignJobRepository.manager.transaction(async (manager) => {
+    const txResult = await this.campaignJobRepository.manager.transaction(async (manager) => {
       const jobRepo = manager.getRepository(CampaignJob);
       const campRepo = manager.getRepository(Campaign);
 
@@ -1057,39 +1057,56 @@ export class AppController {
       }
 
       const job = await jobRepo.findOne({ where: { id: body.jobId } });
-      if (job) {
-        const campaign = await campRepo.findOne({ where: { id: job.campaignId } });
-        if (campaign) {
-          campaign.successCount += 1;
-          const remainingPending = await jobRepo.count({
-            where: [
-              { campaignId: campaign.id, status: 'pending' },
-              { campaignId: campaign.id, status: 'processing' },
-            ],
-          });
-
-          if (remainingPending === 0) {
-            campaign.status = 'completed';
-          }
-          await campRepo.save(campaign);
-          if (remainingPending === 0) {
-            this.checkAndSendTelegramReport(campaign).catch(() => {});
-          }
-        }
-        console.log(`✅ ส่งข้อความสำเร็จ: ${job.lineUserId}`);
+      if (!job) {
+        throw new Error(`Job ${body.jobId} missing after fenced transition`);
       }
 
-      return { success: true };
+      const campaign = await campRepo.findOne({
+        where: { id: job.campaignId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!campaign) {
+        throw new Error(`Campaign ${job.campaignId} missing during finalization`);
+      }
+
+      campaign.successCount += 1;
+      const remainingPending = await jobRepo.count({
+        where: [
+          { campaignId: campaign.id, status: 'pending' },
+          { campaignId: campaign.id, status: 'processing' },
+        ],
+      });
+
+      if (remainingPending === 0) {
+        campaign.status = 'completed';
+      }
+      await campRepo.save(campaign);
+      console.log(`✅ ส่งข้อความสำเร็จ: ${job.lineUserId}`);
+
+      return {
+        success: true,
+        completedCampaign: campaign.status === 'completed' ? campaign : null,
+      };
     });
+
+    if (txResult && txResult.success && (txResult as any).completedCampaign) {
+      this.checkAndSendTelegramReport((txResult as any).completedCampaign).catch(() => {});
+    }
+
+    if (txResult && !txResult.success) {
+      return txResult;
+    }
+
+    return { success: true };
   }
 
-  // API สำหรับ Tampermonkey มารายงานว่าส่งล้มเหลว (พร้อมระบบ Transactional Fenced Lease Validation)
+  // API สำหรับ Tampermonkey มารายงานว่าส่งล้มเหลว (พร้อมระบบ Transactional Fenced Lease Validation & Circuit Breaker)
   @Post('campaign/fail')
   async markFail(
     @Headers('x-linesync-worker-version') workerVersion: string | undefined,
     @Headers('x-linesync-oa-context') workerOaHeader: string | undefined,
     @Headers('x-linesync-worker-instance') workerInstance: string | undefined,
-    @Body() body: { jobId?: string; botId?: string; leaseToken?: string; reason?: string; isBlocked?: boolean },
+    @Body() body: { jobId?: string; botId?: string; leaseToken?: string; reason?: string; isBlocked?: boolean; errorOverflow?: boolean },
     @Res({ passthrough: true }) res?: Response,
   ) {
     if (!workerVersion || workerVersion.trim() !== REQUIRED_WORKER_VERSION) {
@@ -1121,7 +1138,7 @@ export class AppController {
       return { success: false, status: 'oa_context_mismatch' };
     }
 
-    return await this.campaignJobRepository.manager.transaction(async (manager) => {
+    const txResult = await this.campaignJobRepository.manager.transaction(async (manager) => {
       const jobRepo = manager.getRepository(CampaignJob);
       const campRepo = manager.getRepository(Campaign);
       const custRepo = manager.getRepository(Customer);
@@ -1153,46 +1170,84 @@ export class AppController {
       }
 
       const job = await jobRepo.findOne({ where: { id: body.jobId } });
-      if (job) {
-        const campaign = await campRepo.findOne({ where: { id: job.campaignId } });
-        if (campaign) {
-          campaign.failedCount += 1;
-          const remainingPending = await jobRepo.count({
-            where: [
-              { campaignId: campaign.id, status: 'pending' },
-              { campaignId: campaign.id, status: 'processing' },
-            ],
-          });
-
-          if (remainingPending === 0) {
-            campaign.status = 'completed';
-          }
-          await campRepo.save(campaign);
-          if (remainingPending === 0) {
-            this.checkAndSendTelegramReport(campaign).catch(() => {});
-          }
-        }
-
-        const isUserBlocked = body.isBlocked || (body.reason && (body.reason.includes('บล็อก') || body.reason.includes('ไม่สามารถส่งข้อความ')));
-        if (isUserBlocked && job.lineUserId && job.botId && /^U[0-9a-fA-F]{32}$/.test(job.botId)) {
-          try {
-            const customer = await custRepo.findOne({ where: { botId: job.botId, lineUserId: job.lineUserId } });
-            if (customer) {
-              customer.isBlocked = true;
-              customer.blockReason = body.reason || '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว';
-              await custRepo.save(customer);
-              console.log(`🚫 ปิดสถานะผู้ใช้ในตาราง Customers เป็น "บล็อก/ส่งไม่ได้แล้ว": ${job.lineUserId} (OA: ${job.botId})`);
-            }
-          } catch(e) {
-            console.error(`⚠️ ไม่สามารถอัปเดตสถานะบล็อกให้ผู้ใช้ ${job.lineUserId}:`, e);
-          }
-        }
-
-        console.log(`❌ ส่งข้อความล้มเหลว: ${job.lineUserId} (${body.reason})`);
+      if (!job) {
+        throw new Error(`Job ${body.jobId} missing after fenced transition`);
       }
 
-      return { success: true };
+      const campaign = await campRepo.findOne({
+        where: { id: job.campaignId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!campaign) {
+        throw new Error(`Campaign ${job.campaignId} missing during finalization`);
+      }
+
+      campaign.failedCount += 1;
+
+      if (body.errorOverflow === true) {
+        campaign.status = 'stopped_error';
+        await jobRepo
+          .createQueryBuilder()
+          .update(CampaignJob)
+          .set({
+            status: 'failed',
+            errorReason: '🚨 สคริปต์หยุดทำงานอัตโนมัติเนื่องจากพบ Error ติดต่อกันเกิน 10 รายการ',
+            leaseToken: null,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            leaseHeartbeatAt: null,
+          })
+          .where('campaignId = :campaignId', { campaignId: campaign.id })
+          .andWhere('status IN (:...statuses)', { statuses: ['pending', 'processing'] })
+          .execute();
+      } else {
+        const remainingPending = await jobRepo.count({
+          where: [
+            { campaignId: campaign.id, status: 'pending' },
+            { campaignId: campaign.id, status: 'processing' },
+          ],
+        });
+
+        if (remainingPending === 0) {
+          campaign.status = 'completed';
+        }
+      }
+
+      await campRepo.save(campaign);
+
+      const isUserBlocked = body.isBlocked || (body.reason && (body.reason.includes('บล็อก') || body.reason.includes('ไม่สามารถส่งข้อความ')));
+      if (isUserBlocked && job.lineUserId && job.botId && /^U[0-9a-fA-F]{32}$/.test(job.botId)) {
+        const customer = await custRepo.findOne({ where: { botId: job.botId, lineUserId: job.lineUserId } });
+        if (customer) {
+          customer.isBlocked = true;
+          customer.blockReason = body.reason || '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว';
+          await custRepo.save(customer);
+          console.log(`🚫 ปิดสถานะผู้ใช้ในตาราง Customers เป็น "บล็อก/ส่งไม่ได้แล้ว": ${job.lineUserId} (OA: ${job.botId})`);
+        }
+      }
+
+      console.log(`❌ ส่งข้อความล้มเหลว: ${job.lineUserId} (${body.reason})`);
+
+      return {
+        success: true,
+        completedCampaign: campaign.status === 'completed' ? campaign : null,
+        stoppedCampaign: campaign.status === 'stopped_error' ? campaign : null,
+      };
     });
+
+    if (txResult && txResult.success) {
+      if ((txResult as any).completedCampaign) {
+        this.checkAndSendTelegramReport((txResult as any).completedCampaign).catch(() => {});
+      } else if ((txResult as any).stoppedCampaign) {
+        this.checkAndSendTelegramReport((txResult as any).stoppedCampaign).catch(() => {});
+      }
+    }
+
+    if (txResult && !txResult.success) {
+      return txResult;
+    }
+
+    return { success: true };
   }
 
   // API สำหรับสั่งหยุดแคมเปญทันทีเมื่อโควต้าเต็ม หรือพบ Error ติดต่อกันเกิน 10 ครั้ง (Circuit Breaker พร้อม Fenced Stop Authority)
@@ -1231,7 +1286,7 @@ export class AppController {
       }
     }
 
-    return await this.campaignJobRepository.manager.transaction(async (manager) => {
+    const txResult = await this.campaignJobRepository.manager.transaction(async (manager) => {
       const jobRepo = manager.getRepository(CampaignJob);
       const campRepo = manager.getRepository(Campaign);
       const now = new Date();
@@ -1239,24 +1294,23 @@ export class AppController {
       let targetCampaignId = body?.campaignId;
 
       if (body?.jobId) {
+        // A. SELECT calling CampaignJob WITH pessimistic_write
         const callingJob = await jobRepo
           .createQueryBuilder('job')
+          .setLock('pessimistic_write')
           .where('job.id = :jobId', { jobId: body.jobId })
-          .andWhere('job.botId = :botId', { botId: body.botId!.trim() })
-          .andWhere(
-            '((job.status = :status AND job.leaseToken = :leaseToken AND job.leaseOwner = :leaseOwner AND job.leaseExpiresAt IS NOT NULL AND job.leaseExpiresAt > :now) OR (job.status = :failedStatus AND job.updatedAt >= :recentTime))',
-            {
-              status: 'processing',
-              leaseToken: body.leaseToken,
-              leaseOwner: workerInstance!.trim(),
-              now,
-              failedStatus: 'failed',
-              recentTime: new Date(Date.now() - 30000),
-            },
-          )
           .getOne();
 
-        if (!callingJob) {
+        // B. AFTER lock, revalidate active processing lease strictly (no recent-failed or historical bypass)
+        if (
+          !callingJob ||
+          callingJob.botId !== body.botId?.trim() ||
+          callingJob.status !== 'processing' ||
+          callingJob.leaseToken !== body.leaseToken ||
+          callingJob.leaseOwner !== workerInstance?.trim() ||
+          !callingJob.leaseExpiresAt ||
+          callingJob.leaseExpiresAt <= now
+        ) {
           if (res) res.status(HttpStatus.CONFLICT);
           return { success: false, status: 'lease_lost', message: 'Worker-driven stop rejected: stale or invalid lease' };
         }
@@ -1265,7 +1319,12 @@ export class AppController {
       }
 
       if (targetCampaignId) {
-        const campaign = await campRepo.findOne({ where: { id: targetCampaignId } });
+        // C. Lock Campaign row with pessimistic_write
+        const campaign = await campRepo.findOne({
+          where: { id: targetCampaignId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
         if (campaign) {
           let stopStatus = 'stopped_user';
           if (body?.limitReached) stopStatus = 'stopped_limit';
@@ -1274,6 +1333,7 @@ export class AppController {
           campaign.status = stopStatus;
           await campRepo.save(campaign);
 
+          // D. Only then stop campaign / clear remaining leases and mark remaining pending/processing jobs failed
           await jobRepo
             .createQueryBuilder()
             .update(CampaignJob)
@@ -1290,12 +1350,22 @@ export class AppController {
             .execute();
 
           console.log(`🛑 สั่งหยุดแคมเปญ "${campaign.name}": สถานะ ${stopStatus} (เหตุผล: ${body?.reason || 'ผู้ใช้สั่งหยุด'})`);
-          this.checkAndSendTelegramReport(campaign).catch(() => {});
+          return { success: true, stoppedCampaign: campaign };
         }
       }
 
       return { success: true };
     });
+
+    if (txResult && txResult.success && (txResult as any).stoppedCampaign) {
+      this.checkAndSendTelegramReport((txResult as any).stoppedCampaign).catch(() => {});
+    }
+
+    if (txResult && !txResult.success) {
+      return txResult;
+    }
+
+    return { success: true };
   }
 
   private async checkAndSendTelegramReport(campaign: Campaign) {

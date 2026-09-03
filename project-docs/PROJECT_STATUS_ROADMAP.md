@@ -129,7 +129,7 @@ The LineSync Plus safety model operates on strict **fail-closed** principles:
 
 ## 6. Problems Found & Work Packages
 
-Over the course of safety hardening, 25 work packages were identified, implemented, verified, and updated:
+Over the course of safety hardening, 26 work packages were identified, implemented, verified, and updated:
 
 1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard (CLOSED)**
 2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard (CLOSED)**
@@ -146,8 +146,9 @@ Over the course of safety hardening, 25 work packages were identified, implement
 13. **SAFE-WP001-R2 — Reservation Integrity + Truthful Protection Telemetry (CLOSED / PASS)**
 14. **SAFE-WP001-R3 — Active Worker Telemetry Heartbeat (CLOSED / PASS)**
 15. **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing (NOT CLOSED)**
-16. **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing (CLOSED / PASS)**
-17. **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop (READY_FOR_CHATGPT_REVIEW)**
+16. **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing (CORRECTED / SUPERSEDED BY R2-R3)**
+17. **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop (CORRECTIVE REQUIRED / NOT PASS)**
+18. **REL-WP002-R3 — Complete R2 Corrective Exactly (READY_FOR_CHATGPT_REVIEW)**
 
 ---
 
@@ -176,9 +177,10 @@ Over the course of safety hardening, 25 work packages were identified, implement
 - **OA-WP001 / OA-WP001-R1**: **CLOSED / PASS** (Accepted on Worker v28.5)
 - **SYNC-WP001 / R1..R5**: **CLOSED / PASS** (Accepted on Worker v28.8)
 - **SAFE-WP001 / R1..R3**: **CLOSED / PASS** (Accepted on Worker v28.12)
-- **REL-WP002**: **NOT CLOSED** (Lease infrastructure implemented; R1 & R2 correctives implemented; awaiting independent review)
-- **REL-WP002-R1**: **CLOSED / PASS**
-- **REL-WP002-R2**: **READY_FOR_CHATGPT_REVIEW**
+- **REL-WP002**: **NOT CLOSED** (Lease infrastructure implemented; R1/R2/R3 correctives implemented; awaiting independent review)
+- **REL-WP002-R1**: **CORRECTED / SUPERSEDED BY R2-R3**
+- **REL-WP002-R2**: **CORRECTIVE REQUIRED / NOT PASS**
+- **REL-WP002-R3**: **READY_FOR_CHATGPT_REVIEW**
 
 ---
 
@@ -201,8 +203,9 @@ Over the course of safety hardening, 25 work packages were identified, implement
   - `SYNC-WP001 / R1 / R2 / R3 / R4 / R5` (LINE OA Customer Directory Sync): **COMPLETED / CLOSED / PASS**
   - `SAFE-WP001 / R1 / R2 / R3` (LINE OA Account Protection & Send Compliance Guard): **CLOSED / PASS**
   - `REL-WP002` (Job Lease + Heartbeat + Stale Worker Fencing): **NOT CLOSED**
-  - `REL-WP002-R1` (Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing): **CLOSED / PASS**
-  - `REL-WP002-R2` (Serialize Lease Finalization and Circuit Breaker Stop): **READY_FOR_CHATGPT_REVIEW**
+  - `REL-WP002-R1` (Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing): **CORRECTED / SUPERSEDED BY R2-R3**
+  - `REL-WP002-R2` (Serialize Lease Finalization and Circuit Breaker Stop): **CORRECTIVE REQUIRED / NOT PASS**
+  - `REL-WP002-R3` (Complete R2 Corrective Exactly): **READY_FOR_CHATGPT_REVIEW**
   - `REL-WP003`: **NOT STARTED**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
 - **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
@@ -214,15 +217,15 @@ Over the course of safety hardening, 25 work packages were identified, implement
 
 ## 11. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 (REL-WP002-R2 READY_FOR_CHATGPT_REVIEW).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization, same-job finalization retry, circuit breaker stop serialization, and 211 unit tests.
+- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 (REL-WP002-R3 READY_FOR_CHATGPT_REVIEW).
+- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, customer DB rollback, circuit breaker inside markFail, and 236 unit tests.
 
 ---
 
 ## 12. Immediate Decision Gate
 
-Phase 0 REL-WP002 is NOT CLOSED; REL-WP002-R2 is READY_FOR_CHATGPT_REVIEW.
-Worker Version: 28.14 | Runtime Contract: 2 | Required Worker: 28.14
+Phase 0 REL-WP002 is NOT CLOSED; REL-WP002-R3 is READY_FOR_CHATGPT_REVIEW.
+Worker Version: 28.15 | Runtime Contract: 2 | Required Worker: 28.15
 SYNC-WP001 is CLOSED / PASS. OA-WP001 is CLOSED / PASS. REL-WP001 is CLOSED / PASS. SAFE-WP001 is CLOSED / PASS.
-Next Candidate: `REL-WP002-R2 Review` / `REL-WP003` (NOT STARTED — Project Owner authorization required).
+Next Candidate: `REL-WP002-R3 Review` / `REL-WP003` (NOT STARTED — Project Owner authorization required).
 Do NOT perform Live LINE UAT. Do NOT start `REL-WP003` automatically.

@@ -4,7 +4,7 @@
 ACTIVE_WORK_PACKAGE: NONE
 STATUS: AWAITING_AUTHORIZATION
 AUTHORIZED_BY: Project Owner
-NEXT_CANDIDATE: REL-WP002-R2 Review / REL-WP003
+NEXT_CANDIDATE: REL-WP002-R3 Review / REL-WP003
 NEXT_CANDIDATE_STATUS: NOT STARTED
 ```
 
@@ -13,9 +13,10 @@ NEXT_CANDIDATE_STATUS: NOT STARTED
 ## 📋 Work Package Status Summary
 
 - **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `NOT CLOSED`
-  - *Notes*: Lease infrastructure implemented; R1 & R2 correctives implemented; awaiting independent review
-- **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CLOSED / PASS`
-- **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `READY_FOR_CHATGPT_REVIEW`
+  - *Notes*: Lease infrastructure implemented; R1/R2/R3 correctives implemented; awaiting independent review
+- **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED BY R2-R3`
+- **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / NOT PASS`
+- **REL-WP002-R3 — Complete R2 Corrective Exactly**: `READY_FOR_CHATGPT_REVIEW`
 - **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `CLOSED / PASS`
   - **SAFE-WP001-R1**: `CLOSED / PASS`
   - **SAFE-WP001-R2**: `CLOSED / PASS`
@@ -26,9 +27,9 @@ NEXT_CANDIDATE_STATUS: NOT STARTED
 - **REL-WP003**: `NOT STARTED`
 
 ### Version Contracts
-- **Worker Version**: `28.14`
+- **Worker Version**: `28.15`
 - **Runtime Contract Version**: `2`
-- **Required Worker Version**: `28.14`
+- **Required Worker Version**: `28.15`
 
 ---
 

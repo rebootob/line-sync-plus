@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.14
+// @version      28.15
 // @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (REL-WP002 Durable Job Lease Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.14';
+    const WORKER_VERSION = '28.15';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -1930,28 +1930,18 @@
                 sessionStorage.setItem('linesync_error_cooldown_until', String(cooldownUntil));
                 publishAccountProtectionTelemetry(expectedJobBotId, 0).catch(() => {});
                 console.warn(`⚠️ เกิด Error สะสมติดต่อกันแล้ว ${consecutiveErrorCount}/10 รายการ (${reason}). คูลดาวน์ระบบ ${cooldownMs / 1000}s`);
+
+                if (consecutiveErrorCount >= 10) {
+                    console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! สั่งหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
+                }
             }
         }
 
-        if (!success && consecutiveErrorCount >= 10) {
-            console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! สั่งหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
-            try {
-                await fetchLeaseAPI('/campaign/stop', 'POST', {
-                    jobId: jobId,
-                    botId: expectedJobBotId,
-                    leaseToken: leaseToken,
-                    reason: '🚨 สคริปต์หยุดทำงานอัตโนมัติเนื่องจากพบ Error ติดต่อกันเกิน 10 รายการ',
-                    errorOverflow: true
-                });
-            } catch (e) {
-                console.warn('⚠️ [REL] Error triggering pre-finalization circuit breaker stop:', e);
-            }
-        }
-
-        await attemptFinalization(jobId, userId, success, reason, isBlocked, expectedJobBotId, leaseToken);
+        const isErrorOverflow = !success && consecutiveErrorCount >= 10;
+        await attemptFinalization(jobId, userId, success, reason, isBlocked, expectedJobBotId, leaseToken, isErrorOverflow);
     }
 
-    async function attemptFinalization(jobId, userId, success, reason, isBlocked, expectedJobBotId, leaseToken) {
+    async function attemptFinalization(jobId, userId, success, reason, isBlocked, expectedJobBotId, leaseToken, errorOverflow) {
         const rawExpires = sessionStorage.getItem('linesync_job_lease_expires_at');
         const knownExpiresAt = rawExpires ? parseInt(rawExpires, 10) : 0;
         if (knownExpiresAt > 0 && Date.now() >= knownExpiresAt) {
@@ -1966,7 +1956,18 @@
             // OA compatibility signature: fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, leaseToken: leaseToken })
             res = await fetchLeaseAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, leaseToken: leaseToken });
         } else {
-            res = await fetchLeaseAPI('/campaign/fail', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, leaseToken: leaseToken, reason: reason, isBlocked: isBlocked });
+            const failPayload = {
+                jobId: jobId,
+                userId: userId,
+                botId: expectedJobBotId,
+                leaseToken: leaseToken,
+                reason: reason,
+                isBlocked: isBlocked
+            };
+            if (errorOverflow) {
+                failPayload.errorOverflow = true;
+            }
+            res = await fetchLeaseAPI('/campaign/fail', 'POST', failPayload);
         }
 
         if (res.state === 'renewed' || (res.data && res.data.success === true)) {
@@ -1974,17 +1975,8 @@
             clearLocalActiveJobState();
             isExecutingJob = false;
 
-            if (consecutiveErrorCount >= 10) {
-                console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! ยืนยันหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
-                try {
-                    await fetchLeaseAPI('/campaign/stop', 'POST', {
-                        jobId: jobId,
-                        botId: expectedJobBotId,
-                        leaseToken: leaseToken,
-                        reason: '🚨 สคริปต์หยุดทำงานอัตโนมัติเนื่องจากพบ Error ติดต่อกันเกิน 10 รายการ',
-                        errorOverflow: true
-                    });
-                } catch (e) {}
+            if (errorOverflow) {
+                console.error("🚨 [CRITICAL] วงจรความปลอดภัยตัดการทำงาน (Circuit Breaker) สำเร็จ...");
                 safeClearSessionStorage();
                 alert('🚨 ระบบเซฟตี้หยุดสคริปต์อัตโนมัติ เนื่องจากพบ Error ติดต่อกันเกิน 10 รายการเพื่อความปลอดภัยของบัญชี LINE OA');
                 return;
@@ -2006,7 +1998,7 @@
         console.warn(`⚠️ [REL] Transient network error during finalization for job ${jobId}. Scheduling retry while lease remains valid...`);
         stopActiveFinalizationRetry();
         activeFinalizationRetryTimer = setTimeout(() => {
-            attemptFinalization(jobId, userId, success, reason, isBlocked, expectedJobBotId, leaseToken);
+            attemptFinalization(jobId, userId, success, reason, isBlocked, expectedJobBotId, leaseToken, errorOverflow);
         }, 1500);
     }
 
