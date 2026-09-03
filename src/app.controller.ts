@@ -853,22 +853,18 @@ export class AppController {
       return { status: 'empty', reason: 'Master Bot is Paused' };
     }
 
-    // G. Query candidate jobs (pending OR expired processing) (REL-WP003-R3A)
+    // G1. Safety Pre-pass: separately pre-scan ALL expired processing jobs (unlimited by pending queue take:100) (REL-WP003-R3B)
     const now = new Date();
     const nowMs = now.getTime();
     const staleFallbackTime = new Date(nowMs - 60000); // 60s fallback for legacy NULL lease
 
-    const candidateJobs = await this.campaignJobRepository.find({
+    const expiredProcessingJobs = await this.campaignJobRepository.find({
       where: [
-        { status: 'pending', botId: activeBotId },
         { status: 'processing', botId: activeBotId, leaseExpiresAt: LessThan(now) },
         { status: 'processing', botId: activeBotId, leaseExpiresAt: IsNull(), updatedAt: LessThan(staleFallbackTime) },
       ],
-      order: { createdAt: 'ASC' },
-      take: 100,
+      order: { updatedAt: 'ASC' },
     });
-
-    const expiredProcessingJobs = candidateJobs.filter((j) => j.status === 'processing');
 
     // 🛡️ REL-WP003-R3A Pre-pass: Quarantine ALL ambiguous expired processing jobs BEFORE selecting pending jobs
     for (const expJob of expiredProcessingJobs) {
@@ -998,6 +994,17 @@ export class AppController {
         await campRepo.save(lockedCamp);
       });
     }
+
+    // G2. Query candidate jobs for claiming (take: 100) (REL-WP003-R3B)
+    const candidateJobs = await this.campaignJobRepository.find({
+      where: [
+        { status: 'pending', botId: activeBotId },
+        { status: 'processing', botId: activeBotId, leaseExpiresAt: LessThan(now) },
+        { status: 'processing', botId: activeBotId, leaseExpiresAt: IsNull(), updatedAt: LessThan(staleFallbackTime) },
+      ],
+      order: { createdAt: 'ASC' },
+      take: 100,
+    });
 
     const seenJobIds = new Set<string>();
     const readyCandidates: { job: CampaignJob; campaign: Campaign }[] = [];

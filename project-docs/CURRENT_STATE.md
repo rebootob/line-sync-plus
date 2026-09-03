@@ -54,7 +54,7 @@
 
 ---
 
-## 🛡️ Durable Send-Part Ledger & Crash Safety (REL-WP003 STATUS: NOT CLOSED / CORRECTIVE REQUIRED; REL-WP003-R1 STATUS: CORRECTIVE REQUIRED / SUPERSEDED; REL-WP003-R2 STATUS: CORRECTIVE REQUIRED / SUPERSEDED; REL-WP003-R3A STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🛡️ Durable Send-Part Ledger & Crash Safety (REL-WP003 STATUS: NOT CLOSED / CORRECTIVE REQUIRED; REL-WP003-R1 STATUS: CORRECTIVE REQUIRED / SUPERSEDED; REL-WP003-R2 STATUS: CORRECTIVE REQUIRED / SUPERSEDED; REL-WP003-R3A STATUS: CORRECTIVE REQUIRED / SUPERSEDED; REL-WP003-R3B STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
@@ -62,7 +62,7 @@
 - **Core Safety Invariant**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
 - **Operational Policy**: Never automatically resend an ambiguous physical send.
 - **Implemented Architecture**:
-  - `campaign_send_parts` Entity & Table: Non-destructive migration from previous schema, composite uniqueness on `(jobId, partKey)`, legacy fields removed from TypeORM entity.
+  - `campaign_send_parts` Entity & Table: Non-destructive migration from previous schema, composite uniqueness on `(jobId, partKey)`, legacy fields removed from TypeORM entity, fail-closed legacy normalization without swallow.
   - State Machine: `pending` ➔ `armed` ➔ `dispatched` | `reconcile_required`.
   - Ephemeral `dispatchToken`: Generated during ARM phase, held in-memory only; never stored in localStorage/sessionStorage or logged.
   - Pre-Send `already_dispatched` Guard: If `armRes.state === 'already_dispatched'`, physical click / Enter is completely skipped.
@@ -75,10 +75,10 @@
     - `GET /api/campaign/reconciliation`: Inspection of quarantined campaigns/jobs/parts (loopback only, active OA, bot paused).
     - `POST /api/campaign/reconciliation/resolve`: Hard-fenced operator reconciliation actions (`confirmed_sent`, `confirmed_not_sent_retry`). Rejects `pending` and `dispatched` parts; requires job in `reconcile_required` with no active lease.
   - Crash Reconciliation & Quarantine:
-    - `getNextJob`: Pre-scan quarantines ALL ambiguous expired processing jobs to `reconcile_required` with `Campaign = paused_reconcile` before evaluating any pending jobs. Concurrency-safe auto-finalization of all-dispatched expired jobs inside one transaction with row locks.
+    - `getNextJob`: Safety pre-pass separately pre-scans ALL expired processing jobs (unlimited by `take: 100`) before selecting/claiming any pending job. Quarantines ambiguous parts to `reconcile_required` with `Campaign = paused_reconcile`. Concurrency-safe auto-finalization of all-dispatched expired jobs inside one transaction with row locks.
     - `resumeSavedActiveJob`: Queries authoritative send plan on page reload; if any part is `armed` or `reconcile_required`, immediately quarantines without physical resend.
     - `executeChatBot`: Skips already-`dispatched` parts.
-- **Validation**: 269/269 unit tests passing cleanly. No Live UAT performed.
+- **Validation**: 271/271 unit tests passing cleanly. No Live UAT performed.
 
 ---
 

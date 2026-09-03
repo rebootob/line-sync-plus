@@ -1,7 +1,7 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: REL-WP003-R3A
+ACTIVE_WORK_PACKAGE: REL-WP003-R3B
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
@@ -16,7 +16,8 @@ PHASE_0: IN PROGRESS
 - **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `NOT CLOSED / CORRECTIVE REQUIRED`
 - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
 - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
-- **REL-WP003-R3A — Backend Final Fencing Only**: `READY_FOR_CHATGPT_REVIEW`
+- **REL-WP003-R3A — Backend Final Fencing Only**: `CORRECTIVE REQUIRED / SUPERSEDED`
+- **REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration**: `READY_FOR_CHATGPT_REVIEW`
 - **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
 - **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
 - **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -36,12 +37,12 @@ PHASE_0: IN PROGRESS
 
 ---
 
-## 🛡️ REL-WP003-R3A Backend Final Fencing Architecture
+## 🛡️ REL-WP003-R3B Queue Prepass & Fail-Closed Ledger Migration Architecture
 
 > [!IMPORTANT]
 > **Crash-Safety Invariant**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
 > **Operational Policy**: Never automatically resend an ambiguous physical send.
-> **Testing Status**: No Live UAT performed. REL-WP003 remains NOT CLOSED / CORRECTIVE REQUIRED. Validated via 269 automated unit tests.
+> **Testing Status**: No Live UAT performed. REL-WP003 remains NOT CLOSED / CORRECTIVE REQUIRED. Validated via 271 automated unit tests.
 
 ### 1. Legacy Schema Migration
 - **Table**: `campaign_send_parts` migrated non-destructively.

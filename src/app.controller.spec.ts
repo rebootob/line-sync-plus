@@ -867,7 +867,7 @@ describe('AppController', () => {
       appController.toggleBotStatus({ enabled: true });
 
       // Mock job with matching botId
-      jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValueOnce([
+      jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([
         { id: 'j1', campaignId: 'c1', botId: 'U09d6b978fcbfb5275e533ca9b788eb22', lineUserId: 'U12345', status: 'pending', createdAt: new Date() }
       ] as any);
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValueOnce({
@@ -3816,6 +3816,38 @@ describe('AppController', () => {
       const controllerContent = fs.readFileSync('src/app.controller.ts', 'utf8');
       expect(controllerContent).not.toContain("@Post('campaign/send-part/quarantine')");
       expect(controllerContent).not.toContain('quarantineSendPart(');
+    });
+
+    it('16. /campaign/next separately pre-scans ALL expired processing jobs without take: 100 limit', async () => {
+      const findCalls: any[] = [];
+      jest.spyOn(mockCampaignJobRepo, 'find').mockImplementation((opts: any) => {
+        findCalls.push(opts);
+        return Promise.resolve([]);
+      });
+
+      await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
+
+      expect(findCalls.length).toBeGreaterThanOrEqual(2);
+      // Pre-pass call has NO take limit
+      const prePassCall = findCalls[0];
+      expect(prePassCall.take).toBeUndefined();
+      expect(prePassCall.order).toEqual({ updatedAt: 'ASC' });
+
+      // Subsequent candidate selection call has take: 100
+      const candidateCall = findCalls[1];
+      expect(candidateCall.take).toBe(100);
+      expect(candidateCall.order).toEqual({ createdAt: 'ASC' });
+    });
+
+    it('17. legacy send-ledger normalization in database-init.service.ts fails closed (no catch-swallow)', () => {
+      const dbInitContent = fs.readFileSync('src/database-init.service.ts', 'utf8');
+      // Verify normalization DO $$ query is not preceded by try { or swallowed by catch
+      const normCommentIndex = dbInitContent.indexOf('R3B: Legacy send-ledger normalization must FAIL CLOSED');
+      expect(normCommentIndex).toBeGreaterThan(0);
+      const afterComment = dbInitContent.substring(normCommentIndex, normCommentIndex + 500);
+      expect(afterComment).not.toContain('try {');
+      expect(afterComment).toContain('await this.dataSource.query(`');
+      expect(afterComment).toContain('DO $$');
     });
   });
 });

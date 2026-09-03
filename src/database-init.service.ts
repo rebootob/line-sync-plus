@@ -222,32 +222,30 @@ export class DatabaseInitService implements OnModuleInit {
         await this.dataSource.query(`ALTER TABLE campaign_send_parts ALTER COLUMN "sentAt" DROP NOT NULL;`);
       } catch (e) {}
 
-      // 🛡️ R3A: Non-data-destructive migration: normalize legacy data BEFORE enforcing unique index
-      try {
-        await this.dataSource.query(`
-          DO $$
-          BEGIN
-            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'partType') THEN
-              UPDATE campaign_send_parts
-              SET "partKey" = CASE WHEN "partType" = 'image' THEN 'image' ELSE 'text' END
-              WHERE "partType" IS NOT NULL;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'partIndex') THEN
-              UPDATE campaign_send_parts
-              SET "partOrder" = "partIndex"
-              WHERE "partIndex" IS NOT NULL;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'sentAt') THEN
-              UPDATE campaign_send_parts
-              SET "dispatchedAt" = COALESCE("dispatchedAt", "sentAt")
-              WHERE "sentAt" IS NOT NULL;
-            END IF;
+      // 🛡️ R3B: Legacy send-ledger normalization must FAIL CLOSED (do not swallow errors)
+      await this.dataSource.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'partType') THEN
             UPDATE campaign_send_parts
-            SET "status" = 'dispatched'
-            WHERE "status" = 'sent';
-          END $$;
-        `);
-      } catch (e) {}
+            SET "partKey" = CASE WHEN "partType" = 'image' THEN 'image' ELSE 'text' END
+            WHERE "partType" IS NOT NULL;
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'partIndex') THEN
+            UPDATE campaign_send_parts
+            SET "partOrder" = "partIndex"
+            WHERE "partIndex" IS NOT NULL;
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'sentAt') THEN
+            UPDATE campaign_send_parts
+            SET "dispatchedAt" = COALESCE("dispatchedAt", "sentAt")
+            WHERE "sentAt" IS NOT NULL;
+          END IF;
+          UPDATE campaign_send_parts
+          SET "status" = 'dispatched'
+          WHERE "status" = 'sent';
+        END $$;
+      `);
 
       try {
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_customers_botId" ON customers ("botId");`);

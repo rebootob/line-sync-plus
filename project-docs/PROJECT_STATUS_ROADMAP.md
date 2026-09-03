@@ -228,7 +228,8 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety`: **NOT CLOSED / CORRECTIVE REQUIRED**
   - `REL-WP003-R1 — Critical Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
   - `REL-WP003-R2 — Final Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP003-R3A — Backend Final Fencing Only`: **READY_FOR_CHATGPT_REVIEW**
+  - `REL-WP003-R3A — Backend Final Fencing Only`: **CORRECTIVE REQUIRED / SUPERSEDED**
+  - `REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration`: **READY_FOR_CHATGPT_REVIEW**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
 - **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
@@ -239,14 +240,14 @@ Over the course of safety hardening, 26 work packages were identified, implement
 
 ## 11. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003-R3A READY_FOR_CHATGPT_REVIEW).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, operator reconciliation dashboard UI, and 269 passing local unit tests.
+- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003-R3B READY_FOR_CHATGPT_REVIEW).
+- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, operator reconciliation dashboard UI, and 271 passing local unit tests.
 
 ---
 
 ## 12. Immediate Decision Gate
 
-Phase 0 REL-WP003-R3A is READY_FOR_CHATGPT_REVIEW.
+Phase 0 REL-WP003-R3B is READY_FOR_CHATGPT_REVIEW.
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
 No Live LINE UAT. Do NOT send any additional LINE messages. Ready for ChatGPT review.
