@@ -853,32 +853,158 @@ export class AppController {
       return { status: 'empty', reason: 'Master Bot is Paused' };
     }
 
-    // G. Query candidate jobs (pending OR expired processing)
+    // G. Query candidate jobs (pending OR expired processing) (REL-WP003-R3A)
     const now = new Date();
     const nowMs = now.getTime();
     const staleFallbackTime = new Date(nowMs - 60000); // 60s fallback for legacy NULL lease
 
-    const pendingJobs = await this.campaignJobRepository.find({
-      where: { status: 'pending', botId: activeBotId },
+    const candidateJobs = await this.campaignJobRepository.find({
+      where: [
+        { status: 'pending', botId: activeBotId },
+        { status: 'processing', botId: activeBotId, leaseExpiresAt: LessThan(now) },
+        { status: 'processing', botId: activeBotId, leaseExpiresAt: IsNull(), updatedAt: LessThan(staleFallbackTime) },
+      ],
       order: { createdAt: 'ASC' },
       take: 100,
     });
 
-    const expiredProcessingJobs = await this.campaignJobRepository.find({
-      where: [
-        { status: 'processing', botId: activeBotId, leaseExpiresAt: LessThan(now) },
-        { status: 'processing', botId: activeBotId, leaseExpiresAt: IsNull(), updatedAt: LessThan(staleFallbackTime) },
-      ],
-      order: { updatedAt: 'ASC' },
-      take: 50,
-    });
+    const expiredProcessingJobs = candidateJobs.filter((j) => j.status === 'processing');
 
-    const candidateJobs = [...pendingJobs, ...expiredProcessingJobs];
+    // 🛡️ REL-WP003-R3A Pre-pass: Quarantine ALL ambiguous expired processing jobs BEFORE selecting pending jobs
+    for (const expJob of expiredProcessingJobs) {
+      const parts = await this.campaignSendPartRepository.find({
+        where: { jobId: expJob.id },
+      });
+      const anyAmbiguous = parts.some((p) => p.status === 'armed' || p.status === 'reconcile_required');
+      if (anyAmbiguous) {
+        await this.campaignJobRepository.manager.transaction(async (manager) => {
+          const jobRepo = manager.getRepository(CampaignJob);
+          const campRepo = manager.getRepository(Campaign);
+          const partRepo = manager.getRepository(CampaignSendPart);
+
+          const lockedJob = await jobRepo.findOne({
+            where: { id: expJob.id },
+            lock: { mode: 'pessimistic_write' },
+          });
+          if (!lockedJob || lockedJob.status !== 'processing') return;
+
+          for (const p of parts) {
+            if (p.status === 'armed') {
+              p.status = 'reconcile_required';
+              p.reconcileReason = 'quarantined_during_queue_scan';
+              await partRepo.save(p);
+            }
+          }
+
+          lockedJob.status = 'reconcile_required';
+          lockedJob.leaseToken = null;
+          lockedJob.leaseOwner = null;
+          lockedJob.leaseExpiresAt = null;
+          lockedJob.leaseHeartbeatAt = null;
+          lockedJob.errorReason = 'Quarantined during queue pre-pass due to ambiguous arm state';
+          await jobRepo.save(lockedJob);
+
+          expJob.status = 'reconcile_required';
+
+          const lockedCamp = await campRepo.findOne({
+            where: { id: lockedJob.campaignId },
+            lock: { mode: 'pessimistic_write' },
+          });
+          if (lockedCamp) {
+            lockedCamp.status = 'paused_reconcile';
+            await campRepo.save(lockedCamp);
+          }
+        });
+      }
+    }
+
+    // 🛡️ REL-WP003-R3A Pre-pass: Auto-finalize all-dispatched expired processing jobs inside ONE transaction
+    for (const expJob of expiredProcessingJobs) {
+      if (expJob.status === 'reconcile_required') continue;
+
+      const parts = await this.campaignSendPartRepository.find({
+        where: { jobId: expJob.id },
+      });
+      const hasDispatched = parts.some((p) => p.status === 'dispatched');
+      if (!hasDispatched) continue;
+
+      await this.campaignJobRepository.manager.transaction(async (manager) => {
+        const jobRepo = manager.getRepository(CampaignJob);
+        const campRepo = manager.getRepository(Campaign);
+        const partRepo = manager.getRepository(CampaignSendPart);
+
+        // 1. lock CampaignJob pessimistic_write
+        const lockedJob = await jobRepo.findOne({
+          where: { id: expJob.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        // 2. re-read/revalidate: status still processing, lease still expired/stale
+        if (!lockedJob || lockedJob.status !== 'processing') {
+          return;
+        }
+        const isExpired =
+          (lockedJob.leaseExpiresAt && lockedJob.leaseExpiresAt <= now) ||
+          (!lockedJob.leaseExpiresAt && lockedJob.updatedAt <= staleFallbackTime);
+        if (!isExpired) {
+          return;
+        }
+
+        // 6. lock Campaign pessimistic_write
+        const lockedCamp = await campRepo.findOne({
+          where: { id: lockedJob.campaignId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!lockedCamp) return;
+
+        // 3. re-read exact required send ledger inside transaction
+        const partsInside = await partRepo.find({
+          where: { jobId: lockedJob.id },
+        });
+
+        // 4. require exact required part set = dispatched
+        const requiredPlan = getRequiredSendParts(lockedCamp.messageType || 'text');
+        const allDispatched =
+          requiredPlan.length > 0 &&
+          partsInside.length === requiredPlan.length &&
+          requiredPlan.every((req) => {
+            const matching = partsInside.find((p) => p.partKey === req.partKey);
+            return matching && matching.status === 'dispatched';
+          });
+
+        if (!allDispatched) {
+          return;
+        }
+
+        // 5. transition Job -> success exactly once
+        lockedJob.status = 'success';
+        lockedJob.sentAt = now;
+        lockedJob.leaseToken = null;
+        lockedJob.leaseOwner = null;
+        lockedJob.leaseExpiresAt = null;
+        lockedJob.leaseHeartbeatAt = null;
+        await jobRepo.save(lockedJob);
+
+        expJob.status = 'success';
+
+        // 7. increment successCount exactly once
+        lockedCamp.successCount = (lockedCamp.successCount || 0) + 1;
+        const remainingJobs = await jobRepo.count({
+          where: { campaignId: lockedCamp.id, status: In(['pending', 'processing']) },
+        });
+        if (remainingJobs === 0) {
+          lockedCamp.status = 'completed';
+        }
+        await campRepo.save(lockedCamp);
+      });
+    }
+
     const seenJobIds = new Set<string>();
     const readyCandidates: { job: CampaignJob; campaign: Campaign }[] = [];
 
     for (const j of candidateJobs) {
       if (!j.botId || j.botId !== activeBotId) continue;
+      if (j.status !== 'pending' && j.status !== 'processing') continue;
       if (seenJobIds.has(j.id)) continue;
       seenJobIds.add(j.id);
 
@@ -903,71 +1029,9 @@ export class AppController {
 
       if (targetCampaign.status === 'paused_reconcile') continue;
 
-      // 🛡️ REL-WP003-R2 Inspect existing send parts for expired processing jobs before reclaim
       const existingParts = await this.campaignSendPartRepository.find({
         where: { jobId: selectedJob.id },
       });
-
-      if (selectedJob.status === 'processing') {
-        const anyAmbiguous = existingParts.some((p) => p.status === 'armed' || p.status === 'reconcile_required');
-        if (anyAmbiguous) {
-          // Quarantine: NEVER automatically resend an ambiguous physical send!
-          await this.campaignJobRepository.manager.transaction(async (manager) => {
-            const jobRepo = manager.getRepository(CampaignJob);
-            const campRepo = manager.getRepository(Campaign);
-
-            selectedJob.status = 'reconcile_required';
-            selectedJob.leaseToken = null;
-            selectedJob.leaseOwner = null;
-            selectedJob.leaseExpiresAt = null;
-            selectedJob.leaseHeartbeatAt = null;
-            selectedJob.errorReason = 'Quarantined during queue scan due to ambiguous arm state';
-            await jobRepo.save(selectedJob);
-
-            const c = await campRepo.findOne({ where: { id: targetCampaign.id }, lock: { mode: 'pessimistic_write' } });
-            if (c) {
-              c.status = 'paused_reconcile';
-              await campRepo.save(c);
-            }
-          });
-          continue;
-        }
-
-        // Auto-Reconcile if all backend-required parts were already dispatched
-        const requiredPlan = getRequiredSendParts(targetCampaign.messageType || 'text');
-        const allDispatched = requiredPlan.length > 0 && requiredPlan.every((req) => {
-          const matching = existingParts.find((p) => p.partKey === req.partKey);
-          return matching && matching.status === 'dispatched';
-        });
-
-        if (allDispatched) {
-          await this.campaignJobRepository.manager.transaction(async (manager) => {
-            const jobRepo = manager.getRepository(CampaignJob);
-            const campRepo = manager.getRepository(Campaign);
-
-            selectedJob.status = 'success';
-            selectedJob.sentAt = now;
-            selectedJob.leaseToken = null;
-            selectedJob.leaseOwner = null;
-            selectedJob.leaseExpiresAt = null;
-            selectedJob.leaseHeartbeatAt = null;
-            await jobRepo.save(selectedJob);
-
-            const c = await campRepo.findOne({ where: { id: targetCampaign.id }, lock: { mode: 'pessimistic_write' } });
-            if (c) {
-              c.successCount = (c.successCount || 0) + 1;
-              const remainingJobs = await jobRepo.count({
-                where: { campaignId: c.id, status: In(['pending', 'processing']) },
-              });
-              if (remainingJobs === 0) {
-                c.status = 'completed';
-              }
-              await campRepo.save(c);
-            }
-          });
-          continue; // Move to next job!
-        }
-      }
 
       const newLeaseToken = randomUUID();
       const leaseExpiresAt = new Date(nowMs + 60000);
@@ -1215,83 +1279,6 @@ export class AppController {
       isFullyDispatched,
       hasQuarantine,
     };
-  }
-
-  // API สำหรับสั่ง Quarantine เมื่อตรวจพบความกำกวมตอนโหลดหน้า/Resume (REL-WP003-R2)
-  @Post('campaign/send-part/quarantine')
-  async quarantineSendPart(
-    @Headers('x-linesync-worker-version') workerVersion: string | undefined,
-    @Headers('x-linesync-oa-context') workerOaHeader: string | undefined,
-    @Headers('x-linesync-worker-instance') workerInstance: string | undefined,
-    @Body() body: { jobId?: string; botId?: string; leaseToken?: string; reason?: string },
-    @Res({ passthrough: true }) res?: Response,
-  ) {
-    if (!workerVersion || workerVersion.trim() !== REQUIRED_WORKER_VERSION) {
-      if (res) res.status(HttpStatus.CONFLICT);
-      return { success: false, status: 'version_mismatch' };
-    }
-
-    if (!workerOaHeader || !/^U[0-9a-fA-F]{32}$/.test(workerOaHeader.trim())) {
-      if (res) res.status(HttpStatus.CONFLICT);
-      return { success: false, status: 'missing_oa_context' };
-    }
-
-    if (!this.isValidWorkerInstance(workerInstance)) {
-      if (res) res.status(HttpStatus.CONFLICT);
-      return { success: false, status: 'missing_worker_instance' };
-    }
-
-    if (!body || !body.jobId || !body.botId) {
-      if (res) res.status(HttpStatus.BAD_REQUEST);
-      return { success: false, message: 'Missing required parameters' };
-    }
-
-    const cleanJobId = body.jobId.trim();
-    const cleanBodyBotId = body.botId.trim();
-
-    return await this.campaignJobRepository.manager.transaction(async (manager) => {
-      const jobRepo = manager.getRepository(CampaignJob);
-      const campRepo = manager.getRepository(Campaign);
-      const partRepo = manager.getRepository(CampaignSendPart);
-
-      const job = await jobRepo.findOne({
-        where: { id: cleanJobId, botId: cleanBodyBotId },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!job) {
-        if (res) res.status(HttpStatus.NOT_FOUND);
-        return { success: false, message: 'Job not found' };
-      }
-
-      const existingParts = await partRepo.find({ where: { jobId: cleanJobId } });
-      for (const ep of existingParts) {
-        if (ep.status === 'armed') {
-          ep.status = 'reconcile_required';
-          ep.reconcileReason = body.reason || 'quarantined_by_worker_request';
-          await partRepo.save(ep);
-        }
-      }
-
-      job.status = 'reconcile_required';
-      job.errorReason = body.reason || 'Quarantined by worker request';
-      job.leaseToken = null;
-      job.leaseOwner = null;
-      job.leaseExpiresAt = null;
-      job.leaseHeartbeatAt = null;
-      await jobRepo.save(job);
-
-      const campLocked = await campRepo.findOne({
-        where: { id: job.campaignId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (campLocked) {
-        campLocked.status = 'paused_reconcile';
-        await campRepo.save(campLocked);
-      }
-
-      return { success: true, status: 'quarantined', jobId: cleanJobId };
-    });
   }
 
   // API สำหรับ ARM ก่อนส่งชิ้นส่วนจริง (REL-WP003-R1)

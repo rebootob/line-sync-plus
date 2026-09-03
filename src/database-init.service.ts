@@ -222,7 +222,7 @@ export class DatabaseInitService implements OnModuleInit {
         await this.dataSource.query(`ALTER TABLE campaign_send_parts ALTER COLUMN "sentAt" DROP NOT NULL;`);
       } catch (e) {}
 
-      // 🛡️ R2: Non-data-destructive migration for legacy rows
+      // 🛡️ R3A: Non-data-destructive migration: normalize legacy data BEFORE enforcing unique index
       try {
         await this.dataSource.query(`
           DO $$
@@ -230,17 +230,17 @@ export class DatabaseInitService implements OnModuleInit {
             IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'partType') THEN
               UPDATE campaign_send_parts
               SET "partKey" = CASE WHEN "partType" = 'image' THEN 'image' ELSE 'text' END
-              WHERE "partKey" IS NULL;
+              WHERE "partType" IS NOT NULL;
             END IF;
             IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'partIndex') THEN
               UPDATE campaign_send_parts
-              SET "partOrder" = COALESCE("partOrder", "partIndex", 0)
-              WHERE "partOrder" IS NULL;
+              SET "partOrder" = "partIndex"
+              WHERE "partIndex" IS NOT NULL;
             END IF;
             IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'sentAt') THEN
               UPDATE campaign_send_parts
               SET "dispatchedAt" = COALESCE("dispatchedAt", "sentAt")
-              WHERE "dispatchedAt" IS NULL AND "status" = 'sent';
+              WHERE "sentAt" IS NOT NULL;
             END IF;
             UPDATE campaign_send_parts
             SET "status" = 'dispatched'
@@ -258,12 +258,15 @@ export class DatabaseInitService implements OnModuleInit {
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "idx_campaign_jobs_bot_status_lease" ON campaign_jobs ("botId", "status", "leaseExpiresAt");`);
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_send_parts_jobId" ON campaign_send_parts ("jobId");`);
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_send_parts_botId_status" ON campaign_send_parts ("botId", "status");`);
-        await this.dataSource.query(`CREATE UNIQUE INDEX IF NOT EXISTS "UQ_campaign_send_parts_job_partKey" ON campaign_send_parts ("jobId", "partKey");`);
       } catch (e) {}
+
+      // 🛡️ R3A: Enforce authoritative uniqueness - do NOT swallow failure (must fail startup rather than continue unsafely)
+      await this.dataSource.query(`CREATE UNIQUE INDEX IF NOT EXISTS "UQ_campaign_send_parts_job_partKey" ON campaign_send_parts ("jobId", "partKey");`);
 
       this.logger.log('✅ Database schema verified/initialized successfully.');
     } catch (error) {
       this.logger.error('❌ Failed to initialize database schema:', error);
+      throw error;
     }
   }
 }

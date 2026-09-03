@@ -21,11 +21,12 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `REL-WP003-R2`
+* **ACTIVE_WORK_PACKAGE**: `REL-WP003-R3A`
 * **PHASE_0**: `IN PROGRESS`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `NOT CLOSED / CORRECTIVE REQUIRED`
 * **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
-* **REL-WP003-R2 — Final Crash-Safety Corrective**: `READY_FOR_CHATGPT_REVIEW`
+* **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
+* **REL-WP003-R3A — Backend Final Fencing Only**: `READY_FOR_CHATGPT_REVIEW`
 * **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
 * **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
 * **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`

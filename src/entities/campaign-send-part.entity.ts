@@ -51,22 +51,6 @@ export class CampaignSendPart {
   @Column({ type: 'varchar', length: 50, default: 'pending' })
   status: string; // 'pending' | 'armed' | 'dispatched' | 'reconcile_required'
 
-  // Legacy compatibility fields (REL-WP003 -> R2)
-  @Column({ type: 'integer', nullable: true })
-  partIndex?: number | null;
-
-  @Column({ type: 'varchar', length: 50, nullable: true })
-  partType?: string | null;
-
-  @Column({ type: 'integer', nullable: true })
-  totalParts?: number | null;
-
-  @Column({ type: 'timestamp without time zone', nullable: true })
-  sentAt?: Date | null;
-
-  @Column({ type: 'varchar', length: 64, nullable: true })
-  leaseToken?: string | null;
-
   @CreateDateColumn({ type: 'timestamp without time zone' })
   createdAt: Date;
 

@@ -73,7 +73,7 @@ describe('AppController', () => {
   const mockCampaignSendPartRepo = {
     find: jest.fn().mockImplementation((query?: any) => {
       const stack = new Error().stack || '';
-      if (stack.includes('markFail') || stack.includes('getNextJob')) {
+      if (stack.includes('markFail')) {
         return Promise.resolve([]);
       }
       const jobId = query?.where?.jobId || 'j1';
@@ -3213,6 +3213,7 @@ describe('AppController', () => {
       };
 
       jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([mockJob] as any);
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
       const mockCamp = { id: 'c1', botId: testBotId, messageType: 'text', status: 'processing' };
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
 
@@ -3447,6 +3448,7 @@ describe('AppController', () => {
     let mockRes: any;
 
     beforeEach(() => {
+      AppController.isBotEnabled = true;
       mockRes = {
         status: jest.fn().mockImplementation((code) => {
           mockRes.statusCode = code;
@@ -3469,6 +3471,9 @@ describe('AppController', () => {
       expect(dbInitContent).toContain(`SET "dispatchedAt" = COALESCE("dispatchedAt", "sentAt")`);
       expect(dbInitContent).toContain(`SET "status" = 'dispatched'`);
       expect(dbInitContent).toContain(`WHERE "status" = 'sent'`);
+      expect(dbInitContent).toContain(`WHERE "partType" IS NOT NULL`);
+      expect(dbInitContent).toContain(`WHERE "partIndex" IS NOT NULL`);
+      expect(dbInitContent).toContain(`WHERE "sentAt" IS NOT NULL`);
     });
 
     it('2. already_dispatched response skips physical send completely (zero clicks, zero enter)', () => {
@@ -3689,6 +3694,128 @@ describe('AppController', () => {
 
       expect(successRes.success).toBe(true);
       expect(successRes.status).toBe('dispatched');
+    });
+
+    it('11. ambiguity ordering: expired armed Job A quarantines campaign first, pending Job B in same campaign cannot be claimed', async () => {
+      const pastExpiry = new Date(Date.now() - 5000);
+
+      // Job A: expired processing + armed part
+      const mockJobA = {
+        id: 'jobA',
+        campaignId: 'c_shared',
+        botId: testBotId,
+        status: 'processing',
+        leaseToken: 'tok_old',
+        leaseOwner: validInstance,
+        leaseExpiresAt: pastExpiry,
+      };
+
+      // Job B: pending job in SAME campaign
+      const mockJobB = {
+        id: 'jobB',
+        campaignId: 'c_shared',
+        botId: testBotId,
+        status: 'pending',
+        leaseToken: null,
+      };
+
+      const mockSharedCamp = {
+        id: 'c_shared',
+        botId: testBotId,
+        messageType: 'text',
+        status: 'processing',
+      };
+
+      const mockArmedPart = {
+        id: 'sp_arm',
+        jobId: 'jobA',
+        partKey: 'text',
+        status: 'armed',
+      };
+
+      // candidateJobs query returns both Job A (expired processing) and Job B (pending)
+      jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([mockJobA, mockJobB] as any);
+
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockSharedCamp as any);
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJobA as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockImplementation((query?: any) => {
+        if (query?.where?.jobId === 'jobA') {
+          return Promise.resolve([mockArmedPart]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const nextRes: any = await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
+
+      // Must be empty: Job B MUST NOT be claimed because Campaign was quarantined to paused_reconcile
+      expect(nextRes.status).toBe('empty');
+      expect(mockJobA.status).toBe('reconcile_required');
+      expect(mockSharedCamp.status).toBe('paused_reconcile');
+    });
+
+    it('12. all-dispatched auto-finalize concurrency: second concurrent worker observes terminal job and performs zero counter increment', async () => {
+      const pastExpiry = new Date(Date.now() - 5000);
+      const mockCamp = {
+        id: 'c1',
+        botId: testBotId,
+        messageType: 'text',
+        status: 'processing',
+        successCount: 5,
+      };
+      const mockJob = {
+        id: 'job_done',
+        campaignId: 'c1',
+        botId: testBotId,
+        status: 'processing',
+        leaseToken: 'tok_old',
+        leaseExpiresAt: pastExpiry,
+      };
+      const mockPart = {
+        id: 'sp1',
+        jobId: 'job_done',
+        partKey: 'text',
+        status: 'dispatched',
+      };
+
+      jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([mockJob] as any);
+
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([mockPart as any]);
+      jest.spyOn(mockCampaignJobRepo, 'count').mockResolvedValue(1);
+
+      // First run: transitions job to success and increments successCount
+      await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
+
+      expect(mockJob.status).toBe('success');
+      expect(mockCamp.successCount).toBe(6);
+
+      // Second concurrent worker arrives: job is already status 'success' (not 'processing')
+      // Running again must perform ZERO increment
+      await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
+
+      expect(mockCamp.successCount).toBe(6); // Did NOT increment again!
+    });
+
+    it('13. CampaignSendPart TypeORM entity removes legacy compatibility fields', () => {
+      const entityContent = fs.readFileSync('src/entities/campaign-send-part.entity.ts', 'utf8');
+      expect(entityContent).not.toContain('partIndex?:');
+      expect(entityContent).not.toContain('partType?:');
+      expect(entityContent).not.toContain('totalParts?:');
+      expect(entityContent).not.toContain('sentAt?:');
+      expect(entityContent).not.toContain('leaseToken?:');
+    });
+
+    it('14. database-init.service.ts enforces unique index and fails startup on error', () => {
+      const dbInitContent = fs.readFileSync('src/database-init.service.ts', 'utf8');
+      expect(dbInitContent).toContain('await this.dataSource.query(`CREATE UNIQUE INDEX IF NOT EXISTS "UQ_campaign_send_parts_job_partKey"');
+      expect(dbInitContent).toContain('throw error;');
+    });
+
+    it('15. POST /campaign/send-part/quarantine endpoint is removed', () => {
+      const controllerContent = fs.readFileSync('src/app.controller.ts', 'utf8');
+      expect(controllerContent).not.toContain("@Post('campaign/send-part/quarantine')");
+      expect(controllerContent).not.toContain('quarantineSendPart(');
     });
   });
 });

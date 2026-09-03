@@ -203,7 +203,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
 - **CRITICAL**: The repository `rebootob/line-sync-plus` is **PUBLIC**.
 - **PROHIBITED**: Under no circumstances may `.env` files, API keys, passwords, database credentials, access tokens, refresh tokens, private keys, or LINE channel secrets be committed or pushed to Git.
 
-### Crash Safety Boundary Mandate (`REL-WP003-R2`)
+### Crash Safety Boundary Mandate (`REL-WP003-R3A`)
 - **Core Truth**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
 - **Operational Policy**: Never automatically resend an ambiguous physical send.
 - **Ambiguity Quarantine**: Jobs discovering `armed` or `reconcile_required` states are quarantined to `paused_reconcile` until operator review.
@@ -227,7 +227,8 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `REL-WP002-R3` (Complete R2 Corrective Exactly): **CLOSED / PASS**
   - `REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety`: **NOT CLOSED / CORRECTIVE REQUIRED**
   - `REL-WP003-R1 — Critical Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP003-R2 — Final Crash-Safety Corrective`: **READY_FOR_CHATGPT_REVIEW**
+  - `REL-WP003-R2 — Final Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
+  - `REL-WP003-R3A — Backend Final Fencing Only`: **READY_FOR_CHATGPT_REVIEW**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
 - **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
@@ -238,14 +239,14 @@ Over the course of safety hardening, 26 work packages were identified, implement
 
 ## 11. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003-R2 READY_FOR_CHATGPT_REVIEW).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, operator reconciliation dashboard UI, and 264 passing local unit tests.
+- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003-R3A READY_FOR_CHATGPT_REVIEW).
+- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, operator reconciliation dashboard UI, and 269 passing local unit tests.
 
 ---
 
 ## 12. Immediate Decision Gate
 
-Phase 0 REL-WP003-R2 is READY_FOR_CHATGPT_REVIEW.
+Phase 0 REL-WP003-R3A is READY_FOR_CHATGPT_REVIEW.
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
 No Live LINE UAT. Do NOT send any additional LINE messages. Ready for ChatGPT review.
