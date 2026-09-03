@@ -1,7 +1,8 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index, Unique } from 'typeorm';
 
 @Entity('campaign_send_parts')
-@Unique(['jobId', 'partIndex'])
+@Unique(['jobId', 'partKey'])
+@Index(['botId', 'status'])
 export class CampaignSendPart {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -20,23 +21,35 @@ export class CampaignSendPart {
   @Column({ type: 'varchar', length: 50 })
   lineUserId: string;
 
-  @Column({ type: 'integer', default: 0 })
-  partIndex: number;
-
   @Column({ type: 'varchar', length: 50 })
-  partType: string;
+  partKey: string; // 'image' | 'text'
 
-  @Column({ type: 'integer', default: 1 })
-  totalParts: number;
+  @Column({ type: 'integer', default: 0 })
+  partOrder: number;
 
-  @Column({ type: 'varchar', length: 50, default: 'sent' })
-  status: string;
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  armRequestId: string | null;
 
-  @Column({ type: 'timestamp without time zone', default: () => 'CURRENT_TIMESTAMP' })
-  sentAt: Date;
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  dispatchToken: string | null;
 
-  @Column({ type: 'varchar', length: 64, nullable: true })
-  leaseToken: string | null;
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  dispatchOwner: string | null;
+
+  @Column({ type: 'timestamp without time zone', nullable: true })
+  armedAt: Date | null;
+
+  @Column({ type: 'timestamp without time zone', nullable: true })
+  dispatchedAt: Date | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  reconcileReason: string | null;
+
+  @Column({ type: 'timestamp without time zone', nullable: true })
+  resolvedAt: Date | null;
+
+  @Column({ type: 'varchar', length: 50, default: 'pending' })
+  status: string; // 'pending' | 'armed' | 'dispatched' | 'reconcile_required'
 
   @CreateDateColumn({ type: 'timestamp without time zone' })
   createdAt: Date;

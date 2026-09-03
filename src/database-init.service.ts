@@ -160,7 +160,7 @@ export class DatabaseInitService implements OnModuleInit {
         ON CONFLICT ("id") DO NOTHING;
       `);
 
-      // 🛡️ REL-WP003 Durable Send-Part Ledger Migration
+      // 🛡️ REL-WP003-R1 Durable Send-Part Ledger Migration (ARM + CONFIRM)
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS campaign_send_parts (
           "id" uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -168,17 +168,34 @@ export class DatabaseInitService implements OnModuleInit {
           "campaignId" character varying(255) NOT NULL,
           "botId" character varying(64) NOT NULL,
           "lineUserId" character varying(50) NOT NULL,
-          "partIndex" integer NOT NULL DEFAULT 0,
-          "partType" character varying(50) NOT NULL,
-          "totalParts" integer NOT NULL DEFAULT 1,
-          "status" character varying(50) NOT NULL DEFAULT 'sent',
-          "sentAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
-          "leaseToken" character varying(64),
+          "partKey" character varying(50) NOT NULL DEFAULT 'text',
+          "partOrder" integer NOT NULL DEFAULT 0,
+          "armRequestId" character varying(128),
+          "dispatchToken" character varying(128),
+          "dispatchOwner" character varying(128),
+          "armedAt" TIMESTAMP WITHOUT TIME ZONE,
+          "dispatchedAt" TIMESTAMP WITHOUT TIME ZONE,
+          "reconcileReason" character varying(255),
+          "resolvedAt" TIMESTAMP WITHOUT TIME ZONE,
+          "status" character varying(50) NOT NULL DEFAULT 'pending',
           "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
           "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
           CONSTRAINT "PK_campaign_send_parts_id" PRIMARY KEY ("id")
         );
       `);
+
+      // Add columns if migrating from previous schema
+      try {
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "partKey" character varying(50) NOT NULL DEFAULT 'text';`);
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "partOrder" integer NOT NULL DEFAULT 0;`);
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "armRequestId" character varying(128);`);
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "dispatchToken" character varying(128);`);
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "dispatchOwner" character varying(128);`);
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "armedAt" TIMESTAMP WITHOUT TIME ZONE;`);
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "dispatchedAt" TIMESTAMP WITHOUT TIME ZONE;`);
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "reconcileReason" character varying(255);`);
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "resolvedAt" TIMESTAMP WITHOUT TIME ZONE;`);
+      } catch (e) {}
 
       try {
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_customers_botId" ON customers ("botId");`);
@@ -188,8 +205,8 @@ export class DatabaseInitService implements OnModuleInit {
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_jobs_botId_status" ON campaign_jobs ("botId", "status");`);
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "idx_campaign_jobs_bot_status_lease" ON campaign_jobs ("botId", "status", "leaseExpiresAt");`);
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_send_parts_jobId" ON campaign_send_parts ("jobId");`);
-        await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_send_parts_botId" ON campaign_send_parts ("botId");`);
-        await this.dataSource.query(`CREATE UNIQUE INDEX IF NOT EXISTS "UQ_campaign_send_parts_job_part" ON campaign_send_parts ("jobId", "partIndex");`);
+        await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_send_parts_botId_status" ON campaign_send_parts ("botId", "status");`);
+        await this.dataSource.query(`CREATE UNIQUE INDEX IF NOT EXISTS "UQ_campaign_send_parts_job_partKey" ON campaign_send_parts ("jobId", "partKey");`);
       } catch (e) {}
 
       this.logger.log('✅ Database schema verified/initialized successfully.');

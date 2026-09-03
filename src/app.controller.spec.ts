@@ -79,7 +79,7 @@ describe('AppController', () => {
 
   const mockCampaignJobRepo = {
     find: jest.fn().mockResolvedValue([]),
-    findOne: jest.fn().mockResolvedValue(null),
+    findOne: jest.fn().mockResolvedValue({ id: 'j1', campaignId: 'c1', lineUserId: 'U12345', botId: 'U09d6b978fcbfb5275e533ca9b788eb22' }),
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn().mockImplementation(dto => dto),
     save: jest.fn().mockResolvedValue([]),
@@ -3041,38 +3041,7 @@ describe('AppController', () => {
       });
     });
 
-    it('1. POST /api/campaign/send-part rejects invalid/missing worker version with 409', async () => {
-      const res: any = await appController.recordSendPart('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', partIndex: 0 }, mockRes);
-      expect(mockRes.statusCode).toBe(409);
-      expect(res.status).toBe('version_mismatch');
-    });
-
-    it('2. POST /api/campaign/send-part rejects invalid/missing OA context header with 409', async () => {
-      const res: any = await appController.recordSendPart('28.16', undefined, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', partIndex: 0 }, mockRes);
-      expect(mockRes.statusCode).toBe(409);
-      expect(res.status).toBe('missing_oa_context');
-    });
-
-    it('3. POST /api/campaign/send-part rejects missing/invalid worker instance with 409', async () => {
-      const res: any = await appController.recordSendPart('28.16', testBotId, 'invalid_instance', { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', partIndex: 0 }, mockRes);
-      expect(mockRes.statusCode).toBe(409);
-      expect(res.status).toBe('missing_worker_instance');
-    });
-
-    it('4. POST /api/campaign/send-part rejects header OA != body botId with 409', async () => {
-      const res: any = await appController.recordSendPart('28.16', testBotId, validInstance, { jobId: 'j1', botId: 'U11111111222222223333333344444444', leaseToken: 'tok1', partIndex: 0 }, mockRes);
-      expect(mockRes.statusCode).toBe(409);
-      expect(res.status).toBe('oa_context_mismatch');
-    });
-
-    it('5. POST /api/campaign/send-part returns 409 lease_lost when lease is expired or invalid', async () => {
-      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(null);
-      const res: any = await appController.recordSendPart('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', partIndex: 0 }, mockRes);
-      expect(mockRes.statusCode).toBe(409);
-      expect(res.status).toBe('lease_lost');
-    });
-
-    it('6. POST /api/campaign/send-part saves new send part in ledger when lease is valid', async () => {
+    it('1. same armRequestId idempotency returns same dispatchToken', async () => {
       const futureExpiry = new Date(Date.now() + 60000);
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({
         id: 'j1',
@@ -3085,30 +3054,185 @@ describe('AppController', () => {
         leaseExpiresAt: futureExpiry,
       } as any);
 
-      jest.spyOn(mockCampaignSendPartRepo, 'findOne').mockResolvedValue(null);
-      const saveSpy = jest.spyOn(mockCampaignSendPartRepo, 'save');
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue({ id: 'c1', messageType: 'text' } as any);
 
-      const res: any = await appController.recordSendPart('28.16', testBotId, validInstance, {
+      const existingPart = {
+        id: 'sp1',
+        jobId: 'j1',
+        partKey: 'text',
+        partOrder: 0,
+        status: 'armed',
+        armRequestId: 'arm_req_123',
+        dispatchToken: 'dispatch_secret_tok',
+      };
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([existingPart] as any);
+
+      const res: any = await appController.armSendPart('28.16', testBotId, validInstance, {
         jobId: 'j1',
         botId: testBotId,
         leaseToken: 'tok1',
-        partIndex: 0,
-        partType: 'image',
-        totalParts: 2,
+        partKey: 'text',
+        armRequestId: 'arm_req_123',
       }, mockRes);
 
       expect(res.success).toBe(true);
-      expect(res.recorded).toBe(true);
-      expect(res.partIndex).toBe(0);
-      expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
-        jobId: 'j1',
-        partIndex: 0,
-        partType: 'image',
-        status: 'sent',
-      }));
+      expect(res.status).toBe('armed');
+      expect(res.dispatchToken).toBe('dispatch_secret_tok');
     });
 
-    it('7. POST /api/campaign/send-part updates existing send part if already present', async () => {
+    it('2. different armRequestId on armed part triggers reconcile_required quarantine', async () => {
+      const futureExpiry = new Date(Date.now() + 60000);
+      const mockJob = {
+        id: 'j1',
+        campaignId: 'c1',
+        botId: testBotId,
+        lineUserId: 'U12345',
+        status: 'processing',
+        leaseToken: 'tok1',
+        leaseOwner: validInstance,
+        leaseExpiresAt: futureExpiry,
+      };
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
+
+      const mockCamp = { id: 'c1', messageType: 'text', status: 'processing' };
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
+
+      const existingPart = {
+        id: 'sp1',
+        jobId: 'j1',
+        partKey: 'text',
+        partOrder: 0,
+        status: 'armed',
+        armRequestId: 'arm_req_OLD',
+        dispatchToken: 'tok_old',
+      };
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([existingPart] as any);
+
+      const res: any = await appController.armSendPart('28.16', testBotId, validInstance, {
+        jobId: 'j1',
+        botId: testBotId,
+        leaseToken: 'tok1',
+        partKey: 'text',
+        armRequestId: 'arm_req_NEW_DIFFERENT',
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('reconcile_required');
+      expect(existingPart.status).toBe('reconcile_required');
+      expect(mockJob.status).toBe('reconcile_required');
+      expect(mockCamp.status).toBe('paused_reconcile');
+    });
+
+    it('3. token not persisted in browser storage or logged', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).not.toContain("sessionStorage.setItem('linesync_dispatch_token'");
+      expect(scriptContent).not.toContain("localStorage.setItem('linesync_dispatch_token'");
+      expect(scriptContent).not.toContain("console.log(inMemoryDispatchToken)");
+      expect(scriptContent).not.toContain("console.log(dispatchToken)");
+    });
+
+    it('4. exact pre-send ordering in userscript', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const sendChatIdx = scriptContent.indexOf('async function sendChatMessage');
+      expect(sendChatIdx).toBeGreaterThan(0);
+
+      const leaderIdx = scriptContent.indexOf('confirmWorkerLeadershipForSend', sendChatIdx);
+      const recipientIdx = scriptContent.indexOf('verifyCurrentRecipient', leaderIdx);
+      const oaIdx = scriptContent.indexOf('verifyCurrentOAContext', recipientIdx);
+      const safeGateIdx = scriptContent.indexOf('enforceAccountProtectionGate', oaIdx);
+      const verifyResIdx = scriptContent.indexOf('verifyProtectionReservation', safeGateIdx);
+      const renewIdx = scriptContent.indexOf('renewJobLeaseOrThrow', verifyResIdx);
+      const armIdx = scriptContent.indexOf('armSendPart', renewIdx);
+      const clickIdx = scriptContent.indexOf('sendBtn.click()', armIdx);
+
+      expect(leaderIdx).toBeGreaterThan(sendChatIdx);
+      expect(recipientIdx).toBeGreaterThan(leaderIdx);
+      expect(oaIdx).toBeGreaterThan(recipientIdx);
+      expect(safeGateIdx).toBeGreaterThan(oaIdx);
+      expect(verifyResIdx).toBeGreaterThan(safeGateIdx);
+      expect(renewIdx).toBeGreaterThan(verifyResIdx);
+      expect(armIdx).toBeGreaterThan(renewIdx);
+      expect(clickIdx).toBeGreaterThan(armIdx);
+    });
+
+    it('5. no await or network after arm before physical event', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const sendChatIdx = scriptContent.indexOf('async function sendChatMessage');
+      const armIdx = scriptContent.indexOf('const inMemoryDispatchToken = armRes.dispatchToken;', sendChatIdx);
+      const clickIdx = scriptContent.indexOf('sendBtn.click();', armIdx);
+      const armSnippet = scriptContent.substring(armIdx, clickIdx);
+      expect(armSnippet).not.toContain('await ');
+      expect(armSnippet).not.toContain('fetch');
+      expect(armSnippet).not.toContain('setTimeout');
+      expect(armSnippet).not.toContain('window.location');
+    });
+
+    it('6. confirm transient retry does not resend', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const confirmFn = scriptContent.substring(
+        scriptContent.indexOf('async function confirmSendPartWithRetry'),
+        scriptContent.indexOf('function handleLeadershipLost')
+      );
+      expect(confirmFn).toContain('/campaign/send-part/confirm');
+      expect(confirmFn).not.toContain('click');
+      expect(confirmFn).not.toContain('KeyboardEvent');
+      expect(confirmFn).not.toContain('executeChatBot');
+    });
+
+    it('7. reload with armed -> quarantine without physical send', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const resumeIdx = scriptContent.indexOf('async function resumeSavedActiveJob');
+      const nextFnIdx = scriptContent.indexOf('// 🛡️ PAGE-LOAD RECOVERY GUARD', resumeIdx);
+      const resumeFn = scriptContent.substring(resumeIdx, nextFnIdx > resumeIdx ? nextFnIdx : resumeIdx + 1000);
+      expect(resumeFn).toContain('getAuthoritativeSendPlan');
+      expect(resumeFn).toContain("p.status === 'armed' || p.status === 'reconcile_required'");
+      expect(resumeFn).toContain('Quarantining without physical send');
+      expect(resumeFn).toContain('clearLocalActiveJobState();');
+    });
+
+    it('8. expired armed job not reclaimed in /campaign/next and sets quarantine', async () => {
+      const pastExpiry = new Date(Date.now() - 5000);
+      const mockJob = {
+        id: 'j_stale',
+        campaignId: 'c1',
+        botId: testBotId,
+        lineUserId: 'U12345',
+        status: 'processing',
+        leaseToken: 'tok_old',
+        leaseOwner: validInstance,
+        leaseExpiresAt: pastExpiry,
+      };
+
+      jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([mockJob] as any);
+      const mockCamp = { id: 'c1', botId: testBotId, messageType: 'text', status: 'processing' };
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
+
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([
+        { jobId: 'j_stale', partKey: 'text', status: 'armed' } as any
+      ]);
+
+      const res: any = await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
+      expect(res.status).toBe('empty');
+      expect(res.jobId).toBeUndefined();
+      expect(mockJob.status).toBe('reconcile_required');
+      expect(mockCamp.status).toBe('paused_reconcile');
+    });
+
+    it('9. partial dispatched in plan resumes only pending part', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("imageSpec && imageSpec.status === 'dispatched'");
+      expect(scriptContent).toContain("textSpec && textSpec.status === 'dispatched'");
+      expect(scriptContent).toContain("Image part already dispatched per ledger");
+      expect(scriptContent).toContain("Text part already dispatched per ledger");
+    });
+
+    it('10. all dispatched in plan => zero physical sends and directly finishes', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("if (sendPlan.isFullyDispatched)");
+      expect(scriptContent).toContain("await finishJob(jobData.jobId, jobData.userId, true, '', false, expectedJobBotId);");
+    });
+
+    it('11. success requires complete ledger', async () => {
       const futureExpiry = new Date(Date.now() + 60000);
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({
         id: 'j1',
@@ -3121,121 +3245,172 @@ describe('AppController', () => {
         leaseExpiresAt: futureExpiry,
       } as any);
 
-      const existingPart = { id: 'sp1', jobId: 'j1', partIndex: 0, status: 'pending', sentAt: null, leaseToken: 'tok0' };
-      jest.spyOn(mockCampaignSendPartRepo, 'findOne').mockResolvedValue(existingPart as any);
-      const saveSpy = jest.spyOn(mockCampaignSendPartRepo, 'save');
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue({ id: 'c1', messageType: 'image_link' } as any);
 
-      const res: any = await appController.recordSendPart('28.16', testBotId, validInstance, {
+      // Only image dispatched, text is missing
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([
+        { jobId: 'j1', partKey: 'image', status: 'dispatched' } as any,
+      ]);
+
+      const res: any = await appController.markSuccess('28.16', testBotId, validInstance, {
         jobId: 'j1',
         botId: testBotId,
         leaseToken: 'tok1',
-        partIndex: 0,
-        partType: 'image',
-        totalParts: 2,
       }, mockRes);
 
-      expect(res.success).toBe(true);
-      expect(existingPart.status).toBe('sent');
-      expect(existingPart.leaseToken).toBe('tok1');
-      expect(saveSpy).toHaveBeenCalledWith(existingPart);
-    });
-
-    it('8. POST /api/campaign/reconcile rejects invalid worker version with 409', async () => {
-      const res: any = await appController.reconcileJobParts('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
-      expect(res.status).toBe('version_mismatch');
+      expect(res.status).toBe('send_ledger_incomplete');
     });
 
-    it('9. POST /api/campaign/reconcile returns 409 lease_lost when lease is invalid', async () => {
-      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(null);
-      const res: any = await appController.reconcileJobParts('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
-      expect(mockRes.statusCode).toBe(409);
-      expect(res.status).toBe('lease_lost');
-    });
-
-    it('10. POST /api/campaign/reconcile returns sent parts and isFullySent: false when partial', async () => {
+    it('12. partial fail => reconcile_required and no failedCount increment', async () => {
       const futureExpiry = new Date(Date.now() + 60000);
-      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({
+      const mockJob = {
         id: 'j1',
         campaignId: 'c1',
         botId: testBotId,
+        lineUserId: 'U12345',
         status: 'processing',
         leaseToken: 'tok1',
         leaseOwner: validInstance,
         leaseExpiresAt: futureExpiry,
-      } as any);
+      };
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
 
-      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue({ id: 'c1', messageType: 'image_link' } as any);
+      const mockCamp = { id: 'c1', messageType: 'image_link', failedCount: 0, status: 'processing' };
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
+
+      // Partial dispatched (image dispatched, text pending)
       jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([
-        { partIndex: 0, partType: 'image', status: 'sent', sentAt: new Date() } as any,
+        { jobId: 'j1', partKey: 'image', status: 'dispatched' } as any,
       ]);
 
-      const res: any = await appController.reconcileJobParts('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
-      expect(res.success).toBe(true);
-      expect(res.isFullySent).toBe(false);
-      expect(res.totalParts).toBe(2);
-      expect(res.sentParts).toHaveLength(1);
-    });
-
-    it('11. POST /api/campaign/reconcile returns isFullySent: true when all required parts are sent', async () => {
-      const futureExpiry = new Date(Date.now() + 60000);
-      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({
-        id: 'j1',
-        campaignId: 'c1',
+      const res: any = await appController.markFail('28.16', testBotId, validInstance, {
+        jobId: 'j1',
         botId: testBotId,
-        status: 'processing',
         leaseToken: 'tok1',
-        leaseOwner: validInstance,
-        leaseExpiresAt: futureExpiry,
+        reason: 'Image sent but text input lost',
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('reconcile_required');
+      expect(mockCamp.failedCount).toBe(0);
+      expect(mockCamp.status).toBe('paused_reconcile');
+    });
+
+    it('13. success counter is serialized transactionally with row lock', async () => {
+      const txSpy = jest.spyOn(mockCampaignJobRepo.manager, 'transaction');
+      const campSpy = jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue({
+        id: 'c1',
+        name: 'Test Campaign',
+        messageType: 'text',
+        successCount: 0,
+        failedCount: 0,
+        status: 'processing',
+      } as any);
+      jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
       } as any);
 
-      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue({ id: 'c1', messageType: 'image_link' } as any);
       jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([
-        { partIndex: 0, partType: 'image', status: 'sent', sentAt: new Date() } as any,
-        { partIndex: 1, partType: 'text_link', status: 'sent', sentAt: new Date() } as any,
+        { jobId: 'j1', partKey: 'text', status: 'dispatched' } as any,
       ]);
 
-      const res: any = await appController.reconcileJobParts('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      await appController.markSuccess('28.16', testBotId, validInstance, {
+        jobId: 'j1',
+        botId: testBotId,
+        leaseToken: 'tok1',
+      }, mockRes);
+
+      expect(txSpy).toHaveBeenCalled();
+      expect(campSpy).toHaveBeenCalledWith(expect.objectContaining({ lock: { mode: 'pessimistic_write' } }));
+    });
+
+    it('14. reconciliation requires Master Bot PAUSED + active OA + loopback', async () => {
+      // Non-loopback request
+      const nonLoopbackReq = { socket: { remoteAddress: '192.168.1.100' } } as any;
+      const forbiddenRes: any = await appController.resolveQuarantinedPart({
+        jobId: 'j1',
+        partKey: 'text',
+        decision: 'confirmed_sent',
+      }, nonLoopbackReq, mockRes);
+
+      expect(mockRes.statusCode).toBe(403);
+      expect(forbiddenRes.success).toBe(false);
+
+      // Bot ENABLED request
+      const loopbackReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
+      AppController.isBotEnabled = true;
+      const unpausedRes: any = await appController.resolveQuarantinedPart({
+        jobId: 'j1',
+        partKey: 'text',
+        decision: 'confirmed_sent',
+      }, loopbackReq, mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(unpausedRes.message).toContain('Master Bot must be paused');
+      AppController.isBotEnabled = false;
+    });
+
+    it('15. operator confirmed_sent marks part dispatched and finalizes job if complete', async () => {
+      AppController.isBotEnabled = false;
+      const loopbackReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValue({ id: 'global', activeBotId: testBotId } as any);
+
+      const mockJob = { id: 'j1', campaignId: 'c1', botId: testBotId, status: 'reconcile_required' };
+      const mockCamp = { id: 'c1', messageType: 'text', status: 'paused_reconcile', successCount: 0 };
+      const mockPart = { id: 'sp1', jobId: 'j1', partKey: 'text', status: 'armed', dispatchToken: 'tok' };
+
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'findOne').mockResolvedValue(mockPart as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([mockPart as any]);
+      jest.spyOn(mockCampaignJobRepo, 'count').mockResolvedValue(0);
+
+      const res: any = await appController.resolveQuarantinedPart({
+        jobId: 'j1',
+        partKey: 'text',
+        decision: 'confirmed_sent',
+      }, loopbackReq, mockRes);
+
       expect(res.success).toBe(true);
-      expect(res.isFullySent).toBe(true);
-      expect(res.totalParts).toBe(2);
-      expect(res.sentParts).toHaveLength(2);
+      expect(res.decision).toBe('confirmed_sent');
+      expect(mockPart.status).toBe('dispatched');
+      expect(mockPart.dispatchToken).toBeNull();
+      expect(mockJob.status).toBe('success');
+      expect(mockCamp.successCount).toBe(1);
     });
 
-    it('12. Userscript LineSyncApp contains recordDurableSendPart and reconcileJobParts', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('async function recordDurableSendPart');
-      expect(scriptContent).toContain('async function reconcileJobParts');
-      expect(scriptContent).toContain('/campaign/send-part');
-      expect(scriptContent).toContain('/campaign/reconcile');
-    });
+    it('16. operator confirmed_not_sent_retry resets part and job to pending for retry', async () => {
+      AppController.isBotEnabled = false;
+      const loopbackReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValue({ id: 'global', activeBotId: testBotId } as any);
 
-    it('13. Userscript LineSyncApp contains local part ledger helpers and crash reconciliation in resumeSavedActiveJob', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('PART_LEDGER_KEY');
-      expect(scriptContent).toContain('getLocalPartLedger');
-      expect(scriptContent).toContain('markLocalPartSent');
-      expect(scriptContent).toContain('isLocalPartSent');
-      expect(scriptContent).toContain('clearLocalPartLedger');
-      expect(scriptContent).toContain('reconcileJobParts(savedJobData.jobId, savedJobData.botId, savedLeaseToken)');
-      expect(scriptContent).toContain('CRASH_RECONCILED_SUCCESS');
-    });
+      const mockJob = { id: 'j1', campaignId: 'c1', botId: testBotId, status: 'reconcile_required' };
+      const mockCamp = { id: 'c1', messageType: 'text', status: 'paused_reconcile', successCount: 0 };
+      const mockPart = { id: 'sp1', jobId: 'j1', partKey: 'text', status: 'reconcile_required', armRequestId: 'req1', dispatchToken: 'tok' };
 
-    it('14. Userscript LineSyncApp skips already-sent image part (Part 0) in multipart image_link', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('isLocalPartSent(jobData.jobId, 0)');
-      expect(scriptContent).toContain('Part 0 (image) already sent per ledger');
-    });
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'findOne').mockResolvedValue(mockPart as any);
+      jest.spyOn(mockCampaignJobRepo, 'count').mockResolvedValue(0);
 
-    it('15. Userscript LineSyncApp skips already-sent text part in multipart image_link', () => {
-      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain('isLocalPartSent(jobData.jobId, textPartIndex)');
-      expect(scriptContent).toContain('already sent per ledger for job');
-    });
+      const res: any = await appController.resolveQuarantinedPart({
+        jobId: 'j1',
+        partKey: 'text',
+        decision: 'confirmed_not_sent_retry',
+      }, loopbackReq, mockRes);
 
-    it('16. Dashboard index.html displays Required Worker: v28.16', () => {
-      const htmlContent = fs.readFileSync('index.html', 'utf8');
-      expect(htmlContent).toContain('Required Worker: v28.16');
+      expect(res.success).toBe(true);
+      expect(res.decision).toBe('confirmed_not_sent_retry');
+      expect(mockPart.status).toBe('pending');
+      expect(mockPart.armRequestId).toBeNull();
+      expect(mockPart.dispatchToken).toBeNull();
+      expect(mockJob.status).toBe('pending');
+      expect(mockCamp.status).toBe('processing');
     });
 
     it('17. Worker = 28.16, Required Worker = 28.16, Runtime Contract = 2', () => {

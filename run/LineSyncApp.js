@@ -728,7 +728,6 @@
     function clearLocalActiveJobState() {
         stopActiveJobHeartbeat();
         stopActiveFinalizationRetry();
-        clearLocalPartLedger();
         try {
             sessionStorage.removeItem('linesync_jobid');
             sessionStorage.removeItem('linesync_uid');
@@ -742,94 +741,98 @@
         } catch (e) {}
     }
 
-    // 🛡️ REL-WP003 Send-Part Ledger Helpers
-    const PART_LEDGER_KEY = 'linesync_job_part_ledger';
+    // 🛡️ REL-WP003-R1 Send-Part ARM + CONFIRM State Machine Helpers
+    async function getAuthoritativeSendPlan(jobId, botId, leaseToken) {
+        if (!jobId || !botId || !leaseToken) throw new Error('MISSING_LEASE_CREDENTIALS');
 
-    function getLocalPartLedger(jobId) {
-        try {
-            const raw = sessionStorage.getItem(PART_LEDGER_KEY);
-            if (!raw) return {};
-            const parsed = JSON.parse(raw);
-            if (parsed && parsed.jobId === jobId && parsed.parts) {
-                return parsed.parts;
-            }
-        } catch (e) {}
-        return {};
-    }
-
-    function markLocalPartSent(jobId, partIndex, partType) {
-        try {
-            const parts = getLocalPartLedger(jobId);
-            parts[partIndex] = {
-                partIndex,
-                partType,
-                status: 'sent',
-                sentAt: Date.now()
-            };
-            sessionStorage.setItem(PART_LEDGER_KEY, JSON.stringify({ jobId, parts }));
-        } catch (e) {}
-    }
-
-    function isLocalPartSent(jobId, partIndex) {
-        const parts = getLocalPartLedger(jobId);
-        return Boolean(parts[partIndex] && parts[partIndex].status === 'sent');
-    }
-
-    function clearLocalPartLedger() {
-        try {
-            sessionStorage.removeItem(PART_LEDGER_KEY);
-        } catch (e) {}
-    }
-
-    async function recordDurableSendPart(jobId, botId, partIndex, partType, totalParts) {
-        markLocalPartSent(jobId, partIndex, partType);
-        const leaseToken = sessionStorage.getItem('linesync_job_lease_token');
-        if (!leaseToken) {
-            console.warn(`⚠️ [REL-WP003] Missing leaseToken when recording send part ${partIndex} for job ${jobId}`);
-            return;
-        }
-
-        const res = await fetchLeaseAPI('/campaign/send-part', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-LineSync-OA-Context': botId,
-            },
-            body: JSON.stringify({
-                jobId,
-                botId,
-                leaseToken,
-                partIndex,
-                partType,
-                totalParts,
-            }),
+        const res = await fetchLeaseAPI('/campaign/send-plan', 'POST', {
+            jobId,
+            botId,
+            leaseToken,
         });
 
         if (res.state === 'lease_lost') {
-            console.warn(`🛑 [REL-WP003] Backend returned lease_lost while recording send part ${partIndex} for job ${jobId}`);
-            handleJobLeaseLost('SEND_PART_LEASE_LOST');
+            console.warn(`🛑 [REL-WP003-R1] Backend returned lease_lost while requesting send plan for job ${jobId}`);
+            handleJobLeaseLost('SEND_PLAN_LEASE_LOST');
             throw new Error('JOB_LEASE_LOST');
         }
 
-        if (res.state === 'success') {
-            console.log(`✅ [REL-WP003] Send part ${partIndex} (${partType}) recorded in durable backend ledger.`);
+        if (res.state === 'renewed' && res.data && res.data.requiredParts) {
+            return res.data;
         }
+
+        throw new Error(`SEND_PLAN_FAILED_${res.state}`);
     }
 
-    async function reconcileJobParts(jobId, botId, leaseToken) {
-        const res = await fetchLeaseAPI('/campaign/reconcile', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-LineSync-OA-Context': botId,
-            },
-            body: JSON.stringify({
+    async function armSendPart(jobId, botId, leaseToken, partKey, armRequestId) {
+        if (!jobId || !botId || !leaseToken || !partKey || !armRequestId) throw new Error('MISSING_ARM_CREDENTIALS');
+
+        const res = await fetchLeaseAPI('/campaign/send-part/arm', 'POST', {
+            jobId,
+            botId,
+            leaseToken,
+            partKey,
+            armRequestId,
+        });
+
+        if (res.state === 'lease_lost') {
+            console.warn(`🛑 [REL-WP003-R1] Backend returned lease_lost during ARM for part ${partKey} (job ${jobId})`);
+            handleJobLeaseLost('ARM_PART_LEASE_LOST');
+            throw new Error('JOB_LEASE_LOST');
+        }
+
+        if (res.state === 'renewed' && res.data) {
+            if (res.data.status === 'already_dispatched') {
+                return { state: 'already_dispatched', partKey };
+            }
+            if (res.data.status === 'armed' && res.data.dispatchToken) {
+                return { state: 'armed', dispatchToken: res.data.dispatchToken, partKey };
+            }
+        }
+
+        if (res.data && res.data.status === 'reconcile_required') {
+            console.error(`🛑 [REL-WP003-R1] Backend marked part ${partKey} as reconcile_required. Quarantining job.`);
+            throw new Error('RECONCILE_REQUIRED');
+        }
+
+        throw new Error(`ARM_FAILED_${partKey}_${res.state}`);
+    }
+
+    async function confirmSendPartWithRetry(jobId, botId, leaseToken, partKey, armRequestId, dispatchToken) {
+        if (!jobId || !botId || !leaseToken || !partKey || !armRequestId || !dispatchToken) {
+            throw new Error('MISSING_CONFIRM_CREDENTIALS');
+        }
+
+        let confirmAttempts = 0;
+        const maxConfirmAttempts = 5;
+
+        while (confirmAttempts < maxConfirmAttempts) {
+            confirmAttempts++;
+            const res = await fetchLeaseAPI('/campaign/send-part/confirm', 'POST', {
                 jobId,
                 botId,
                 leaseToken,
-            }),
-        });
-        return res;
+                partKey,
+                armRequestId,
+                dispatchToken,
+            });
+
+            if (res.state === 'renewed' && res.data && res.data.status === 'dispatched') {
+                console.log(`✅ [REL-WP003-R1] Part ${partKey} confirmed as dispatched.`);
+                return true;
+            }
+
+            if (res.state === 'lease_lost') {
+                console.warn(`🛑 [REL-WP003-R1] Backend returned lease_lost during confirm for part ${partKey}`);
+                handleJobLeaseLost('CONFIRM_PART_LEASE_LOST');
+                throw new Error('JOB_LEASE_LOST');
+            }
+
+            console.warn(`⚠️ [REL-WP003-R1] Transient network error confirming part ${partKey} (attempt ${confirmAttempts}/${maxConfirmAttempts}). Retrying confirm only...`);
+            await sleep(2000);
+        }
+
+        throw new Error(`CONFIRM_PART_FAILED_${partKey}`);
     }
 
     function handleLeadershipLost(reason = 'UNKNOWN') {
@@ -1352,6 +1355,10 @@
         const currentLeaseToken = sessionStorage.getItem('linesync_job_lease_token');
         await renewJobLeaseOrThrow(currentJobId, expectedBotId, currentLeaseToken);
 
+        const armRequestId = `arm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        const armRes = await armSendPart(currentJobId, expectedBotId, currentLeaseToken, 'image', armRequestId);
+        const inMemoryDispatchToken = armRes.dispatchToken;
+
         const opts = { bubbles: true, cancelable: true, composed: true, view: window };
         try { target.focus(); } catch(e){}
         try { target.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch(e){}
@@ -1364,6 +1371,10 @@
         console.log("✅ 3. สั่งกดส่งรูปภาพ 1 ครั้งสำเร็จ! รอ 4.5 วินาที ให้รูปภาพส่งลงห้องแชทเสร็จสมบูรณ์...");
         await sleep(4500);
         console.log("✅ 4. รูปภาพส่งลงห้องแชตเป็นอันดับแรกเรียบร้อยแล้ว!");
+
+        if (inMemoryDispatchToken) {
+            await confirmSendPartWithRetry(currentJobId, expectedBotId, currentLeaseToken, 'image', armRequestId, inMemoryDispatchToken);
+        }
     }
 
     // 🛡️ ZERO-TOLERANCE TEXT SEND GUARD: Send chat text message with strict expectedUserId & expectedBotId check
@@ -1426,6 +1437,10 @@
 
             emitDiagnostic('TEXT_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
+            const armRequestId = `arm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            const armRes = await armSendPart(currentJobId, expectedBotId, currentLeaseToken, 'text', armRequestId);
+            const inMemoryDispatchToken = armRes.dispatchToken;
+
             console.log("✅ เจอและสั่งคลิกปุ่มส่งสีเขียวที่มุมล่างขวาช่องพิมพ์สำเร็จ!");
             const opts = { bubbles: true, cancelable: true, composed: true, view: window };
             try { sendBtn.focus(); } catch(e){}
@@ -1435,6 +1450,11 @@
             try { sendBtn.dispatchEvent(new MouseEvent('mouseup', opts)); } catch(e){}
             try { sendBtn.click(); } catch(e){}
             try { sendBtn.dispatchEvent(new MouseEvent('click', opts)); } catch(e){}
+
+            await sleep(3000);
+            if (inMemoryDispatchToken) {
+                await confirmSendPartWithRetry(currentJobId, expectedBotId, currentLeaseToken, 'text', armRequestId, inMemoryDispatchToken);
+            }
         } else {
             const isEnterLeaderConfirmed = await confirmWorkerLeadershipForSend();
             if (!isEnterLeaderConfirmed) {
@@ -1460,10 +1480,19 @@
 
             emitDiagnostic('TEXT_PRE_SEND_VERIFIED', { expectedUserId: expectedUserId });
 
+            const armRequestId = `arm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            const armRes = await armSendPart(currentJobId, expectedBotId, currentLeaseToken, 'text', armRequestId);
+            const inMemoryDispatchToken = armRes.dispatchToken;
+
             const enterOpts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true, shiftKey: false };
             try { chatInput.dispatchEvent(new KeyboardEvent('keydown', enterOpts)); } catch(e){}
             try { chatInput.dispatchEvent(new KeyboardEvent('keypress', enterOpts)); } catch(e){}
             try { chatInput.dispatchEvent(new KeyboardEvent('keyup', enterOpts)); } catch(e){}
+
+            await sleep(3000);
+            if (inMemoryDispatchToken) {
+                await confirmSendPartWithRetry(currentJobId, expectedBotId, currentLeaseToken, 'text', armRequestId, inMemoryDispatchToken);
+            }
         }
     }
 
@@ -1683,14 +1712,6 @@
                 sessionStorage.setItem('linesync_job_lease_token', job.leaseToken || '');
                 sessionStorage.setItem('linesync_job_lease_expires_at', String(job.leaseExpiresAt || 0));
 
-                if (Array.isArray(job.sentParts)) {
-                    job.sentParts.forEach((p) => {
-                        if (p.status === 'sent') {
-                            markLocalPartSent(job.jobId, p.partIndex, p.partType);
-                        }
-                    });
-                }
-
                 startActiveJobHeartbeat(job.jobId, job.botId, job.leaseToken);
 
                 const targetUrl = getOAContextUrl(job.userId);
@@ -1863,14 +1884,30 @@
                 }
 
                 try {
-                    const isMultipart = (jobData.messageType === 'image_link');
-                    const totalParts = isMultipart ? 2 : 1;
+                    const currentLeaseToken = sessionStorage.getItem('linesync_job_lease_token');
+                    const sendPlan = await getAuthoritativeSendPlan(jobData.jobId, expectedJobBotId, currentLeaseToken);
+
+                    if (sendPlan.hasQuarantine || (sendPlan.requiredParts && sendPlan.requiredParts.some((p) => p.status === 'armed' || p.status === 'reconcile_required'))) {
+                        console.error(`🛑 [REL-WP003-R1] Job ${jobData.jobId} has armed/ambiguous part state. Quarantining immediately without send.`);
+                        clearLocalActiveJobState();
+                        isExecutingJob = false;
+                        return;
+                    }
+
+                    if (sendPlan.isFullyDispatched) {
+                        console.log(`🛡️ [REL-WP003-R1] All required parts already dispatched for job ${jobData.jobId}. Finalizing directly without re-sending.`);
+                        await finishJob(jobData.jobId, jobData.userId, true, '', false, expectedJobBotId);
+                        return;
+                    }
+
+                    const imageSpec = sendPlan.requiredParts.find((p) => p.partKey === 'image');
+                    const textSpec = sendPlan.requiredParts.find((p) => p.partKey === 'text');
 
                     let hasImageToSend = (jobData.messageType === 'image_link' || jobData.messageType === 'image_only') && jobData.imageUrl;
 
                     if (hasImageToSend) {
-                        if (isLocalPartSent(jobData.jobId, 0)) {
-                            console.log(`⏩ [REL-WP003] Part 0 (image) already sent per ledger for job ${jobData.jobId}. Skipping upload.`);
+                        if (imageSpec && imageSpec.status === 'dispatched') {
+                            console.log(`⏩ [REL-WP003-R1] Image part already dispatched per ledger for job ${jobData.jobId}. Skipping upload.`);
                         } else {
                             if (!hasValidWorkerLeadership()) {
                                 throw new Error('WORKER_LEADERSHIP_LOST');
@@ -1905,7 +1942,6 @@
                                 }
 
                                 await confirmAndCloseImageModal(jobData.userId, expectedJobBotId);
-                                await recordDurableSendPart(jobData.jobId, expectedJobBotId, 0, 'image', totalParts);
                             }
                         }
                     }
@@ -1928,12 +1964,9 @@
                         }
                     }
 
-                    const textPartIndex = isMultipart ? 1 : 0;
-                    const textPartType = isMultipart ? 'text_link' : (jobData.messageType === 'link_only' ? 'link' : (jobData.messageType === 'text_link' ? 'text_link' : 'text'));
-
                     if (textToSend && textToSend.trim() !== '') {
-                        if (isLocalPartSent(jobData.jobId, textPartIndex)) {
-                            console.log(`⏩ [REL-WP003] Part ${textPartIndex} (${textPartType}) already sent per ledger for job ${jobData.jobId}. Skipping text send.`);
+                        if (textSpec && textSpec.status === 'dispatched') {
+                            console.log(`⏩ [REL-WP003-R1] Text part already dispatched per ledger for job ${jobData.jobId}. Skipping text send.`);
                         } else {
                             if (!hasValidWorkerLeadership()) {
                                 throw new Error('WORKER_LEADERSHIP_LOST');
@@ -1965,14 +1998,13 @@
                             await sleep(1200);
 
                             await sendChatMessage(chatInput, jobData.userId, expectedJobBotId);
-                            await recordDurableSendPart(jobData.jobId, expectedJobBotId, textPartIndex, textPartType, totalParts);
                         }
 
-                        await sleep(3000);
+                        await sleep(1000);
                         console.log("✅ ส่งแคมเปญสำเร็จ 100%!");
                         await finishJob(jobData.jobId, jobData.userId, true, '', false, expectedJobBotId);
                     } else {
-                        await sleep(2000);
+                        await sleep(1000);
                         console.log("✅ ส่งแคมเปญรูปภาพอย่างเดียวสำเร็จ 100%!");
                         await finishJob(jobData.jobId, jobData.userId, true, '', false, expectedJobBotId);
                     }
@@ -2172,32 +2204,28 @@
 
         startActiveJobHeartbeat(savedJobData.jobId, savedJobData.botId, savedLeaseToken);
 
-        // 🛡️ REL-WP003 Crash Reconciliation with Durable Send-Part Ledger
+        // 🛡️ REL-WP003-R1 Crash Reconciliation with Authoritative Backend Send Plan
         try {
-            const reconcileRes = await reconcileJobParts(savedJobData.jobId, savedJobData.botId, savedLeaseToken);
-            if (reconcileRes.state === 'lease_lost') {
-                console.warn(`🛑 [REL-WP003] Lease lost during page-load crash reconciliation for job ${savedJobData.jobId}. Relinquishing active job.`);
-                handleJobLeaseLost('RECONCILE_LEASE_LOST');
-                return;
-            }
-            if (reconcileRes.state === 'success' && reconcileRes.data) {
-                const { isFullySent, sentParts } = reconcileRes.data;
-                if (Array.isArray(sentParts)) {
-                    sentParts.forEach((p) => {
-                        if (p.status === 'sent') {
-                            markLocalPartSent(savedJobData.jobId, p.partIndex, p.partType);
-                        }
-                    });
+            const planRes = await getAuthoritativeSendPlan(savedJobData.jobId, savedJobData.botId, savedLeaseToken);
+            if (planRes) {
+                const { requiredParts, isFullyDispatched, hasQuarantine } = planRes;
+                if (hasQuarantine || (requiredParts && requiredParts.some(p => p.status === 'armed' || p.status === 'reconcile_required'))) {
+                    console.error(`🛑 [REL-WP003-R1] Ambiguous part state discovered on page load for job ${savedJobData.jobId}. Quarantining without physical send.`);
+                    clearLocalActiveJobState();
+                    isExecutingJob = false;
+                    return;
                 }
-                if (isFullySent) {
-                    console.log(`🛡️ [REL-WP003] Crash Reconciliation: Job ${savedJobData.jobId} was already fully sent before crash/reload. Finalizing without repeating send.`);
+
+                if (isFullyDispatched) {
+                    console.log(`🛡️ [REL-WP003-R1] Crash Reconciliation: Job ${savedJobData.jobId} was already fully dispatched. Finalizing without repeating send.`);
                     emitDiagnostic('CRASH_RECONCILED_SUCCESS', { jobId: savedJobData.jobId, userId: savedJobData.userId, botId: savedJobData.botId });
                     await finishJob(savedJobData.jobId, savedJobData.userId, true, '', false, savedJobData.botId);
                     return;
                 }
             }
         } catch (reconcileErr) {
-            console.warn("⚠️ [REL-WP003] Non-fatal error during crash reconciliation. Proceeding with local ledger.", reconcileErr);
+            if (reconcileErr.message === 'JOB_LEASE_LOST') return;
+            console.warn("⚠️ [REL-WP003-R1] Non-fatal error during crash reconciliation plan query:", reconcileErr);
         }
 
         emitDiagnostic('PAGE_LOAD_ACTIVE_JOB', { jobId: savedJobData.jobId, userId: savedJobData.userId, botId: savedJobData.botId });

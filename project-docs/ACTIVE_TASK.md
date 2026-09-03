@@ -1,18 +1,20 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: NONE
-STATUS: COMPLETED
+ACTIVE_WORK_PACKAGE: REL-WP003-R1
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: COMPLETE
+NEXT_CANDIDATE_STATUS: PENDING_REVIEW
+PHASE_0: IN PROGRESS
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
-- **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
+- **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `NOT CLOSED / CORRECTIVE REQUIRED`
+- **REL-WP003-R1 — Critical Crash-Safety Corrective**: `READY_FOR_CHATGPT_REVIEW`
 - **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
 - **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
 - **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -29,6 +31,36 @@ NEXT_CANDIDATE_STATUS: COMPLETE
 - **Worker Version**: `28.16`
 - **Runtime Contract Version**: `2`
 - **Required Worker Version**: `28.16`
+
+---
+
+## 🛡️ REL-WP003-R1 Crash-Safety & Operator Reconciliation Architecture
+
+> [!IMPORTANT]
+> **Crash-Safety Invariant**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
+> **Operational Policy**: Never automatically resend an ambiguous physical send.
+
+### 1. Authoritative Send Plan & State Machine
+- **Table**: `campaign_send_parts` with unique index `(jobId, partKey)`.
+- **States**: `pending` ➔ `armed` ➔ `dispatched` | `reconcile_required`.
+- **Backend Authoritative Plan**: `POST /api/campaign/send-plan` returns required parts per `messageType` (`['text']` or `['image', 'text']`).
+- **ARM Phase**: `POST /api/campaign/send-part/arm` returns ephemeral `dispatchToken`. Conflicting arms trigger immediate quarantine (`reconcile_required`).
+- **Zero Network Gap**: Immediate DOM dispatch after ARM response with no intervening `await`, `fetch`, or navigation.
+- **Confirm Phase**: `POST /api/campaign/send-part/confirm` transitions part to `dispatched`. Transient network errors retry confirmation only—never physical send.
+
+### 2. Ambiguity Quarantine & Fail-Closed Resumption
+- **Quarantine**: If page/worker crash discovers an `armed` or `reconcile_required` part on reload, `CampaignJob.status = 'reconcile_required'`, `Campaign.status = 'paused_reconcile'`, and leases are stripped. No increment to `failedCount` or `successCount`.
+- **Expired Jobs**: `getNextJob` quarantines expired jobs with ambiguous parts instead of reclaiming them.
+- **Multipart Resume**: Safely skips already-`dispatched` parts. If any part is ambiguous, execution halts immediately.
+
+### 3. Operator Reconciliation Guard
+- **Endpoints**: `GET /api/campaign/reconciliation` and `POST /api/campaign/reconciliation/resolve`.
+- **Fencing**: Loopback only (`127.0.0.1` / `::1`), matching active OA, and Master Bot strictly **PAUSED**.
+- **Operator Decisions**:
+  - `confirmed_sent`: Transitions part to `dispatched`, finalizes job to `success` if all parts dispatched, and unpauses campaign if eligible.
+  - `confirmed_not_sent_retry`: Transitions part back to `pending`, resets job to `pending`, and unpauses campaign. **This is the ONLY route to retry an ambiguous send.**
+- **No Live UAT Performed**: Validated through 254 executable unit tests covering all 16 critical scenarios.
+
 
 ---
 

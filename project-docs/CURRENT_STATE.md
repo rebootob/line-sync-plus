@@ -54,21 +54,29 @@
 
 ---
 
-## 🛡️ Durable Send-Part Ledger & Crash Safety (REL-WP003 STATUS: CLOSED / PASS)
+## 🛡️ Durable Send-Part Ledger & Crash Safety (REL-WP003 STATUS: NOT CLOSED / CORRECTIVE REQUIRED; REL-WP003-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
+- **Core Safety Invariant**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
+- **Operational Policy**: Never automatically resend an ambiguous physical send.
 - **Implemented Architecture**:
-  - `campaign_send_parts` Entity & Table: Tracks each sent message part with composite uniqueness on `(jobId, partIndex)`.
+  - `campaign_send_parts` Entity & Table: Tracks each sent message part with composite uniqueness on `(jobId, partKey)`.
+  - State Machine: `pending` ➔ `armed` ➔ `dispatched` | `reconcile_required`.
+  - Ephemeral `dispatchToken`: Generated during ARM phase, held in-memory only; never stored in localStorage/sessionStorage or logged.
+  - Zero Network Gap: Physical DOM dispatch occurs immediately after ARM response with no intervening `await`, `fetch`, or navigation.
   - Endpoints:
-    - `POST /api/campaign/send-part`: Fenced recording of physically sent parts (requires worker version 28.16, valid OA context, valid worker instance, and active valid processing lease).
-    - `POST /api/campaign/reconcile`: Fenced status check returning whether a job was fully sent, total parts, and array of sent parts.
-  - Crash Reconciliation:
-    - `getNextJob`: If an expired processing job was already fully sent by a crashed worker, auto-reconciles to `success` atomically, increments `successCount`, and proceeds to the next job.
-    - `resumeSavedActiveJob`: Checks backend ledger on browser restart/reload; if already fully sent, finalizes immediately without physical re-send. If partially sent, populates local ledger.
-    - `executeChatBot`: Checks local ledger before uploading image (Part 0) or typing/sending text (Part 1); skips already-sent parts in multipart campaigns.
-- **Validation**: 254/254 unit tests passing cleanly.
+    - `POST /api/campaign/send-plan`: Authoritative message part plan per `messageType`.
+    - `POST /api/campaign/send-part/arm`: Fenced pre-send state transition. Same `armRequestId` returns same `dispatchToken`; conflicting arm triggers immediate quarantine.
+    - `POST /api/campaign/send-part/confirm`: Post-send acknowledgement. Retries confirmation only upon transient network error; never repeats physical send.
+    - `GET /api/campaign/reconciliation`: Inspection of quarantined campaigns/jobs/parts (loopback only, active OA, bot paused).
+    - `POST /api/campaign/reconciliation/resolve`: Operator reconciliation actions (`confirmed_sent`, `confirmed_not_sent_retry`).
+  - Crash Reconciliation & Quarantine:
+    - `getNextJob`: If an expired processing job has an ambiguous part (`armed` or `reconcile_required`), it is quarantined to `reconcile_required` with `Campaign = paused_reconcile` and NOT reclaimed. If fully dispatched, auto-reconciles to `success` atomically.
+    - `resumeSavedActiveJob`: Queries authoritative send plan on page reload; if any part is `armed` or `reconcile_required`, immediately quarantines without physical resend.
+    - `executeChatBot`: Skips already-`dispatched` parts.
+- **Validation**: 254/254 unit tests passing cleanly. No Live UAT performed.
 
 ---
 

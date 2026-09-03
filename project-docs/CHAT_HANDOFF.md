@@ -21,8 +21,10 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
+* **ACTIVE_WORK_PACKAGE**: `REL-WP003-R1`
+* **PHASE_0**: `IN PROGRESS`
+* **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `NOT CLOSED / CORRECTIVE REQUIRED`
+* **REL-WP003-R1 — Critical Crash-Safety Corrective**: `READY_FOR_CHATGPT_REVIEW`
 * **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
 * **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
 * **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -57,13 +59,18 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Integrated Circuit Breaker**: 10 errors finalize via `POST /campaign/fail` with `errorOverflow: true` (increments failedCount, stops campaign `stopped_error`, clears remaining leases).
 - **Customer Rollback**: DB error updating blocked customer in `markFail` rolls back transaction.
 - **Post-Commit Telegram**: Sent only after DB transaction resolves.
-- **Durable Send-Part Ledger (REL-WP003)**:
-  - Table: `campaign_send_parts` records each part sent per job.
-  - Endpoints: `POST /api/campaign/send-part` and `POST /api/campaign/reconcile`.
-  - Crash Reconciliation: On startup/reload, `resumeSavedActiveJob` checks `/campaign/reconcile`. If fully sent, fast-finalizes without re-send. If partially sent, skips previously sent parts during dispatch.
-  - Automated Tests: 254/254 passing.
+- **Crash Safety Invariant & Operator Reconciliation (REL-WP003-R1)**:
+  - True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
+  - Policy: Never automatically resend an ambiguous physical send.
+  - Durable state machine: `pending` ➔ `armed` ➔ `dispatched` | `reconcile_required`.
+  - Ephemeral `dispatchToken` in memory only; zero network gap after arm before physical DOM dispatch.
+  - Confirmation retry loops on confirm API only without repeating physical send.
+  - Page crash discovering `armed` or `reconcile_required` triggers quarantine without physical send (`CampaignJob = reconcile_required`, `Campaign = paused_reconcile`, no counters incremented).
+  - Operator reconciliation (`GET /api/campaign/reconciliation`, `POST /api/campaign/reconciliation/resolve`) fenced to loopback + active OA + Master Bot PAUSED.
+  - Actions: `confirmed_sent` or `confirmed_not_sent_retry`.
+  - No Live UAT performed. All 254 executable unit tests passing.
 
 ## Exact Recommended Next Step
 
-REL-WP003 implementation complete and validated with all tests passing.
-No Live LINE UAT. Do NOT send any additional LINE messages. Ready for commit and push.
+REL-WP003-R1 implementation complete and validated with all 254 tests passing.
+No Live LINE UAT. Do NOT send any additional LINE messages. Ready for ChatGPT review.
