@@ -756,7 +756,7 @@ export class AppController {
   private isValidWorkerInstance(instance: string | undefined): boolean {
     if (!instance || typeof instance !== 'string') return false;
     const trimmed = instance.trim();
-    return trimmed.length > 0 && trimmed.length <= 128;
+    return /^ts_[0-9]{10,17}_[a-z0-9]{4,32}$/.test(trimmed);
   }
 
   // API สำหรับ Tampermonkey มาขอรับคิวงานถัดไปจาก DB (พร้อมระบบ Scheduled, OA Gate & Stale Worker Fencing REL-WP002)
@@ -988,7 +988,7 @@ export class AppController {
     return { success: true, leaseExpiresAt: newExpiresAt.getTime() };
   }
 
-  // API สำหรับ Tampermonkey มารายงานว่าส่งเสร็จแล้ว (พร้อมระบบ Fenced Lease Validation)
+  // API สำหรับ Tampermonkey มารายงานว่าส่งเสร็จแล้ว (พร้อมระบบ Transactional Fenced Lease Validation)
   @Post('campaign/success')
   async markSuccess(
     @Headers('x-linesync-worker-version') workerVersion: string | undefined,
@@ -1026,59 +1026,64 @@ export class AppController {
       return { success: false, status: 'oa_context_mismatch' };
     }
 
-    const now = new Date();
+    return await this.campaignJobRepository.manager.transaction(async (manager) => {
+      const jobRepo = manager.getRepository(CampaignJob);
+      const campRepo = manager.getRepository(Campaign);
 
-    const updateResult = await this.campaignJobRepository
-      .createQueryBuilder()
-      .update(CampaignJob)
-      .set({
-        status: 'success',
-        sentAt: now,
-        leaseToken: null,
-        leaseOwner: null,
-        leaseExpiresAt: null,
-        leaseHeartbeatAt: null,
-      })
-      .where('id = :jobId', { jobId: body.jobId })
-      .andWhere('botId = :botId', { botId: cleanBodyBotId })
-      .andWhere('status = :procStatus', { procStatus: 'processing' })
-      .andWhere('"leaseToken" = :leaseToken', { leaseToken: body.leaseToken })
-      .andWhere('"leaseOwner" = :leaseOwner', { leaseOwner: cleanWorkerInstance })
-      .andWhere('"leaseExpiresAt" IS NOT NULL AND "leaseExpiresAt" > :now', { now })
-      .execute();
+      const now = new Date();
 
-    if (!updateResult.affected || updateResult.affected === 0) {
-      if (res) res.status(HttpStatus.CONFLICT);
-      return { success: false, status: 'lease_lost', message: 'Job lease is invalid, stale, or already finalized' };
-    }
+      const updateResult = await jobRepo
+        .createQueryBuilder()
+        .update(CampaignJob)
+        .set({
+          status: 'success',
+          sentAt: now,
+          leaseToken: null,
+          leaseOwner: null,
+          leaseExpiresAt: null,
+          leaseHeartbeatAt: null,
+        })
+        .where('id = :jobId', { jobId: body.jobId })
+        .andWhere('botId = :botId', { botId: cleanBodyBotId })
+        .andWhere('status = :procStatus', { procStatus: 'processing' })
+        .andWhere('"leaseToken" = :leaseToken', { leaseToken: body.leaseToken })
+        .andWhere('"leaseOwner" = :leaseOwner', { leaseOwner: cleanWorkerInstance })
+        .andWhere('"leaseExpiresAt" IS NOT NULL AND "leaseExpiresAt" > :now', { now })
+        .execute();
 
-    const job = await this.campaignJobRepository.findOne({ where: { id: body.jobId } });
-    if (job) {
-      const campaign = await this.campaignRepository.findOne({ where: { id: job.campaignId } });
-      if (campaign) {
-        campaign.successCount += 1;
-        const remainingPending = await this.campaignJobRepository.count({
-          where: [
-            { campaignId: campaign.id, status: 'pending' },
-            { campaignId: campaign.id, status: 'processing' },
-          ],
-        });
-
-        if (remainingPending === 0) {
-          campaign.status = 'completed';
-          await this.campaignRepository.save(campaign);
-          await this.checkAndSendTelegramReport(campaign);
-        } else {
-          await this.campaignRepository.save(campaign);
-        }
+      if (!updateResult.affected || updateResult.affected === 0) {
+        if (res) res.status(HttpStatus.CONFLICT);
+        return { success: false, status: 'lease_lost', message: 'Job lease is invalid, stale, or already finalized' };
       }
-      console.log(`✅ ส่งข้อความสำเร็จ: ${job.lineUserId}`);
-    }
 
-    return { success: true };
+      const job = await jobRepo.findOne({ where: { id: body.jobId } });
+      if (job) {
+        const campaign = await campRepo.findOne({ where: { id: job.campaignId } });
+        if (campaign) {
+          campaign.successCount += 1;
+          const remainingPending = await jobRepo.count({
+            where: [
+              { campaignId: campaign.id, status: 'pending' },
+              { campaignId: campaign.id, status: 'processing' },
+            ],
+          });
+
+          if (remainingPending === 0) {
+            campaign.status = 'completed';
+          }
+          await campRepo.save(campaign);
+          if (remainingPending === 0) {
+            this.checkAndSendTelegramReport(campaign).catch(() => {});
+          }
+        }
+        console.log(`✅ ส่งข้อความสำเร็จ: ${job.lineUserId}`);
+      }
+
+      return { success: true };
+    });
   }
 
-  // API สำหรับ Tampermonkey มารายงานว่าส่งล้มเหลว (พร้อมระบบ Fenced Lease Validation)
+  // API สำหรับ Tampermonkey มารายงานว่าส่งล้มเหลว (พร้อมระบบ Transactional Fenced Lease Validation)
   @Post('campaign/fail')
   async markFail(
     @Headers('x-linesync-worker-version') workerVersion: string | undefined,
@@ -1116,75 +1121,81 @@ export class AppController {
       return { success: false, status: 'oa_context_mismatch' };
     }
 
-    const now = new Date();
+    return await this.campaignJobRepository.manager.transaction(async (manager) => {
+      const jobRepo = manager.getRepository(CampaignJob);
+      const campRepo = manager.getRepository(Campaign);
+      const custRepo = manager.getRepository(Customer);
 
-    const updateResult = await this.campaignJobRepository
-      .createQueryBuilder()
-      .update(CampaignJob)
-      .set({
-        status: 'failed',
-        errorReason: body.reason || 'ส่งล้มเหลว / หาช่องพิมพ์ไม่เจอ',
-        leaseToken: null,
-        leaseOwner: null,
-        leaseExpiresAt: null,
-        leaseHeartbeatAt: null,
-      })
-      .where('id = :jobId', { jobId: body.jobId })
-      .andWhere('botId = :botId', { botId: cleanBodyBotId })
-      .andWhere('status = :procStatus', { procStatus: 'processing' })
-      .andWhere('"leaseToken" = :leaseToken', { leaseToken: body.leaseToken })
-      .andWhere('"leaseOwner" = :leaseOwner', { leaseOwner: cleanWorkerInstance })
-      .andWhere('"leaseExpiresAt" IS NOT NULL AND "leaseExpiresAt" > :now', { now })
-      .execute();
+      const now = new Date();
 
-    if (!updateResult.affected || updateResult.affected === 0) {
-      if (res) res.status(HttpStatus.CONFLICT);
-      return { success: false, status: 'lease_lost', message: 'Job lease is invalid, stale, or already finalized' };
-    }
+      const updateResult = await jobRepo
+        .createQueryBuilder()
+        .update(CampaignJob)
+        .set({
+          status: 'failed',
+          errorReason: body.reason || 'ส่งล้มเหลว / หาช่องพิมพ์ไม่เจอ',
+          leaseToken: null,
+          leaseOwner: null,
+          leaseExpiresAt: null,
+          leaseHeartbeatAt: null,
+        })
+        .where('id = :jobId', { jobId: body.jobId })
+        .andWhere('botId = :botId', { botId: cleanBodyBotId })
+        .andWhere('status = :procStatus', { procStatus: 'processing' })
+        .andWhere('"leaseToken" = :leaseToken', { leaseToken: body.leaseToken })
+        .andWhere('"leaseOwner" = :leaseOwner', { leaseOwner: cleanWorkerInstance })
+        .andWhere('"leaseExpiresAt" IS NOT NULL AND "leaseExpiresAt" > :now', { now })
+        .execute();
 
-    const job = await this.campaignJobRepository.findOne({ where: { id: body.jobId } });
-    if (job) {
-      const campaign = await this.campaignRepository.findOne({ where: { id: job.campaignId } });
-      if (campaign) {
-        campaign.failedCount += 1;
-        const remainingPending = await this.campaignJobRepository.count({
-          where: [
-            { campaignId: campaign.id, status: 'pending' },
-            { campaignId: campaign.id, status: 'processing' },
-          ],
-        });
-
-        if (remainingPending === 0) {
-          campaign.status = 'completed';
-          await this.campaignRepository.save(campaign);
-          await this.checkAndSendTelegramReport(campaign);
-        } else {
-          await this.campaignRepository.save(campaign);
-        }
+      if (!updateResult.affected || updateResult.affected === 0) {
+        if (res) res.status(HttpStatus.CONFLICT);
+        return { success: false, status: 'lease_lost', message: 'Job lease is invalid, stale, or already finalized' };
       }
 
-      const isUserBlocked = body.isBlocked || (body.reason && (body.reason.includes('บล็อก') || body.reason.includes('ไม่สามารถส่งข้อความ')));
-      if (isUserBlocked && job.lineUserId && job.botId && /^U[0-9a-fA-F]{32}$/.test(job.botId)) {
-        try {
-          const customer = await this.customerRepository.findOne({ where: { botId: job.botId, lineUserId: job.lineUserId } });
-          if (customer) {
-            customer.isBlocked = true;
-            customer.blockReason = body.reason || '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว';
-            await this.customerRepository.save(customer);
-            console.log(`🚫 ปิดสถานะผู้ใช้ในตาราง Customers เป็น "บล็อก/ส่งไม่ได้แล้ว": ${job.lineUserId} (OA: ${job.botId})`);
+      const job = await jobRepo.findOne({ where: { id: body.jobId } });
+      if (job) {
+        const campaign = await campRepo.findOne({ where: { id: job.campaignId } });
+        if (campaign) {
+          campaign.failedCount += 1;
+          const remainingPending = await jobRepo.count({
+            where: [
+              { campaignId: campaign.id, status: 'pending' },
+              { campaignId: campaign.id, status: 'processing' },
+            ],
+          });
+
+          if (remainingPending === 0) {
+            campaign.status = 'completed';
           }
-        } catch(e) {
-          console.error(`⚠️ ไม่สามารถอัปเดตสถานะบล็อกให้ผู้ใช้ ${job.lineUserId}:`, e);
+          await campRepo.save(campaign);
+          if (remainingPending === 0) {
+            this.checkAndSendTelegramReport(campaign).catch(() => {});
+          }
         }
+
+        const isUserBlocked = body.isBlocked || (body.reason && (body.reason.includes('บล็อก') || body.reason.includes('ไม่สามารถส่งข้อความ')));
+        if (isUserBlocked && job.lineUserId && job.botId && /^U[0-9a-fA-F]{32}$/.test(job.botId)) {
+          try {
+            const customer = await custRepo.findOne({ where: { botId: job.botId, lineUserId: job.lineUserId } });
+            if (customer) {
+              customer.isBlocked = true;
+              customer.blockReason = body.reason || '🚫 บล็อก / ไม่สามารถส่งข้อความได้แล้ว';
+              await custRepo.save(customer);
+              console.log(`🚫 ปิดสถานะผู้ใช้ในตาราง Customers เป็น "บล็อก/ส่งไม่ได้แล้ว": ${job.lineUserId} (OA: ${job.botId})`);
+            }
+          } catch(e) {
+            console.error(`⚠️ ไม่สามารถอัปเดตสถานะบล็อกให้ผู้ใช้ ${job.lineUserId}:`, e);
+          }
+        }
+
+        console.log(`❌ ส่งข้อความล้มเหลว: ${job.lineUserId} (${body.reason})`);
       }
 
-      console.log(`❌ ส่งข้อความล้มเหลว: ${job.lineUserId} (${body.reason})`);
-    }
-
-    return { success: true };
+      return { success: true };
+    });
   }
 
-  // API สำหรับสั่งหยุดแคมเปญทันทีเมื่อโควต้าเต็ม หรือพบ Error ติดต่อกันเกิน 10 ครั้ง (Circuit Breaker)
+  // API สำหรับสั่งหยุดแคมเปญทันทีเมื่อโควต้าเต็ม หรือพบ Error ติดต่อกันเกิน 10 ครั้ง (Circuit Breaker พร้อม Fenced Stop Authority)
   @Post('campaign/stop')
   async stopCampaign(
     @Headers('x-linesync-worker-version') workerVersion?: string,
@@ -1193,64 +1204,91 @@ export class AppController {
     @Body() body?: { campaignId?: string; jobId?: string; botId?: string; leaseToken?: string; reason?: string; limitReached?: boolean; errorOverflow?: boolean },
     @Res({ passthrough: true }) res?: Response,
   ) {
-    let campaignId = body?.campaignId;
-
     if (body?.jobId) {
-      if (!body.leaseToken || !body.botId || !this.isValidWorkerInstance(workerInstance)) {
+      if (!workerVersion || workerVersion.trim() !== REQUIRED_WORKER_VERSION) {
+        if (res) res.status(HttpStatus.CONFLICT);
+        return { success: false, status: 'version_mismatch', requiredWorkerVersion: REQUIRED_WORKER_VERSION };
+      }
+
+      if (!workerOaHeader || !/^U[0-9a-fA-F]{32}$/.test(workerOaHeader.trim())) {
+        if (res) res.status(HttpStatus.CONFLICT);
+        return { success: false, status: 'missing_oa_context' };
+      }
+
+      if (!body.botId || workerOaHeader.trim() !== body.botId.trim()) {
+        if (res) res.status(HttpStatus.CONFLICT);
+        return { success: false, status: 'oa_context_mismatch' };
+      }
+
+      if (!this.isValidWorkerInstance(workerInstance)) {
+        if (res) res.status(HttpStatus.CONFLICT);
+        return { success: false, status: 'missing_worker_instance' };
+      }
+
+      if (!body.leaseToken) {
         if (res) res.status(HttpStatus.CONFLICT);
         return { success: false, status: 'lease_lost', message: 'Worker-driven stop requires valid active job lease' };
       }
-
-      const job = await this.campaignJobRepository.findOne({ where: { id: body.jobId } });
-      if (
-        !job ||
-        job.status !== 'processing' ||
-        job.botId !== body.botId ||
-        job.leaseToken !== body.leaseToken ||
-        job.leaseOwner !== workerInstance?.trim() ||
-        !job.leaseExpiresAt ||
-        new Date(job.leaseExpiresAt).getTime() <= Date.now()
-      ) {
-        if (res) res.status(HttpStatus.CONFLICT);
-        return { success: false, status: 'lease_lost', message: 'Worker-driven stop rejected: stale or invalid lease' };
-      }
-
-      campaignId = job.campaignId;
     }
 
-    if (campaignId) {
-      const campaign = await this.campaignRepository.findOne({ where: { id: campaignId } });
-      if (campaign) {
-        let stopStatus = 'stopped_user';
-        if (body?.limitReached) stopStatus = 'stopped_limit';
-        else if (body?.errorOverflow) stopStatus = 'stopped_error';
+    return await this.campaignJobRepository.manager.transaction(async (manager) => {
+      const jobRepo = manager.getRepository(CampaignJob);
+      const campRepo = manager.getRepository(Campaign);
+      const now = new Date();
 
-        campaign.status = stopStatus;
-        await this.campaignRepository.save(campaign);
+      let targetCampaignId = body?.campaignId;
 
-        const pendingJobs = await this.campaignJobRepository.find({
-          where: [
-            { campaignId: campaign.id, status: 'pending' },
-            { campaignId: campaign.id, status: 'processing' },
-          ],
-        });
+      if (body?.jobId) {
+        const callingJob = await jobRepo
+          .createQueryBuilder('job')
+          .where('job.id = :jobId', { jobId: body.jobId })
+          .andWhere('job.botId = :botId', { botId: body.botId!.trim() })
+          .andWhere('job.status = :status', { status: 'processing' })
+          .andWhere('job.leaseToken = :leaseToken', { leaseToken: body.leaseToken })
+          .andWhere('job.leaseOwner = :leaseOwner', { leaseOwner: workerInstance!.trim() })
+          .andWhere('job.leaseExpiresAt IS NOT NULL AND job.leaseExpiresAt > :now', { now })
+          .getOne();
 
-        for (const job of pendingJobs) {
-          job.status = 'failed';
-          job.errorReason = body?.reason || 'ผู้ใช้สั่งหยุดการส่งแคมเปญ';
-          job.leaseToken = null;
-          job.leaseOwner = null;
-          job.leaseExpiresAt = null;
-          job.leaseHeartbeatAt = null;
-          await this.campaignJobRepository.save(job);
+        if (!callingJob) {
+          if (res) res.status(HttpStatus.CONFLICT);
+          return { success: false, status: 'lease_lost', message: 'Worker-driven stop rejected: stale or invalid lease' };
         }
 
-        console.log(`🛑 สั่งหยุดแคมเปญ "${campaign.name}": สถานะ ${stopStatus} (เหตุผล: ${body?.reason || 'ผู้ใช้สั่งหยุด'})`);
-        await this.checkAndSendTelegramReport(campaign);
+        targetCampaignId = callingJob.campaignId;
       }
-    }
 
-    return { success: true };
+      if (targetCampaignId) {
+        const campaign = await campRepo.findOne({ where: { id: targetCampaignId } });
+        if (campaign) {
+          let stopStatus = 'stopped_user';
+          if (body?.limitReached) stopStatus = 'stopped_limit';
+          else if (body?.errorOverflow) stopStatus = 'stopped_error';
+
+          campaign.status = stopStatus;
+          await campRepo.save(campaign);
+
+          await jobRepo
+            .createQueryBuilder()
+            .update(CampaignJob)
+            .set({
+              status: 'failed',
+              errorReason: body?.reason || 'ผู้ใช้สั่งหยุดการส่งแคมเปญ',
+              leaseToken: null,
+              leaseOwner: null,
+              leaseExpiresAt: null,
+              leaseHeartbeatAt: null,
+            })
+            .where('campaignId = :campaignId', { campaignId: targetCampaignId })
+            .andWhere('status IN (:...statuses)', { statuses: ['pending', 'processing'] })
+            .execute();
+
+          console.log(`🛑 สั่งหยุดแคมเปญ "${campaign.name}": สถานะ ${stopStatus} (เหตุผล: ${body?.reason || 'ผู้ใช้สั่งหยุด'})`);
+          this.checkAndSendTelegramReport(campaign).catch(() => {});
+        }
+      }
+
+      return { success: true };
+    });
   }
 
   private async checkAndSendTelegramReport(campaign: Campaign) {

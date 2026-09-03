@@ -1,10 +1,10 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: NONE
+STATUS: AWAITING_AUTHORIZATION
 AUTHORIZED_BY: Project Owner
-NEXT_CANDIDATE: REL-WP003
+NEXT_CANDIDATE: REL-WP002-R1 Review / REL-WP003
 NEXT_CANDIDATE_STATUS: NOT STARTED
 ```
 
@@ -12,7 +12,9 @@ NEXT_CANDIDATE_STATUS: NOT STARTED
 
 ## 📋 Work Package Status Summary
 
-- **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `READY_FOR_CHATGPT_REVIEW`
+- **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `NOT CLOSED`
+  - *Notes*: Lease infrastructure implemented; R1 corrective implemented; awaiting independent review
+- **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `READY_FOR_CHATGPT_REVIEW`
 - **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `CLOSED / PASS`
   - **SAFE-WP001-R1**: `CLOSED / PASS`
   - **SAFE-WP001-R2**: `CLOSED / PASS`
@@ -23,9 +25,9 @@ NEXT_CANDIDATE_STATUS: NOT STARTED
 - **REL-WP003**: `NOT STARTED`
 
 ### Version Contracts
-- **Worker Version**: `28.13`
+- **Worker Version**: `28.14`
 - **Runtime Contract Version**: `2`
-- **Required Worker Version**: `28.13`
+- **Required Worker Version**: `28.14`
 
 ---
 
@@ -71,6 +73,6 @@ NEXT_CANDIDATE_STATUS: NOT STARTED
 
 ## 🚀 Next Candidate Work Package
 
-- **Candidate**: `REL-WP002 — Job Lease + Heartbeat`
-- **Status**: `READY / NOT STARTED / AUTHORIZATION REQUIRED`
+- **Candidate**: `REL-WP002-R1 Independent Review` / `REL-WP003`
+- **Status**: `AWAITING_AUTHORIZATION`
 - **Note**: Awaits explicit Project Owner authorization before starting. Do NOT start automatically.

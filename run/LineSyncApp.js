@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.13
+// @version      28.14
 // @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (REL-WP002 Durable Job Lease Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.13';
+    const WORKER_VERSION = '28.14';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -561,6 +561,14 @@
 
     const JOB_HEARTBEAT_INTERVAL_MS = 10000;
     let activeJobHeartbeatTimer = null;
+    let activeFinalizationRetryTimer = null;
+
+    function stopActiveFinalizationRetry() {
+        if (activeFinalizationRetryTimer) {
+            clearTimeout(activeFinalizationRetryTimer);
+            activeFinalizationRetryTimer = null;
+        }
+    }
 
     function stopActiveJobHeartbeat() {
         if (activeJobHeartbeatTimer) {
@@ -569,37 +577,108 @@
         }
     }
 
-    async function sendJobHeartbeat(jobId, botId, leaseToken) {
-        if (!jobId || !botId || !leaseToken) return false;
-        try {
-            const res = await fetchAPI('/campaign/heartbeat', 'POST', {
-                jobId: jobId,
-                botId: botId,
-                leaseToken: leaseToken
-            });
+    // 🛡️ REL-WP002-R1 Specialized Lease HTTP Helper (distinguishes renewed, explicit lease_lost, transient_error)
+    function fetchLeaseAPI(endpoint, method = 'POST', data = null) {
+        return new Promise((resolve) => {
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-LineSync-Worker-Version': WORKER_VERSION,
+                'X-LineSync-Worker-Instance': getTabSessionId()
+            };
 
-            if (res && res.success === true && typeof res.leaseExpiresAt === 'number') {
+            const currentBot = (data && data.botId) || getBotId();
+            if (currentBot && isValidChatContextId(currentBot)) {
+                headers['X-LineSync-OA-Context'] = currentBot;
+            }
+
+            const options = {
+                method: method,
+                url: `${API_BASE}${endpoint}`,
+                headers: headers,
+                timeout: 10000,
+                onload: function(response) {
+                    let parsed = null;
+                    try {
+                        parsed = JSON.parse(response.responseText);
+                    } catch (e) {}
+
+                    if (response.status >= 200 && response.status < 300) {
+                        resolve({
+                            state: 'renewed',
+                            leaseExpiresAt: parsed && typeof parsed.leaseExpiresAt === 'number' ? parsed.leaseExpiresAt : undefined,
+                            data: parsed
+                        });
+                        return;
+                    }
+
+                    if (response.status === 409 && parsed && (parsed.status === 'lease_lost' || (parsed.message && parsed.message.includes('lease_lost')))) {
+                        resolve({
+                            state: 'lease_lost',
+                            status: response.status,
+                            data: parsed
+                        });
+                        return;
+                    }
+
+                    resolve({
+                        state: 'transient_error',
+                        status: response.status,
+                        data: parsed
+                    });
+                },
+                onerror: function() {
+                    resolve({
+                        state: 'transient_error',
+                        error: 'network_error'
+                    });
+                },
+                ontimeout: function() {
+                    resolve({
+                        state: 'transient_error',
+                        error: 'timeout'
+                    });
+                }
+            };
+            if (data) options.data = JSON.stringify(data);
+            GM_xmlhttpRequest(options);
+        });
+    }
+
+    async function sendJobHeartbeat(jobId, botId, leaseToken) {
+        if (!jobId || !botId || !leaseToken) return { state: 'lease_lost' };
+
+        const rawExpires = sessionStorage.getItem('linesync_job_lease_expires_at');
+        const knownExpiresAt = rawExpires ? parseInt(rawExpires, 10) : 0;
+
+        const res = await fetchLeaseAPI('/campaign/heartbeat', 'POST', {
+            jobId: jobId,
+            botId: botId,
+            leaseToken: leaseToken
+        });
+
+        if (res.state === 'renewed') {
+            if (typeof res.leaseExpiresAt === 'number') {
                 try {
                     sessionStorage.setItem('linesync_job_lease_expires_at', String(res.leaseExpiresAt));
                 } catch (e) {}
-                return true;
-            } else {
-                console.warn(`🛑 [REL] Job lease heartbeat rejected by backend for job ${jobId}:`, res);
-                handleJobLeaseLost('EXPLICIT_LEASE_LOST');
-                return false;
             }
-        } catch (err) {
-            console.warn(`⚠️ [REL] Heartbeat network error for job ${jobId}:`, err);
-            const rawExpires = sessionStorage.getItem('linesync_job_lease_expires_at');
-            const knownExpiresAt = rawExpires ? parseInt(rawExpires, 10) : 0;
-
-            if (knownExpiresAt > 0 && Date.now() >= knownExpiresAt) {
-                console.error(`🛑 [REL] Known job lease expired during network failure for job ${jobId}. Failing closed.`);
-                handleJobLeaseLost('LEASE_EXPIRED_ON_NETWORK_ERROR');
-                return false;
-            }
-            return false;
+            return { state: 'renewed', leaseExpiresAt: res.leaseExpiresAt };
         }
+
+        if (res.state === 'lease_lost') {
+            console.warn(`🛑 [REL] Job lease heartbeat rejected by backend (lease_lost) for job ${jobId}`);
+            handleJobLeaseLost('EXPLICIT_LEASE_LOST');
+            return { state: 'lease_lost' };
+        }
+
+        console.warn(`⚠️ [REL] Heartbeat network error for job ${jobId}`);
+        if (knownExpiresAt > 0 && Date.now() >= knownExpiresAt) {
+            console.error(`🛑 [REL] Known job lease expired during network failure for job ${jobId}. Failing closed.`);
+            handleJobLeaseLost('LEASE_EXPIRED_ON_NETWORK_ERROR');
+            return { state: 'lease_lost' };
+        }
+
+        return { state: 'transient_error', knownExpiresAt: knownExpiresAt };
     }
 
     function startActiveJobHeartbeat(jobId, botId, leaseToken) {
@@ -625,16 +704,21 @@
             throw new Error('JOB_LEASE_LOST');
         }
 
-        const isRenewed = await sendJobHeartbeat(jobId, botId, leaseToken);
-        if (!isRenewed) {
-            console.error(`🛑 [REL] Authoritative pre-send lease renewal failed for job ${jobId}. Aborting physical send.`);
+        const result = await sendJobHeartbeat(jobId, botId, leaseToken);
+        if (result.state === 'lease_lost') {
+            console.error(`🛑 [REL] Authoritative pre-send lease renewal failed (lease_lost) for job ${jobId}. Aborting physical send.`);
             throw new Error('JOB_LEASE_LOST');
+        }
+        if (result.state === 'transient_error') {
+            console.warn(`⚠️ [REL] Pre-send lease renewal unconfirmed due to transient network error for job ${jobId}. Blocking physical send.`);
+            throw new Error('JOB_LEASE_UNCONFIRMED');
         }
     }
 
     function handleJobLeaseLost(reason = 'UNKNOWN') {
         console.error(`🛑 [REL] JOB LEASE LOST (${reason}): Relinquishing local active job execution.`);
         stopActiveJobHeartbeat();
+        stopActiveFinalizationRetry();
         isExecutingJob = false;
         clearLocalActiveJobState();
         emitDiagnostic('JOB_LEASE_LOST', { reason: reason });
@@ -643,6 +727,7 @@
     // 🛡️ Helper: Clear local active job session storage fields
     function clearLocalActiveJobState() {
         stopActiveJobHeartbeat();
+        stopActiveFinalizationRetry();
         try {
             sessionStorage.removeItem('linesync_jobid');
             sessionStorage.removeItem('linesync_uid');
@@ -1107,8 +1192,12 @@
         return isBlocked;
     }
 
-    // 🛡️ ZERO-TOLERANCE IMAGE SEND GUARD: Confirm & Send image with strict expectedUserId check
-    async function confirmAndCloseImageModal(expectedUserId) {
+    // 🛡️ ZERO-TOLERANCE IMAGE SEND GUARD: Confirm & Send image with strict expectedUserId and expectedBotId check (REL-WP002-R1)
+    async function confirmAndCloseImageModal(expectedUserId, expectedBotId) {
+        if (!expectedBotId || !isValidChatContextId(expectedBotId)) {
+            console.error("🛑 [OA] Zero-tolerance image send guard: Missing or invalid expectedBotId in confirmAndCloseImageModal!");
+            throw new Error('OA_CONTEXT_MISMATCH');
+        }
         console.log("⏳ [DEBUG] 1. รอป๊อปอัปยืนยันรูปภาพปรากฏขึ้นมาบนหน้าจอ...");
 
         let confirmBtn = null;
@@ -1776,7 +1865,20 @@
                 } catch (e) {
                     console.error("❌ เกิด Error ตอนส่ง:", e);
                     const errReason = e.message || String(e) || 'Error ในกระบวนการพิมพ์';
-                    if (errReason.includes('WORKER_LEADERSHIP_LOST')) {
+                    if (errReason.includes('JOB_LEASE_LOST')) {
+                        console.error("🛑 [REL] Aborting execution due to JOB_LEASE_LOST. Relinquishing job without marking fail.");
+                        handleJobLeaseLost('EXECUTE_CHATBOT_LEASE_LOST');
+                        return;
+                    } else if (errReason.includes('JOB_LEASE_UNCONFIRMED')) {
+                        console.warn("⚠️ [REL] Transient lease uncertainty before physical send. Preserving SAME job for retry.");
+                        isExecutingJob = false;
+                        setTimeout(() => {
+                            if (!isExecutingJob) {
+                                executeChatBot(jobData);
+                            }
+                        }, 2000);
+                        return;
+                    } else if (errReason.includes('WORKER_LEADERSHIP_LOST')) {
                         handleLeadershipLost('EXECUTE_CHATBOT_THROWN');
                     } else if (errReason.includes('OA_CONTEXT_MISMATCH')) {
                         console.error("🛑 [OA] Physical send phase aborted due to OA_CONTEXT_MISMATCH.");
@@ -1799,83 +1901,96 @@
         }, 1000);
     }
 
+    // 🛡️ REL-WP002-R1 Real Same-Job Finalization Retry
+    // Note: Browser/process death after physical send but before backend acknowledgement remains a known REL-WP003 risk.
     async function finishJob(jobId, userId, success, reason = '', isBlocked = false, botId = '') {
-        let isFinalizedOnBackend = false;
-        try {
-            sessionStorage.removeItem(`linesync_retry_${jobId}`);
+        stopActiveFinalizationRetry();
+        sessionStorage.removeItem(`linesync_retry_${jobId}`);
 
-            const expectedJobBotId = botId || sessionStorage.getItem('linesync_job_botid') || '';
-            const leaseToken = sessionStorage.getItem('linesync_job_lease_token') || '';
+        const expectedJobBotId = botId || sessionStorage.getItem('linesync_job_botid') || '';
+        const leaseToken = sessionStorage.getItem('linesync_job_lease_token') || '';
 
-            if (success) {
-                emitDiagnostic('JOB_SUCCESS', { jobId: jobId, userId: userId, botId: expectedJobBotId });
-                consecutiveErrorCount = 0;
-                sessionStorage.setItem('linesync_consecutive_errors', '0');
-                sessionStorage.removeItem('linesync_error_cooldown_until');
-                publishAccountProtectionTelemetry(expectedJobBotId, 0).catch(() => {});
-                const res = await fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, leaseToken: leaseToken });
-                if (res && res.status === 'lease_lost') {
-                    handleJobLeaseLost('SUCCESS_LEASE_LOST');
-                    return;
-                }
-                isFinalizedOnBackend = true;
+        if (success) {
+            emitDiagnostic('JOB_SUCCESS', { jobId: jobId, userId: userId, botId: expectedJobBotId });
+            consecutiveErrorCount = 0;
+            sessionStorage.setItem('linesync_consecutive_errors', '0');
+            sessionStorage.removeItem('linesync_error_cooldown_until');
+            publishAccountProtectionTelemetry(expectedJobBotId, 0).catch(() => {});
+        } else {
+            emitDiagnostic('JOB_FAIL', { jobId: jobId, userId: userId, botId: expectedJobBotId, reason: reason });
+
+            const isUserBlocked = isBlocked || (reason && (reason.includes('บล็อก') || reason.includes('ไม่สามารถส่งข้อความ')));
+            if (isUserBlocked) {
+                console.log(`ℹ️ ผู้ใช้บล็อกแชท/ส่งไม่ได้ (ไม่นับเป็น Error ระบบ): ${userId}`);
             } else {
-                emitDiagnostic('JOB_FAIL', { jobId: jobId, userId: userId, botId: expectedJobBotId, reason: reason });
-
-                const isUserBlocked = isBlocked || (reason && (reason.includes('บล็อก') || reason.includes('ไม่สามารถส่งข้อความ')));
-
-                if (isUserBlocked) {
-                    console.log(`ℹ️ ผู้ใช้บล็อกแชท/ส่งไม่ได้ (ไม่นับเป็น Error ระบบ): ${userId}`);
-                } else {
-                    consecutiveErrorCount++;
-                    sessionStorage.setItem('linesync_consecutive_errors', String(consecutiveErrorCount));
-                    const cooldownMs = getSystemErrorCooldownMs(consecutiveErrorCount);
-                    const cooldownUntil = Date.now() + cooldownMs;
-                    sessionStorage.setItem('linesync_error_cooldown_until', String(cooldownUntil));
-                    publishAccountProtectionTelemetry(expectedJobBotId, 0).catch(() => {});
-                    console.warn(`⚠️ เกิด Error สะสมติดต่อกันแล้ว ${consecutiveErrorCount}/10 รายการ (${reason}). คูลดาวน์ระบบ ${cooldownMs / 1000}s`);
-                }
-
-                const res = await fetchAPI('/campaign/fail', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, leaseToken: leaseToken, reason: reason, isBlocked: isBlocked });
-                if (res && res.status === 'lease_lost') {
-                    handleJobLeaseLost('FAIL_LEASE_LOST');
-                    return;
-                }
-                isFinalizedOnBackend = true;
-
-                if (consecutiveErrorCount >= 10) {
-                    console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! สั่งหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
-                    await fetchAPI('/campaign/stop', 'POST', {
-                        jobId: jobId,
-                        botId: expectedJobBotId,
-                        leaseToken: leaseToken,
-                        reason: '🚨 สคริปต์หยุดทำงานอัตโนมัติเนื่องจากพบ Error ติดต่อกันเกิน 10 รายการ',
-                        errorOverflow: true
-                    });
-                    safeClearSessionStorage();
-                    isExecutingJob = false;
-                    alert('🚨 ระบบเซฟตี้หยุดสคริปต์อัตโนมัติ เนื่องจากพบ Error ติดต่อกันเกิน 10 รายการเพื่อความปลอดภัยของบัญชี LINE OA');
-                    return;
-                }
-            }
-        } catch(e) {
-            console.error("❌ ส่งรายงานไม่สำเร็จ:", e);
-            const rawExpires = sessionStorage.getItem('linesync_job_lease_expires_at');
-            const knownExpiresAt = rawExpires ? parseInt(rawExpires, 10) : 0;
-            if (knownExpiresAt > 0 && Date.now() < knownExpiresAt) {
-                console.warn("⚠️ Network failure during finalization acknowledgement. Retrying finalization while lease remains valid...");
-                return;
-            }
-            handleJobLeaseLost('FINALIZATION_NETWORK_ERROR_EXPIRED');
-            return;
-        } finally {
-            if (isFinalizedOnBackend) {
-                clearLocalActiveJobState();
-                isExecutingJob = false;
-                closeUserChatAndReturnToMain();
-                setTimeout(processQueue, 3500);
+                consecutiveErrorCount++;
+                sessionStorage.setItem('linesync_consecutive_errors', String(consecutiveErrorCount));
+                const cooldownMs = getSystemErrorCooldownMs(consecutiveErrorCount);
+                const cooldownUntil = Date.now() + cooldownMs;
+                sessionStorage.setItem('linesync_error_cooldown_until', String(cooldownUntil));
+                publishAccountProtectionTelemetry(expectedJobBotId, 0).catch(() => {});
+                console.warn(`⚠️ เกิด Error สะสมติดต่อกันแล้ว ${consecutiveErrorCount}/10 รายการ (${reason}). คูลดาวน์ระบบ ${cooldownMs / 1000}s`);
             }
         }
+
+        await attemptFinalization(jobId, userId, success, reason, isBlocked, expectedJobBotId, leaseToken);
+    }
+
+    async function attemptFinalization(jobId, userId, success, reason, isBlocked, expectedJobBotId, leaseToken) {
+        const rawExpires = sessionStorage.getItem('linesync_job_lease_expires_at');
+        const knownExpiresAt = rawExpires ? parseInt(rawExpires, 10) : 0;
+        if (knownExpiresAt > 0 && Date.now() >= knownExpiresAt) {
+            console.error(`🛑 [REL] Lease expired before finalization acknowledgement for job ${jobId}. Failing closed.`);
+            stopActiveFinalizationRetry();
+            handleJobLeaseLost('FINALIZATION_LEASE_EXPIRED');
+            return;
+        }
+
+        let res;
+        if (success) {
+            // OA compatibility signature: fetchAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, leaseToken: leaseToken })
+            res = await fetchLeaseAPI('/campaign/success', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, leaseToken: leaseToken });
+        } else {
+            res = await fetchLeaseAPI('/campaign/fail', 'POST', { jobId: jobId, userId: userId, botId: expectedJobBotId, leaseToken: leaseToken, reason: reason, isBlocked: isBlocked });
+        }
+
+        if (res.state === 'renewed' || (res.data && res.data.success === true)) {
+            stopActiveFinalizationRetry();
+            clearLocalActiveJobState();
+            isExecutingJob = false;
+
+            if (consecutiveErrorCount >= 10) {
+                console.error("🚨 [CRITICAL] พบ Error ติดต่อกันเกิน 10 รายการ! สั่งหยุดสคริปต์ฉุกเฉิน (Circuit Breaker)...");
+                await fetchLeaseAPI('/campaign/stop', 'POST', {
+                    jobId: jobId,
+                    botId: expectedJobBotId,
+                    leaseToken: leaseToken,
+                    reason: '🚨 สคริปต์หยุดทำงานอัตโนมัติเนื่องจากพบ Error ติดต่อกันเกิน 10 รายการ',
+                    errorOverflow: true
+                });
+                safeClearSessionStorage();
+                alert('🚨 ระบบเซฟตี้หยุดสคริปต์อัตโนมัติ เนื่องจากพบ Error ติดต่อกันเกิน 10 รายการเพื่อความปลอดภัยของบัญชี LINE OA');
+                return;
+            }
+
+            closeUserChatAndReturnToMain();
+            setTimeout(processQueue, 3500);
+            return;
+        }
+
+        if (res.state === 'lease_lost') {
+            console.warn(`🛑 [REL] Backend returned lease_lost during finalization for job ${jobId}. Relinquishing retry.`);
+            stopActiveFinalizationRetry();
+            handleJobLeaseLost(success ? 'SUCCESS_LEASE_LOST' : 'FAIL_LEASE_LOST');
+            return;
+        }
+
+        // Transient network error or 5xx:
+        console.warn(`⚠️ [REL] Transient network error during finalization for job ${jobId}. Scheduling retry while lease remains valid...`);
+        stopActiveFinalizationRetry();
+        activeFinalizationRetryTimer = setTimeout(() => {
+            attemptFinalization(jobId, userId, success, reason, isBlocked, expectedJobBotId, leaseToken);
+        }, 1500);
     }
 
     // 🛡️ SAVED ACTIVE JOB RECOVERY WITH FAIL-CLOSED RUNTIME RETRY & LEADER LOCK (REL-WP001 / REL-WP002)
@@ -1913,10 +2028,21 @@
             return;
         }
 
-        const isRenewed = await sendJobHeartbeat(savedJobData.jobId, savedJobData.botId, savedLeaseToken);
-        if (!isRenewed) {
-            console.warn("🛑 [REL] Page-load saved job lease renewal rejected by backend. Relinquishing active job state.");
+        const heartbeatResult = await sendJobHeartbeat(savedJobData.jobId, savedJobData.botId, savedLeaseToken);
+        if (heartbeatResult.state === 'lease_lost') {
+            console.warn("🛑 [REL] Page-load saved job lease renewal rejected by backend (lease_lost). Relinquishing active job state.");
             handleJobLeaseLost('SAVED_LEASE_RENEWAL_FAILED_ON_LOAD');
+            return;
+        }
+
+        if (heartbeatResult.state === 'transient_error') {
+            if (Date.now() >= knownExpiresAt) {
+                console.error("🛑 [REL] Page-load saved job lease expired during transient network error. Failing closed.");
+                handleJobLeaseLost('SAVED_LEASE_EXPIRED_ON_NETWORK_ERROR');
+                return;
+            }
+            console.warn("⚠️ [REL] Transient network error during page-load lease renewal. Preserving active job lease and retrying in 2000ms...");
+            setTimeout(() => resumeSavedActiveJob(savedJobData), 2000);
             return;
         }
 
