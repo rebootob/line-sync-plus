@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-**LineSync Plus** is an automated customer contact synchronization, group segmentation, and broadcast campaign management platform operating against the **LINE Official Account (LINE OA)** Web Interface (`chat.line.biz`). The system consists of a NestJS backend REST API, a single-page HTML web dashboard, a PostgreSQL database, and a client-side Tampermonkey automation script (`run/LineSyncApp.js` v28.14).
+**LineSync Plus** is an automated customer contact synchronization, group segmentation, and broadcast campaign management platform operating against the **LINE Official Account (LINE OA)** Web Interface (`chat.line.biz`). The system consists of a NestJS backend REST API, a single-page HTML web dashboard, a PostgreSQL database, and a client-side Tampermonkey automation script (`run/LineSyncApp.js` v28.15).
 
 This document serves as the master source-of-truth for project architecture, safety models, complete incident corrective history, live UAT evidence, technical debt, secret hygiene mandates, and the Phase 0–5 development roadmap.
 
@@ -20,7 +20,7 @@ Key Operational Goals:
 - Guarantee single active worker execution across multiple open browser tabs.
 - Guarantee strict OA context isolation across multi-OA environments.
 - Protect LINE OA account via per-OA send rate limits, fail-closed protection state, exact read-back timestamp reservations, active worker telemetry heartbeats, campaign target hygiene, and adaptive error backoff (SAFE-WP001 / R1 / R2 / R3 CLOSED / PASS).
-- Guarantee durable backend job leases, active heartbeat renewals, pre-send lease fencing, transactional finalization, and stale worker fencing (REL-WP002 NOT CLOSED; REL-WP002-R1 READY_FOR_CHATGPT_REVIEW).
+- Guarantee durable backend job leases, active heartbeat renewals, pre-send lease fencing, transactional finalization, and stale worker fencing (REL-WP002 CLOSED / PASS; REL-WP002-R3 CLOSED / PASS).
 
 ---
 
@@ -51,7 +51,7 @@ Key Operational Goals:
 
 +-----------------------------------------------------------------------------------+
 |                          Client Automation & Observability                        |
-|                     Tampermonkey Userscript (LineSyncApp.js v28.14)              |
+|                     Tampermonkey Userscript (LineSyncApp.js v28.15)              |
 |                             Running in chat.line.biz                              |
 |                                                                                   |
 |  - Durable Job Lease & Active Heartbeat Loop (REL-WP002 / REL-WP002-R1)           |
@@ -73,7 +73,7 @@ Key Operational Goals:
 |  - Fail-Closed Lease Persistence (writeAndVerifyLeaderRecord)                     |
 |  - Complete Navigation Hold (navigateAsLeader: NAVIGATION_LEASE_MS = 45000)       |
 |  - Atomic Pre-Send Fencing (confirmWorkerLeadershipForSend under Web Locks)       |
-|  - Fail-Closed Runtime Version Gate (X-LineSync-Worker-Version: 28.14)            |
+|  - Fail-Closed Runtime Version Gate (X-LineSync-Worker-Version: 28.15)            |
 |  - Strict OA Context Validator (isValidChatContextId)                             |
 |  - Full-Lifecycle Execution Lock (isExecutingJob)                                 |
 |  - Same-Job Safe Recovery & Preservation (handleSafeRecovery)                     |
@@ -94,7 +94,7 @@ Key Operational Goals:
 2. **Campaign & Queue Engine**:
    - Campaign target hygiene on `POST /api/campaign/add`: deduplicates target IDs, excludes blocked customers (`isBlocked === true`), sets `totalTargets` to `queuedCount`.
    - Multi-type campaign dispatching (`text`, `image_only`, `link_only`, `text_link`, `image_link`).
-   - Durable job lease claim via `GET /api/campaign/next` generating UUID `leaseToken` and setting 60s lease expiry with fail-closed runtime version gate (`X-LineSync-Worker-Version: 28.14`) and strict worker instance header (`^ts_[0-9]{10,17}_[a-z0-9]{4,32}$`).
+   - Durable job lease claim via `GET /api/campaign/next` generating UUID `leaseToken` and setting 60s lease expiry with fail-closed runtime version gate (`X-LineSync-Worker-Version: 28.15`) and strict worker instance header (`^ts_[0-9]{10,17}_[a-z0-9]{4,32}$`).
    - Active lease heartbeat via `POST /api/campaign/heartbeat` extending lease by 60s or returning 409 Conflict `lease_lost`.
    - Pre-send lease renewal fencing (`renewJobLeaseOrThrow`) before image confirm, text send click, and Enter keydown.
    - Transactional finalization (`/campaign/success`, `/campaign/fail`, `/campaign/stop`) executing inside TypeORM transactions with atomic fencing queries; duplicate finalizations fail closed with 409 `lease_lost` and cannot double-increment counters or mutate customer block status.
@@ -119,11 +119,11 @@ The LineSync Plus safety model operates on strict **fail-closed** principles:
 - **Durable Job Lease & Heartbeat Fencing (REL-WP002 / REL-WP002-R1)**: Atomic job claim generating UUID `leaseToken`, 60s lease expiry, 10s active heartbeat extension, pre-send lease renewal fencing, real same-job finalization retry without re-send, and transactional finalization fencing.
 - **LINE OA Account Protection & Compliance Guard (SAFE-WP001 CLOSED / PASS)**: Enforces strict protection state schema reads, exact read-back timestamp reservations, final reservation revalidation, active worker telemetry heartbeats, loopback-trusted cross-origin telemetry, per-OA rolling window send caps (10s min gap, 60/10m, 300/1h), campaign target hygiene, and adaptive error backoff.
   > ⚠️ **Notice**: SAFE-WP001 is an operational risk-reduction control. It does NOT guarantee that LINE will never restrict/suspend an OA. Internal rate thresholds are safety defaults, not official LINE API limits. Zero detection evasion techniques are included.
-- **Customer Directory Sync Hard Fencing & Metric Integrity (SYNC-WP001 CLOSED / PASS)**: `POST /api/customers/sync-batch` enforces loopback origin, valid `botId` format, `botId === activeBotId`, strict User ID regex, and Master Bot PAUSED status. Worker v28.14 queries `/chats?folderType=ALL&limit=20&prioritizePinnedChat=true`.
+- **Customer Directory Sync Hard Fencing & Metric Integrity (SYNC-WP001 CLOSED / PASS)**: `POST /api/customers/sync-batch` enforces loopback origin, valid `botId` format, `botId === activeBotId`, strict User ID regex, and Master Bot PAUSED status. Worker v28.15 queries `/chats?folderType=ALL&limit=20&prioritizePinnedChat=true`.
 - **Strict OA Identity Fencing (OA-WP001 / OA-WP001-R1 CLOSED / PASS)**: Terminal fallback reporting requires valid `botId` + `lineUserId` + `status: 'processing'`.
 - **Single Worker Multi-Tab Lock & Clone Defense (REL-WP001 CLOSED / PASS)**: `ensureWorkerLeadership()` enforces single worker tab execution.
 - **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path and DOM attribute validation before any physical send action.
-- **Fail-Closed Runtime Version Gate (OPS-WP001 CLOSED / PASS)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.14'`.
+- **Fail-Closed Runtime Version Gate (OPS-WP001 CLOSED / PASS)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.15'`.
 
 ---
 
@@ -169,7 +169,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - Both jobs completed successfully (`08:10:18`, `08:10:30`); 0 failed; overall campaign completed.
   - Zero visible `JOB_LEASE_LOST`, `lease_lost`, `OA_CONTEXT_MISMATCH`, or `RECIPIENT_UNVERIFIED`.
   - Post-run Account Protection: ON, 10m: 2/60, 1h: 2/300, Next Send: now, Cooling: none.
-  - *Non-Destructive UAT Limitation*: Destructive failure modes (lease takeover, competing stale worker, forced outage during finalization, 10-error circuit breaker) were NOT run against live LINE OA; covered by 236 unit tests.
+  - *Non-Destructive UAT Limitation*: These destructive scenarios were not executed on Live LINE OA to avoid unnecessary operational/send risk. They are covered by focused behavioral/unit tests. The local validation suite reported 236/236 passing; no independent GitHub CI status is available.
   - *Known REL-WP003 Boundary*: Post-send crash window (send succeeds in LINE but browser crashes before backend response) is deferred to REL-WP003.
 
 ---
@@ -227,7 +227,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
 ## 11. Technical Evolution
 
 - **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 (REL-WP002 CLOSED / PASS).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, customer DB rollback, circuit breaker inside markFail, and 236 unit tests.
+- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, customer DB rollback, circuit breaker inside markFail, and 236 passing local unit tests.
 
 ---
 

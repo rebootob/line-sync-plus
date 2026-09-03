@@ -51,14 +51,17 @@
   - Integrated Circuit Breaker inside `markFail` (R3): When 10 consecutive errors occur, the worker calls `/campaign/fail` with `errorOverflow: true`. The transaction increments `failedCount`, sets `campaign.status = 'stopped_error'`, clears all remaining leases, and commits atomically without calling `/campaign/stop`.
   - Strict Worker-Driven Stop Fencing: `/campaign/stop` with `jobId` locks the calling `CampaignJob` with `pessimistic_write` and strictly enforces active processing lease before stopping the campaign; recent-failed and historical fallbacks are removed.
   - Post-Commit Telegram: Notifications dispatched only after DB transaction resolves.
-- **Non-Destructive UAT Limitation**: Intentional testing of destructive failure modes (lease expiration takeover, stale-worker competing finalization, forced outage during finalization, forced heartbeat failure, forced 10-error circuit breaker) was NOT run against live LINE OA to avoid operational/send risk; covered by 236 unit tests.
+- **Non-Destructive UAT Limitation**: Intentional testing of destructive failure modes (lease expiration takeover, stale-worker competing finalization, forced outage during finalization, forced heartbeat failure, forced 10-error circuit breaker) was NOT run against live LINE OA to avoid operational/send risk. They are covered by focused behavioral/unit tests. The local validation suite reported 236/236 passing; no independent GitHub CI status is available.
 - **Known REL-WP003 Boundary**: Post-send crash window (send succeeds in LINE but browser/node crashes before backend finalization response) is explicitly bounded and deferred to `REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety`.
 
 ---
 
 ## 🛡️ Account Protection & Send Compliance Guard (SAFE-WP001 STATUS: CLOSED / PASS)
 
-- Worker v28.13 maintains all SAFE-WP001 protection rules, fail-closed storage, rate limits (10s gap, 60/10m, 300/1h), exact timestamp reservation, and telemetry heartbeat.
+- **SAFE-WP001 Accepted Live UAT**:
+  - v28.11 send run
+  - v28.12 telemetry heartbeat closure
+- Current Worker v28.15 preserves the accepted SAFE-WP001 protection contract (fail-closed storage, rate limits of 10s gap, 60/10m, 300/1h, exact timestamp reservation, and telemetry heartbeat).
 
 ---
 

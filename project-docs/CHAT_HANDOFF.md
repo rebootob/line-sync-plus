@@ -57,8 +57,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Integrated Circuit Breaker**: 10 errors finalize via `POST /campaign/fail` with `errorOverflow: true` (increments failedCount, stops campaign `stopped_error`, clears remaining leases).
 - **Customer Rollback**: DB error updating blocked customer in `markFail` rolls back transaction.
 - **Post-Commit Telegram**: Sent only after DB transaction resolves.
-- **Finalization Retry**: Network error retries acknowledgement without re-executing physical send.
-- **Non-Destructive UAT Limitation**: Destructive failure scenarios (lease expiry takeover, competing stale worker, forced network outage, 10-error circuit breaker) covered by 236 unit tests; not executed on Live OA to prevent account risk.
+- **Non-Destructive UAT Limitation**: These destructive scenarios were not executed on Live LINE OA to avoid unnecessary operational/send risk. They are covered by focused behavioral/unit tests. The local validation suite reported 236/236 passing; no independent GitHub CI status is available.
 - **Known REL-WP003 Boundary**: Post-send crash window (LINE send succeeds, browser/process crashes before backend ack) belongs to `REL-WP003`.
 
 ## Exact Recommended Next Step

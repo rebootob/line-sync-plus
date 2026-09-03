@@ -120,7 +120,7 @@ Intentional Live UAT of:
 
 was **NOT** performed against Live LINE OA.
 
-**Reason**: These scenarios would introduce unnecessary operational/send risk to live LINE OA accounts. They are fully covered by 236 reviewed, focused behavioral and unit tests.
+**Reason**: These destructive scenarios were not executed on Live LINE OA to avoid unnecessary operational/send risk. They are covered by focused behavioral/unit tests. The local validation suite reported 236/236 passing; no independent GitHub CI status is available.
 
 ---
 
@@ -139,21 +139,11 @@ REL-WP003 remains:
 
 ## 📜 Accepted Live UAT Evidence (SAFE-WP001)
 
-### Worker v28.11 Baseline Test Run
-- 2-recipient text campaign created while Master Bot was **PAUSED**.
-- Exactly 2 jobs queued and processed to completion.
-- LINE messages/send physically observed and verified.
-- Zero recipient mismatch, zero OA mismatch, and zero `ACCOUNT_PROTECTION_STATE_UNAVAILABLE` errors.
+SAFE-WP001 accepted Live UAT:
+- **v28.11 send run**: 2-recipient text campaign created while Master Bot was **PAUSED**, exactly 2 jobs queued and processed to completion, LINE messages/send physically observed and verified, zero recipient mismatch, zero OA mismatch, and zero `ACCOUNT_PROTECTION_STATE_UNAVAILABLE` errors.
+- **v28.12 telemetry heartbeat closure**: Worker v28.12 introduced active-worker telemetry heartbeat in `processQueue()`. Dashboard telemetry displayed `Protection: ON`, `10m: 0 / 60`, `1h: 2 / 300`, `Next Send: now`, `Cooling: none`, proving send reservations correctly aged out of 10m window while remaining inside 1h window.
 
-### Worker v28.12 Telemetry Heartbeat Verification
-- Worker v28.12 introduced active-worker telemetry heartbeat in `processQueue()`.
-- **Accepted Live UAT Dashboard Telemetry**:
-  - Account Protection: **ON**
-  - 10m: **0 / 60**
-  - 1h: **2 / 300**
-  - Next Send: **now**
-  - Cooling: **none**
-- Proves 2 send reservations correctly aged out of 10m window while remaining inside 1h window.
+Current Worker v28.15 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
