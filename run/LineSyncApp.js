@@ -767,35 +767,46 @@
     async function armSendPart(jobId, botId, leaseToken, partKey, armRequestId) {
         if (!jobId || !botId || !leaseToken || !partKey || !armRequestId) throw new Error('MISSING_ARM_CREDENTIALS');
 
-        const res = await fetchLeaseAPI('/campaign/send-part/arm', 'POST', {
-            jobId,
-            botId,
-            leaseToken,
-            partKey,
-            armRequestId,
-        });
+        let armAttempts = 0;
+        const maxArmAttempts = 3;
 
-        if (res.state === 'lease_lost') {
-            console.warn(`🛑 [REL-WP003-R1] Backend returned lease_lost during ARM for part ${partKey} (job ${jobId})`);
-            handleJobLeaseLost('ARM_PART_LEASE_LOST');
-            throw new Error('JOB_LEASE_LOST');
-        }
+        while (armAttempts < maxArmAttempts) {
+            armAttempts++;
+            const res = await fetchLeaseAPI('/campaign/send-part/arm', 'POST', {
+                jobId,
+                botId,
+                leaseToken,
+                partKey,
+                armRequestId,
+            });
 
-        if (res.state === 'renewed' && res.data) {
-            if (res.data.status === 'already_dispatched') {
-                return { state: 'already_dispatched', partKey };
+            if (res.state === 'lease_lost') {
+                console.warn(`🛑 [REL-WP003-R2] Backend returned lease_lost during ARM for part ${partKey} (job ${jobId})`);
+                handleJobLeaseLost('ARM_PART_LEASE_LOST');
+                throw new Error('JOB_LEASE_LOST');
             }
-            if (res.data.status === 'armed' && res.data.dispatchToken) {
-                return { state: 'armed', dispatchToken: res.data.dispatchToken, partKey };
+
+            if (res.state === 'renewed' && res.data) {
+                if (res.data.status === 'already_dispatched') {
+                    return { state: 'already_dispatched', partKey };
+                }
+                if (res.data.status === 'armed' && res.data.dispatchToken) {
+                    return { state: 'armed', dispatchToken: res.data.dispatchToken, partKey };
+                }
+            }
+
+            if (res.data && res.data.status === 'reconcile_required') {
+                console.error(`🛑 [REL-WP003-R2] Backend marked part ${partKey} as reconcile_required. Quarantining job.`);
+                throw new Error('RECONCILE_REQUIRED');
+            }
+
+            console.warn(`⚠️ [REL-WP003-R2] Transient error during ARM for part ${partKey} (attempt ${armAttempts}/${maxArmAttempts}). Retrying ARM with same armRequestId...`);
+            if (armAttempts < maxArmAttempts) {
+                await sleep(1500);
             }
         }
 
-        if (res.data && res.data.status === 'reconcile_required') {
-            console.error(`🛑 [REL-WP003-R1] Backend marked part ${partKey} as reconcile_required. Quarantining job.`);
-            throw new Error('RECONCILE_REQUIRED');
-        }
-
-        throw new Error(`ARM_FAILED_${partKey}_${res.state}`);
+        throw new Error(`ARM_FAILED_${partKey}_TRANSIENT_EXHAUSTED`);
     }
 
     async function confirmSendPartWithRetry(jobId, botId, leaseToken, partKey, armRequestId, dispatchToken) {
@@ -1357,6 +1368,17 @@
 
         const armRequestId = `arm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
         const armRes = await armSendPart(currentJobId, expectedBotId, currentLeaseToken, 'image', armRequestId);
+
+        if (armRes && armRes.state === 'already_dispatched') {
+            console.log("ℹ️ [REL-WP003-R2] Image part already marked dispatched in authoritative ledger. Skipping physical send.");
+            return;
+        }
+
+        if (!armRes || armRes.state !== 'armed' || !armRes.dispatchToken) {
+            console.error("🛑 [REL-WP003-R2] Image ARM did not return armed state with dispatchToken. Failing closed.");
+            throw new Error(`ARM_FAILED_IMAGE_${armRes ? armRes.state : 'UNKNOWN'}`);
+        }
+
         const inMemoryDispatchToken = armRes.dispatchToken;
 
         const opts = { bubbles: true, cancelable: true, composed: true, view: window };
@@ -1439,6 +1461,17 @@
 
             const armRequestId = `arm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
             const armRes = await armSendPart(currentJobId, expectedBotId, currentLeaseToken, 'text', armRequestId);
+
+            if (armRes && armRes.state === 'already_dispatched') {
+                console.log("ℹ️ [REL-WP003-R2] Text part already marked dispatched in authoritative ledger. Skipping physical send.");
+                return;
+            }
+
+            if (!armRes || armRes.state !== 'armed' || !armRes.dispatchToken) {
+                console.error("🛑 [REL-WP003-R2] Text ARM did not return armed state with dispatchToken. Failing closed.");
+                throw new Error(`ARM_FAILED_TEXT_${armRes ? armRes.state : 'UNKNOWN'}`);
+            }
+
             const inMemoryDispatchToken = armRes.dispatchToken;
 
             console.log("✅ เจอและสั่งคลิกปุ่มส่งสีเขียวที่มุมล่างขวาช่องพิมพ์สำเร็จ!");
@@ -1482,6 +1515,17 @@
 
             const armRequestId = `arm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
             const armRes = await armSendPart(currentJobId, expectedBotId, currentLeaseToken, 'text', armRequestId);
+
+            if (armRes && armRes.state === 'already_dispatched') {
+                console.log("ℹ️ [REL-WP003-R2] Text part already marked dispatched in authoritative ledger (Enter path). Skipping physical send.");
+                return;
+            }
+
+            if (!armRes || armRes.state !== 'armed' || !armRes.dispatchToken) {
+                console.error("🛑 [REL-WP003-R2] Text Enter ARM did not return armed state with dispatchToken. Failing closed.");
+                throw new Error(`ARM_FAILED_TEXT_ENTER_${armRes ? armRes.state : 'UNKNOWN'}`);
+            }
+
             const inMemoryDispatchToken = armRes.dispatchToken;
 
             const enterOpts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true, shiftKey: false };

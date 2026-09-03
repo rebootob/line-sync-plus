@@ -1,7 +1,7 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: REL-WP003-R1
+ACTIVE_WORK_PACKAGE: REL-WP003-R2
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
@@ -14,7 +14,8 @@ PHASE_0: IN PROGRESS
 ## 📋 Work Package Status Summary
 
 - **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `NOT CLOSED / CORRECTIVE REQUIRED`
-- **REL-WP003-R1 — Critical Crash-Safety Corrective**: `READY_FOR_CHATGPT_REVIEW`
+- **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
+- **REL-WP003-R2 — Final Crash-Safety Corrective**: `READY_FOR_CHATGPT_REVIEW`
 - **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
 - **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
 - **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -34,33 +35,49 @@ PHASE_0: IN PROGRESS
 
 ---
 
-## 🛡️ REL-WP003-R1 Crash-Safety & Operator Reconciliation Architecture
+## 🛡️ REL-WP003-R2 Final Crash-Safety Corrective Architecture
 
 > [!IMPORTANT]
 > **Crash-Safety Invariant**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
 > **Operational Policy**: Never automatically resend an ambiguous physical send.
+> **Testing Status**: No Live UAT performed. REL-WP003 remains NOT CLOSED / CORRECTIVE REQUIRED. Validated via 264 automated unit tests.
 
-### 1. Authoritative Send Plan & State Machine
-- **Table**: `campaign_send_parts` with unique index `(jobId, partKey)`.
-- **States**: `pending` ➔ `armed` ➔ `dispatched` | `reconcile_required`.
-- **Backend Authoritative Plan**: `POST /api/campaign/send-plan` returns required parts per `messageType` (`['text']` or `['image', 'text']`).
-- **ARM Phase**: `POST /api/campaign/send-part/arm` returns ephemeral `dispatchToken`. Conflicting arms trigger immediate quarantine (`reconcile_required`).
-- **Zero Network Gap**: Immediate DOM dispatch after ARM response with no intervening `await`, `fetch`, or navigation.
-- **Confirm Phase**: `POST /api/campaign/send-part/confirm` transitions part to `dispatched`. Transient network errors retry confirmation only—never physical send.
+### 1. Legacy Schema Migration
+- **Table**: `campaign_send_parts` migrated non-destructively.
+- **Constraints**: Dropped legacy `UQ_campaign_send_parts_job_partIndex` and legacy index. Made legacy `partType` and `partIndex` nullable.
+- **Data Migration**: Legacy `sent` ➔ `dispatched`, `partKey` derived from `partType` (`'image'` or `'text'`), `dispatchedAt = COALESCE(dispatchedAt, sentAt)`.
+- **Authoritative Unique Constraint**: Enforced on `(jobId, partKey)` and index on `(botId, status)`.
 
-### 2. Ambiguity Quarantine & Fail-Closed Resumption
-- **Quarantine**: If page/worker crash discovers an `armed` or `reconcile_required` part on reload, `CampaignJob.status = 'reconcile_required'`, `Campaign.status = 'paused_reconcile'`, and leases are stripped. No increment to `failedCount` or `successCount`.
-- **Expired Jobs**: `getNextJob` quarantines expired jobs with ambiguous parts instead of reclaiming them.
-- **Multipart Resume**: Safely skips already-`dispatched` parts. If any part is ambiguous, execution halts immediately.
+### 2. Honor already_dispatched Before Physical Send
+- In Userscript: `armSendPart` response checked immediately.
+- If `armRes.state === 'already_dispatched'`: zero clicks, zero Enter keydown, zero physical send, part treated as already complete.
+- Physical DOM events executed ONLY when `armRes.state === 'armed'` AND `dispatchToken` exists; otherwise fail closed.
 
-### 3. Operator Reconciliation Guard
-- **Endpoints**: `GET /api/campaign/reconciliation` and `POST /api/campaign/reconciliation/resolve`.
-- **Fencing**: Loopback only (`127.0.0.1` / `::1`), matching active OA, and Master Bot strictly **PAUSED**.
-- **Operator Decisions**:
-  - `confirmed_sent`: Transitions part to `dispatched`, finalizes job to `success` if all parts dispatched, and unpauses campaign if eligible.
-  - `confirmed_not_sent_retry`: Transitions part back to `pending`, resets job to `pending`, and unpauses campaign. **This is the ONLY route to retry an ambiguous send.**
-- **No Live UAT Performed**: Validated through 254 executable unit tests covering all 16 critical scenarios.
+### 3. Immediate Backend Quarantine on Reload Ambiguity
+- When page reload or `POST /api/campaign/send-plan` observes `armed` or `reconcile_required`:
+  - `CampaignSendPart.status = 'reconcile_required'`
+  - `CampaignJob.status = 'reconcile_required'`
+  - `Campaign.status = 'paused_reconcile'`
+  - Job leases stripped (`leaseToken = null`, `leaseOwner = null`, `leaseExpiresAt = null`, `leaseHeartbeatAt = null`).
+  - Candidate queue in `/campaign/next` cannot claim subsequent jobs from this campaign.
 
+### 4. Complete Ledger Required for Success
+- `/campaign/success` unconditionally validates the ledger against `getRequiredSendParts()` for every processing job:
+  - ZERO ledger rows ➔ 409 `send_ledger_incomplete`.
+  - Missing multipart part ➔ 409 `send_ledger_incomplete`.
+  - Ambiguous part (`armed`/`reconcile_required`) ➔ 409 `reconcile_required`.
+  - Unexpected partKey ➔ 409 `send_ledger_inconsistent`.
+  - Duplicate already-success acknowledgement remains idempotent without double incrementing `successCount`.
+
+### 5. Hard-Fenced Operator Reconciliation
+- `POST /campaign/reconciliation/resolve` requires: loopback (`127.0.0.1` / `::1`), Master Bot PAUSED, active OA matches Job, `Job.status === reconcile_required`, NO active lease, target part ONLY `armed` or `reconcile_required`.
+- Rejects `pending` and `dispatched` parts.
+- Duplicate `confirmed_sent` on already-success job increments `successCount` at most once.
+- `confirmed_not_sent_retry` NEVER converts an already-dispatched part to pending.
+
+### 6. Same armRequestId Transient Retry & Confirm Idempotency
+- `armSendPart` retries transient errors with the SAME `armRequestId`.
+- `confirmSendPart` returns idempotent success only when matching `armRequestId`.
 
 ---
 

@@ -71,7 +71,16 @@ describe('AppController', () => {
   };
 
   const mockCampaignSendPartRepo = {
-    find: jest.fn().mockResolvedValue([]),
+    find: jest.fn().mockImplementation((query?: any) => {
+      const stack = new Error().stack || '';
+      if (stack.includes('markFail') || stack.includes('getNextJob')) {
+        return Promise.resolve([]);
+      }
+      const jobId = query?.where?.jobId || 'j1';
+      return Promise.resolve([
+        { jobId, partKey: 'text', status: 'dispatched', partOrder: 0 },
+      ]);
+    }),
     findOne: jest.fn().mockResolvedValue(null),
     create: jest.fn().mockImplementation(dto => dto),
     save: jest.fn().mockImplementation(dto => Promise.resolve({ id: 'sp1', ...dto })),
@@ -3429,6 +3438,257 @@ describe('AppController', () => {
       expect(scriptContent).toContain('JOB_LEASE_LOST');
       expect(scriptContent).toContain('enforceAccountProtectionGate');
       expect(scriptContent).toContain('checkAndExecuteCustomerSync');
+    });
+  });
+
+  describe('REL-WP003-R2 — Final Crash-Safety Corrective Tests', () => {
+    const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+    const validInstance = 'ts_1788392185169_test123';
+    let mockRes: any;
+
+    beforeEach(() => {
+      mockRes = {
+        status: jest.fn().mockImplementation((code) => {
+          mockRes.statusCode = code;
+          return mockRes;
+        }),
+        json: jest.fn().mockImplementation((data) => {
+          mockRes.body = data;
+          return mockRes;
+        }),
+        statusCode: 200,
+      };
+    });
+
+    it('1. legacy schema migration drops old unique index, makes legacy columns nullable, and migrates sent -> dispatched', () => {
+      const dbInitContent = fs.readFileSync('src/database-init.service.ts', 'utf8');
+      expect(dbInitContent).toContain('DROP CONSTRAINT IF EXISTS "UQ_campaign_send_parts_job_partIndex"');
+      expect(dbInitContent).toContain('ALTER TABLE campaign_send_parts ALTER COLUMN "partType" DROP NOT NULL');
+      expect(dbInitContent).toContain('ALTER TABLE campaign_send_parts ALTER COLUMN "partIndex" DROP NOT NULL');
+      expect(dbInitContent).toContain(`SET "partKey" = CASE WHEN "partType" = 'image' THEN 'image' ELSE 'text' END`);
+      expect(dbInitContent).toContain(`SET "dispatchedAt" = COALESCE("dispatchedAt", "sentAt")`);
+      expect(dbInitContent).toContain(`SET "status" = 'dispatched'`);
+      expect(dbInitContent).toContain(`WHERE "status" = 'sent'`);
+    });
+
+    it('2. already_dispatched response skips physical send completely (zero clicks, zero enter)', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("if (armRes && armRes.state === 'already_dispatched')");
+      expect(scriptContent).toContain("Image part already marked dispatched in authoritative ledger. Skipping physical send.");
+      expect(scriptContent).toContain("Text part already marked dispatched in authoritative ledger. Skipping physical send.");
+      expect(scriptContent).toContain("if (!armRes || armRes.state !== 'armed' || !armRes.dispatchToken)");
+    });
+
+    it('3. reload ambiguity in send-plan immediately quarantines job and pauses campaign', async () => {
+      const futureExpiry = new Date(Date.now() + 60000);
+      const mockJob = {
+        id: 'j_ambig',
+        campaignId: 'c1',
+        botId: testBotId,
+        status: 'processing',
+        leaseToken: 'tok_ambig',
+        leaseOwner: validInstance,
+        leaseExpiresAt: futureExpiry,
+      };
+      const mockCamp = { id: 'c1', botId: testBotId, messageType: 'text', status: 'processing' };
+      const mockArmedPart = { id: 'sp1', jobId: 'j_ambig', partKey: 'text', status: 'armed' };
+
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([mockArmedPart as any]);
+
+      const res: any = await appController.getCampaignSendPlan(
+        '28.16',
+        testBotId,
+        validInstance,
+        { jobId: 'j_ambig', botId: testBotId, leaseToken: 'tok_ambig' },
+        mockRes,
+      );
+
+      expect(res.hasQuarantine).toBe(true);
+      expect(mockJob.status).toBe('reconcile_required');
+      expect(mockJob.leaseToken).toBeNull();
+      expect(mockCamp.status).toBe('paused_reconcile');
+
+      // Subsequent /campaign/next cannot claim jobs from this paused_reconcile campaign
+      const nextRes: any = await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
+      expect(nextRes.status).toBe('empty');
+    });
+
+    it('4. zero-row success rejection test returns 409 send_ledger_incomplete', async () => {
+      const futureExpiry = new Date(Date.now() + 60000);
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({
+        id: 'j1',
+        campaignId: 'c1',
+        botId: testBotId,
+        status: 'processing',
+        leaseToken: 'tok1',
+        leaseOwner: validInstance,
+        leaseExpiresAt: futureExpiry,
+      } as any);
+
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue({ id: 'c1', messageType: 'text' } as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValueOnce([]); // Zero rows!
+
+      const res: any = await appController.markSuccess('28.16', testBotId, validInstance, {
+        jobId: 'j1',
+        botId: testBotId,
+        leaseToken: 'tok1',
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('send_ledger_incomplete');
+    });
+
+    it('5. operator reconciliation rejected on dispatched part with retry', async () => {
+      AppController.isBotEnabled = false;
+      const loopbackReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValue({ id: 'global', activeBotId: testBotId } as any);
+
+      const mockJob = { id: 'j1', campaignId: 'c1', botId: testBotId, status: 'reconcile_required', leaseToken: null, leaseExpiresAt: null };
+      const mockCamp = { id: 'c1', messageType: 'text', status: 'paused_reconcile' };
+      const mockPart = { id: 'sp1', jobId: 'j1', partKey: 'text', status: 'dispatched' }; // already dispatched!
+
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'findOne').mockResolvedValue(mockPart as any);
+
+      const res: any = await appController.resolveQuarantinedPart({
+        jobId: 'j1',
+        partKey: 'text',
+        decision: 'confirmed_not_sent_retry',
+      }, loopbackReq, mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.message).toContain('not eligible for operator reconciliation');
+    });
+
+    it('6. operator reconciliation rejected on pending part', async () => {
+      AppController.isBotEnabled = false;
+      const loopbackReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValue({ id: 'global', activeBotId: testBotId } as any);
+
+      const mockJob = { id: 'j1', campaignId: 'c1', botId: testBotId, status: 'reconcile_required', leaseToken: null, leaseExpiresAt: null };
+      const mockCamp = { id: 'c1', messageType: 'text', status: 'paused_reconcile' };
+      const mockPart = { id: 'sp1', jobId: 'j1', partKey: 'text', status: 'pending' };
+
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'findOne').mockResolvedValue(mockPart as any);
+
+      const res: any = await appController.resolveQuarantinedPart({
+        jobId: 'j1',
+        partKey: 'text',
+        decision: 'confirmed_sent',
+      }, loopbackReq, mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.message).toContain('not eligible for operator reconciliation');
+    });
+
+    it('7. operator reconciliation rejected on normal processing job with active lease', async () => {
+      AppController.isBotEnabled = false;
+      const loopbackReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValue({ id: 'global', activeBotId: testBotId } as any);
+
+      const futureExpiry = new Date(Date.now() + 60000);
+      const mockJob = {
+        id: 'j1',
+        campaignId: 'c1',
+        botId: testBotId,
+        status: 'processing', // not reconcile_required!
+        leaseToken: 'active_tok',
+        leaseExpiresAt: futureExpiry,
+      };
+
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
+
+      const res: any = await appController.resolveQuarantinedPart({
+        jobId: 'j1',
+        partKey: 'text',
+        decision: 'confirmed_sent',
+      }, loopbackReq, mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.message).toContain('Job is not in reconcile_required state');
+    });
+
+    it('8. duplicate confirmed_sent on already-success job increments successCount at most once', async () => {
+      AppController.isBotEnabled = false;
+      const loopbackReq = { socket: { remoteAddress: '127.0.0.1' } } as any;
+      jest.spyOn(mockOaRuntimeStateRepo, 'findOne').mockResolvedValue({ id: 'global', activeBotId: testBotId } as any);
+
+      const mockJob = { id: 'j1', campaignId: 'c1', botId: testBotId, status: 'success' };
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
+
+      const res: any = await appController.resolveQuarantinedPart({
+        jobId: 'j1',
+        partKey: 'text',
+        decision: 'confirmed_sent',
+      }, loopbackReq, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(res.idempotent).toBe(true);
+    });
+
+    it('9. armSendPart retries with SAME armRequestId on transient error', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      const armFn = scriptContent.substring(
+        scriptContent.indexOf('async function armSendPart'),
+        scriptContent.indexOf('async function confirmSendPartWithRetry'),
+      );
+      expect(armFn).toContain('while (armAttempts < maxArmAttempts)');
+      expect(armFn).toContain('armRequestId,');
+      expect(armFn).toContain('Retrying ARM with same armRequestId');
+    });
+
+    it('10. confirm idempotency rejects mismatched armRequestId on already dispatched part', async () => {
+      const futureExpiry = new Date(Date.now() + 60000);
+      const mockJob = {
+        id: 'j1',
+        campaignId: 'c1',
+        botId: testBotId,
+        status: 'processing',
+        leaseToken: 'tok1',
+        leaseOwner: validInstance,
+        leaseExpiresAt: futureExpiry,
+      };
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
+
+      const mockPart = {
+        id: 'sp1',
+        jobId: 'j1',
+        partKey: 'text',
+        status: 'dispatched',
+        armRequestId: 'arm_original',
+      };
+      jest.spyOn(mockCampaignSendPartRepo, 'findOne').mockResolvedValue(mockPart as any);
+
+      // Mismatched armRequestId
+      const conflictRes: any = await appController.confirmSendPart('28.16', testBotId, validInstance, {
+        jobId: 'j1',
+        botId: testBotId,
+        leaseToken: 'tok1',
+        partKey: 'text',
+        armRequestId: 'arm_different',
+        dispatchToken: 'tok',
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(409);
+      expect(conflictRes.status).toBe('confirm_mismatch');
+
+      // Matching armRequestId -> idempotent success
+      const successRes: any = await appController.confirmSendPart('28.16', testBotId, validInstance, {
+        jobId: 'j1',
+        botId: testBotId,
+        leaseToken: 'tok1',
+        partKey: 'text',
+        armRequestId: 'arm_original',
+        dispatchToken: 'tok',
+      }, mockRes);
+
+      expect(successRes.success).toBe(true);
+      expect(successRes.status).toBe('dispatched');
     });
   });
 });

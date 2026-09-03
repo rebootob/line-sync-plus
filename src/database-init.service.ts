@@ -160,7 +160,7 @@ export class DatabaseInitService implements OnModuleInit {
         ON CONFLICT ("id") DO NOTHING;
       `);
 
-      // 🛡️ REL-WP003-R1 Durable Send-Part Ledger Migration (ARM + CONFIRM)
+      // 🛡️ REL-WP003-R2 Durable Send-Part Ledger Migration (ARM + CONFIRM & Legacy Migration)
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS campaign_send_parts (
           "id" uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -184,7 +184,18 @@ export class DatabaseInitService implements OnModuleInit {
         );
       `);
 
-      // Add columns if migrating from previous schema
+      // 🛡️ R2: Drop obsolete legacy uniqueness/constraints that would block multipart inserts
+      try {
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts DROP CONSTRAINT IF EXISTS "UQ_campaign_send_parts_job_partIndex";`);
+      } catch (e) {}
+      try {
+        await this.dataSource.query(`DROP INDEX IF EXISTS "UQ_campaign_send_parts_job_partIndex";`);
+      } catch (e) {}
+      try {
+        await this.dataSource.query(`DROP INDEX IF EXISTS "IDX_campaign_send_parts_jobId_partIndex";`);
+      } catch (e) {}
+
+      // 🛡️ R2: Add new columns if migrating from previous schema
       try {
         await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "partKey" character varying(50) NOT NULL DEFAULT 'text';`);
         await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "partOrder" integer NOT NULL DEFAULT 0;`);
@@ -195,6 +206,47 @@ export class DatabaseInitService implements OnModuleInit {
         await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "dispatchedAt" TIMESTAMP WITHOUT TIME ZONE;`);
         await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "reconcileReason" character varying(255);`);
         await this.dataSource.query(`ALTER TABLE campaign_send_parts ADD COLUMN IF NOT EXISTS "resolvedAt" TIMESTAMP WITHOUT TIME ZONE;`);
+      } catch (e) {}
+
+      // 🛡️ R2: Make legacy NOT NULL columns nullable/default-safe so new entity inserts never fail
+      try {
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ALTER COLUMN "partType" DROP NOT NULL;`);
+      } catch (e) {}
+      try {
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ALTER COLUMN "partIndex" DROP NOT NULL;`);
+      } catch (e) {}
+      try {
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ALTER COLUMN "totalParts" DROP NOT NULL;`);
+      } catch (e) {}
+      try {
+        await this.dataSource.query(`ALTER TABLE campaign_send_parts ALTER COLUMN "sentAt" DROP NOT NULL;`);
+      } catch (e) {}
+
+      // 🛡️ R2: Non-data-destructive migration for legacy rows
+      try {
+        await this.dataSource.query(`
+          DO $$
+          BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'partType') THEN
+              UPDATE campaign_send_parts
+              SET "partKey" = CASE WHEN "partType" = 'image' THEN 'image' ELSE 'text' END
+              WHERE "partKey" IS NULL;
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'partIndex') THEN
+              UPDATE campaign_send_parts
+              SET "partOrder" = COALESCE("partOrder", "partIndex", 0)
+              WHERE "partOrder" IS NULL;
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'campaign_send_parts' AND column_name = 'sentAt') THEN
+              UPDATE campaign_send_parts
+              SET "dispatchedAt" = COALESCE("dispatchedAt", "sentAt")
+              WHERE "dispatchedAt" IS NULL AND "status" = 'sent';
+            END IF;
+            UPDATE campaign_send_parts
+            SET "status" = 'dispatched'
+            WHERE "status" = 'sent';
+          END $$;
+        `);
       } catch (e) {}
 
       try {
