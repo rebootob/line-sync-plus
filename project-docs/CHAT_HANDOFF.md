@@ -9,7 +9,7 @@
 
 ## Project Purpose
 
-LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.15) running inside `chat.line.biz`.
+LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.16) running inside `chat.line.biz`.
 
 ## Technology Stack
 
@@ -22,6 +22,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 ## Work Package Status
 
 * **ACTIVE_WORK_PACKAGE**: `NONE`
+* **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
 * **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
 * **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
 * **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -33,11 +34,10 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **SYNC-WP001 — LINE OA Customer Directory Sync to DB**: `CLOSED / PASS`
 * **OA-WP001**: `CLOSED / PASS` (Accepted on Worker v28.5)
 * **REL-WP001**: `CLOSED / PASS`
-* **REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety**: `READY / NOT STARTED / AUTHORIZATION REQUIRED`
 * **Version Contracts**:
-  - Worker Version: `28.15`
+  - Worker Version: `28.16`
   - Runtime Contract Version: `2`
-  - Required Worker Version: `28.15`
+  - Required Worker Version: `28.16`
 
 ## Accepted REL-WP002 Live UAT Evidence
 
@@ -57,10 +57,13 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Integrated Circuit Breaker**: 10 errors finalize via `POST /campaign/fail` with `errorOverflow: true` (increments failedCount, stops campaign `stopped_error`, clears remaining leases).
 - **Customer Rollback**: DB error updating blocked customer in `markFail` rolls back transaction.
 - **Post-Commit Telegram**: Sent only after DB transaction resolves.
-- **Non-Destructive UAT Limitation**: These destructive scenarios were not executed on Live LINE OA to avoid unnecessary operational/send risk. They are covered by focused behavioral/unit tests. The local validation suite reported 236/236 passing; no independent GitHub CI status is available.
-- **Known REL-WP003 Boundary**: Post-send crash window (LINE send succeeds, browser/process crashes before backend ack) belongs to `REL-WP003`.
+- **Durable Send-Part Ledger (REL-WP003)**:
+  - Table: `campaign_send_parts` records each part sent per job.
+  - Endpoints: `POST /api/campaign/send-part` and `POST /api/campaign/reconcile`.
+  - Crash Reconciliation: On startup/reload, `resumeSavedActiveJob` checks `/campaign/reconcile`. If fully sent, fast-finalizes without re-send. If partially sent, skips previously sent parts during dispatch.
+  - Automated Tests: 254/254 passing.
 
 ## Exact Recommended Next Step
 
-`REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety` is `READY / NOT STARTED / AUTHORIZATION REQUIRED`.
-Do NOT perform Live LINE UAT. Do NOT send any additional LINE messages. Do NOT start REL-WP003 without explicit Project Owner authorization.
+REL-WP003 implementation complete and validated with all tests passing.
+No Live LINE UAT. Do NOT send any additional LINE messages. Ready for commit and push.

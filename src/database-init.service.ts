@@ -160,6 +160,26 @@ export class DatabaseInitService implements OnModuleInit {
         ON CONFLICT ("id") DO NOTHING;
       `);
 
+      // 🛡️ REL-WP003 Durable Send-Part Ledger Migration
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS campaign_send_parts (
+          "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+          "jobId" uuid NOT NULL,
+          "campaignId" character varying(255) NOT NULL,
+          "botId" character varying(64) NOT NULL,
+          "lineUserId" character varying(50) NOT NULL,
+          "partIndex" integer NOT NULL DEFAULT 0,
+          "partType" character varying(50) NOT NULL,
+          "totalParts" integer NOT NULL DEFAULT 1,
+          "status" character varying(50) NOT NULL DEFAULT 'sent',
+          "sentAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+          "leaseToken" character varying(64),
+          "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+          "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+          CONSTRAINT "PK_campaign_send_parts_id" PRIMARY KEY ("id")
+        );
+      `);
+
       try {
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_customers_botId" ON customers ("botId");`);
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_customer_groups_botId" ON customer_groups ("botId");`);
@@ -167,6 +187,9 @@ export class DatabaseInitService implements OnModuleInit {
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaigns_botId" ON campaigns ("botId");`);
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_jobs_botId_status" ON campaign_jobs ("botId", "status");`);
         await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "idx_campaign_jobs_bot_status_lease" ON campaign_jobs ("botId", "status", "leaseExpiresAt");`);
+        await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_send_parts_jobId" ON campaign_send_parts ("jobId");`);
+        await this.dataSource.query(`CREATE INDEX IF NOT EXISTS "IDX_campaign_send_parts_botId" ON campaign_send_parts ("botId");`);
+        await this.dataSource.query(`CREATE UNIQUE INDEX IF NOT EXISTS "UQ_campaign_send_parts_job_part" ON campaign_send_parts ("jobId", "partIndex");`);
       } catch (e) {}
 
       this.logger.log('✅ Database schema verified/initialized successfully.');

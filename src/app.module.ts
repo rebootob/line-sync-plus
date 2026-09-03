@@ -5,6 +5,7 @@ import { CustomerGroup } from './entities/customer-group.entity';
 import { CustomerGroupMember } from './entities/customer-group-member.entity';
 import { Campaign } from './entities/campaign.entity';
 import { CampaignJob } from './entities/campaign-job.entity';
+import { CampaignSendPart } from './entities/campaign-send-part.entity';
 import { OaRuntimeState } from './entities/oa-runtime-state.entity';
 import { AppController } from './app.controller';
 import { DatabaseInitService } from './database-init.service';
@@ -19,7 +20,7 @@ import { TelegramService } from './telegram.service';
       username: process.env.DB_USERNAME || 'postgres',
       password: process.env.DB_PASSWORD || 'pg@1234',
       database: process.env.DB_NAME || 'line_sync_db',
-      entities: [Customer, CustomerGroup, CustomerGroupMember, Campaign, CampaignJob, OaRuntimeState],
+      entities: [Customer, CustomerGroup, CustomerGroupMember, Campaign, CampaignJob, CampaignSendPart, OaRuntimeState],
       synchronize: false, // ⚠️ กำหนดเป็น false เพื่อป้องกันไม่ให้ NestJS ไปสร้างตารางใหม่ทับข้อมูลเดิม
     }),
     TypeOrmModule.forFeature([
@@ -28,6 +29,7 @@ import { TelegramService } from './telegram.service';
       CustomerGroupMember,
       Campaign,
       CampaignJob,
+      CampaignSendPart,
       OaRuntimeState,
     ]),
   ],

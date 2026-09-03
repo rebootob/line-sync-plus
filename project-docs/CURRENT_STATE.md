@@ -30,10 +30,10 @@
 
 ## 🔒 Durable Job Lease + Heartbeat + Stale Worker Fencing (REL-WP002 STATUS: CLOSED / PASS; REL-WP002-R3 STATUS: CLOSED / PASS)
 
-- **Worker Version**: `28.15` (`run/LineSyncApp.js` v28.15).
-- **Backend Required Version**: `28.15` (`src/runtime-version.ts`).
+- **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16).
+- **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
-- **Accepted Live UAT (Worker v28.15)**:
+- **Accepted Live UAT (Worker v28.15 Baseline)**:
   - 2-recipient text campaign (`"แคมเปญ 3/9/2026 8:6"`, test text `"1111"`) created while Master Bot was PAUSED.
   - Exactly 2 jobs queued and processed to completion after bot was enabled.
   - Recipient verification verified prior to send; LINE send physically observed.
@@ -51,8 +51,24 @@
   - Integrated Circuit Breaker inside `markFail` (R3): When 10 consecutive errors occur, the worker calls `/campaign/fail` with `errorOverflow: true`. The transaction increments `failedCount`, sets `campaign.status = 'stopped_error'`, clears all remaining leases, and commits atomically without calling `/campaign/stop`.
   - Strict Worker-Driven Stop Fencing: `/campaign/stop` with `jobId` locks the calling `CampaignJob` with `pessimistic_write` and strictly enforces active processing lease before stopping the campaign; recent-failed and historical fallbacks are removed.
   - Post-Commit Telegram: Notifications dispatched only after DB transaction resolves.
-- **Non-Destructive UAT Limitation**: Intentional testing of destructive failure modes (lease expiration takeover, stale-worker competing finalization, forced outage during finalization, forced heartbeat failure, forced 10-error circuit breaker) was NOT run against live LINE OA to avoid operational/send risk. They are covered by focused behavioral/unit tests. The local validation suite reported 236/236 passing; no independent GitHub CI status is available.
-- **Known REL-WP003 Boundary**: Post-send crash window (send succeeds in LINE but browser/node crashes before backend finalization response) is explicitly bounded and deferred to `REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety`.
+
+---
+
+## 🛡️ Durable Send-Part Ledger & Crash Safety (REL-WP003 STATUS: CLOSED / PASS)
+
+- **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16).
+- **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
+- **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
+- **Implemented Architecture**:
+  - `campaign_send_parts` Entity & Table: Tracks each sent message part with composite uniqueness on `(jobId, partIndex)`.
+  - Endpoints:
+    - `POST /api/campaign/send-part`: Fenced recording of physically sent parts (requires worker version 28.16, valid OA context, valid worker instance, and active valid processing lease).
+    - `POST /api/campaign/reconcile`: Fenced status check returning whether a job was fully sent, total parts, and array of sent parts.
+  - Crash Reconciliation:
+    - `getNextJob`: If an expired processing job was already fully sent by a crashed worker, auto-reconciles to `success` atomically, increments `successCount`, and proceeds to the next job.
+    - `resumeSavedActiveJob`: Checks backend ledger on browser restart/reload; if already fully sent, finalizes immediately without physical re-send. If partially sent, populates local ledger.
+    - `executeChatBot`: Checks local ledger before uploading image (Part 0) or typing/sending text (Part 1); skips already-sent parts in multipart campaigns.
+- **Validation**: 254/254 unit tests passing cleanly.
 
 ---
 

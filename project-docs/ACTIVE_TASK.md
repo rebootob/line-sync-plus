@@ -2,16 +2,17 @@
 
 ```yaml
 ACTIVE_WORK_PACKAGE: NONE
-STATUS: AWAITING_AUTHORIZATION
+STATUS: COMPLETED
 AUTHORIZED_BY: Project Owner
-NEXT_CANDIDATE: REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety
-NEXT_CANDIDATE_STATUS: READY / NOT STARTED / AUTHORIZATION REQUIRED
+NEXT_CANDIDATE: NONE
+NEXT_CANDIDATE_STATUS: COMPLETE
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
+- **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
 - **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
 - **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
 - **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -23,12 +24,11 @@ NEXT_CANDIDATE_STATUS: READY / NOT STARTED / AUTHORIZATION REQUIRED
 - **SYNC-WP001 — LINE OA Customer Directory Sync**: `CLOSED / PASS` (Accepted on Worker v28.8)
 - **OA-WP001 — OA Context Isolation & Strict Identity Fencing**: `CLOSED / PASS` (Accepted on Worker v28.5)
 - **REL-WP001 — Single Worker Multi-Tab Lock**: `CLOSED / PASS`
-- **REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety**: `NOT STARTED`
 
 ### Version Contracts
-- **Worker Version**: `28.15`
+- **Worker Version**: `28.16`
 - **Runtime Contract Version**: `2`
-- **Required Worker Version**: `28.15`
+- **Required Worker Version**: `28.16`
 
 ---
 
@@ -124,16 +124,14 @@ was **NOT** performed against Live LINE OA.
 
 ---
 
-## 🚧 Known REL-WP003 Boundary
+## 🛡️ REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety
 
-REL-WP002 does **NOT** fully solve:
-- Physical LINE send succeeds → browser/process crashes before backend success acknowledgement.
-
-This post-send crash/idempotency window belongs to:
-**REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety**
-
-REL-WP003 remains:
-**READY / NOT STARTED / AUTHORIZATION REQUIRED**
+REL-WP003 solves the post-send crash window:
+- **`campaign_send_parts` Entity**: Durable ledger recording physical send of each message part (`partIndex: 0`, `partIndex: 1`, etc.) with composite uniqueness on `(jobId, partIndex)`.
+- **`POST /api/campaign/send-part`**: Worker-driven durable ledger recording with strict fencing (`X-LineSync-Worker-Version: 28.16`, OA context, valid worker instance, and active unexpired processing lease).
+- **`POST /api/campaign/reconcile`**: Crash reconciliation endpoint checking whether a job was already fully or partially sent.
+- **Multipart Skip & Fast Finalization**: In `executeChatBot`, already-sent parts are skipped per ledger. In `resumeSavedActiveJob`, fully-sent jobs finalize immediately without re-sending. In `getNextJob`, fully-sent expired jobs auto-reconcile to `success`.
+- **Validation**: 254/254 unit tests pass cleanly.
 
 ---
 
@@ -143,12 +141,11 @@ SAFE-WP001 accepted Live UAT:
 - **v28.11 send run**: 2-recipient text campaign created while Master Bot was **PAUSED**, exactly 2 jobs queued and processed to completion, LINE messages/send physically observed and verified, zero recipient mismatch, zero OA mismatch, and zero `ACCOUNT_PROTECTION_STATE_UNAVAILABLE` errors.
 - **v28.12 telemetry heartbeat closure**: Worker v28.12 introduced active-worker telemetry heartbeat in `processQueue()`. Dashboard telemetry displayed `Protection: ON`, `10m: 0 / 60`, `1h: 2 / 300`, `Next Send: now`, `Cooling: none`, proving send reservations correctly aged out of 10m window while remaining inside 1h window.
 
-Current Worker v28.15 preserves the accepted SAFE-WP001 protection contract.
+Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
 ## 🚀 Next Candidate Work Package
 
-- **Candidate**: `REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety`
-- **Status**: `READY / NOT STARTED / AUTHORIZATION REQUIRED`
-- **Note**: Awaits explicit Project Owner authorization before starting. Do NOT start automatically.
+- **Candidate**: `NONE`
+- **Status**: `COMPLETE`

@@ -6,6 +6,7 @@ import { CustomerGroup } from './entities/customer-group.entity';
 import { CustomerGroupMember } from './entities/customer-group-member.entity';
 import { Campaign } from './entities/campaign.entity';
 import { CampaignJob } from './entities/campaign-job.entity';
+import { CampaignSendPart } from './entities/campaign-send-part.entity';
 import { OaRuntimeState } from './entities/oa-runtime-state.entity';
 
 import { TelegramService } from './telegram.service';
@@ -69,12 +70,20 @@ describe('AppController', () => {
     save: jest.fn().mockResolvedValue({ id: 'c1', name: 'Test Campaign', successCount: 0, failedCount: 0, botId: 'U09d6b978fcbfb5275e533ca9b788eb22' }),
   };
 
+  const mockCampaignSendPartRepo = {
+    find: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockImplementation(dto => dto),
+    save: jest.fn().mockImplementation(dto => Promise.resolve({ id: 'sp1', ...dto })),
+  };
+
   const mockCampaignJobRepo = {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue(null),
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn().mockImplementation(dto => dto),
     save: jest.fn().mockResolvedValue([]),
+    update: jest.fn().mockResolvedValue({ affected: 1 }),
     createQueryBuilder: jest.fn().mockReturnValue({
       setLock: jest.fn().mockReturnThis(),
       update: jest.fn().mockReturnThis(),
@@ -91,6 +100,7 @@ describe('AppController', () => {
             if (entity === CampaignJob) return mockCampaignJobRepo;
             if (entity === Campaign) return mockCampaignRepo;
             if (entity === Customer) return mockCustomerRepo;
+            if (entity === CampaignSendPart) return mockCampaignSendPartRepo;
             return mockCampaignJobRepo;
           },
         });
@@ -122,6 +132,7 @@ describe('AppController', () => {
         { provide: getRepositoryToken(CustomerGroupMember), useValue: mockGroupMemberRepo },
         { provide: getRepositoryToken(Campaign), useValue: mockCampaignRepo },
         { provide: getRepositoryToken(CampaignJob), useValue: mockCampaignJobRepo },
+        { provide: getRepositoryToken(CampaignSendPart), useValue: mockCampaignSendPartRepo },
         { provide: getRepositoryToken(OaRuntimeState), useValue: mockOaRuntimeStateRepo },
         { provide: TelegramService, useValue: mockTelegramService },
       ],
@@ -508,7 +519,7 @@ describe('AppController', () => {
       const res = appController.getRuntimeVersion();
       expect(res).toEqual({
         runtimeContractVersion: 2,
-        requiredWorkerVersion: '28.15',
+        requiredWorkerVersion: '28.16',
       });
     });
 
@@ -521,7 +532,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.15',
+        requiredWorkerVersion: '28.16',
       });
       // Prove version gate executes BEFORE job query/claim logic
       expect(findSpy).not.toHaveBeenCalled();
@@ -536,7 +547,7 @@ describe('AppController', () => {
       expect(mockRes.statusCode).toBe(409);
       expect(res).toEqual({
         status: 'version_mismatch',
-        requiredWorkerVersion: '28.15',
+        requiredWorkerVersion: '28.16',
       });
       expect(findSpy).not.toHaveBeenCalled();
     });
@@ -561,7 +572,7 @@ describe('AppController', () => {
     it('5. GET /api/campaign/next with EXACT version ("28.15") and valid OA header & instance -> reaches normal job claim logic', async () => {
       const findSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
 
-      const res = await appController.getNextJob('28.15', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, mockRes);
+      const res = await appController.getNextJob('28.16', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, mockRes);
 
       expect(mockRes.statusCode).toBe(200);
       expect(findSpy).toHaveBeenCalled();
@@ -686,13 +697,13 @@ describe('AppController', () => {
       findSpy.mockClear();
 
       // Missing OA header
-      const resMissingOa = await appController.getNextJob('28.15', undefined, validInstance, mockRes);
+      const resMissingOa = await appController.getNextJob('28.16', undefined, validInstance, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMissingOa).toEqual({ status: 'missing_oa_context', message: 'X-LineSync-OA-Context header missing or invalid' });
       expect(findSpy).not.toHaveBeenCalled();
 
       // OA Mismatch (worker sends foreign OA)
-      const resMismatchOa = await appController.getNextJob('28.15', 'U11111111222222223333333344444444', validInstance, mockRes);
+      const resMismatchOa = await appController.getNextJob('28.16', 'U11111111222222223333333344444444', validInstance, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(resMismatchOa.status).toBe('oa_context_mismatch');
       expect(findSpy).not.toHaveBeenCalled();
@@ -702,7 +713,7 @@ describe('AppController', () => {
       const fs = require('fs');
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
 
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.15'");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.16'");
       expect(scriptContent).toContain('headers[\'X-LineSync-OA-Context\']');
       expect(scriptContent).toContain('checkAndExecuteControlledOaSwitch');
       expect(scriptContent).toContain('verifyCurrentOAContext');
@@ -722,13 +733,13 @@ describe('AppController', () => {
     });
 
     it('1. userId-only success fallback without botId fails closed (400 Bad Request)', async () => {
-      const res = await appController.markSuccess('28.15', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, { userId: 'U12345' }, mockRes);
+      const res = await appController.markSuccess('28.16', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, { userId: 'U12345' }, mockRes);
       expect(mockRes.statusCode).toBe(400);
       expect(res).toEqual({ success: false, message: 'Missing required parameters (jobId, botId, leaseToken required)' });
     });
 
     it('2. userId-only fail fallback without botId fails closed (400 Bad Request)', async () => {
-      const res = await appController.markFail('28.15', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, { userId: 'U12345' }, mockRes);
+      const res = await appController.markFail('28.16', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, { userId: 'U12345' }, mockRes);
       expect(mockRes.statusCode).toBe(400);
       expect(res).toEqual({ success: false, message: 'Missing required parameters (jobId, botId, leaseToken required)' });
     });
@@ -753,7 +764,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
       } as any);
 
-      const res = await appController.markSuccess('28.15', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, {
+      const res = await appController.markSuccess('28.16', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, {
         jobId: 'j1',
         userId: 'U12345',
         botId: 'U09d6b978fcbfb5275e533ca9b788eb22',
@@ -776,7 +787,7 @@ describe('AppController', () => {
       const custFindSpy = jest.spyOn(mockCustomerRepo, 'findOne');
       custFindSpy.mockClear();
 
-      await appController.markFail('28.15', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, { jobId: 'j2', isBlocked: true, reason: 'บล็อก' }, mockRes);
+      await appController.markFail('28.16', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, { jobId: 'j2', isBlocked: true, reason: 'บล็อก' }, mockRes);
 
       expect(custFindSpy).not.toHaveBeenCalled();
     });
@@ -858,7 +869,7 @@ describe('AppController', () => {
         message: 'Hello'
       } as any);
 
-      const jobRes: any = await appController.getNextJob('28.15', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, mockRes);
+      const jobRes: any = await appController.getNextJob('28.16', 'U09d6b978fcbfb5275e533ca9b788eb22', validInstance, mockRes);
       expect(jobRes.botId).toBe('U09d6b978fcbfb5275e533ca9b788eb22');
     });
 
@@ -1213,24 +1224,24 @@ describe('AppController', () => {
       expect(res.success).toBe(true);
     });
 
-    it('10. Worker = 28.15', () => {
+    it('10. Worker = 28.16', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.15'");
-      expect(scriptContent).toContain("@version      28.15");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.16'");
+      expect(scriptContent).toContain("@version      28.16");
     });
 
-    it('11. Required Worker = 28.15', () => {
+    it('11. Required Worker = 28.16', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.15');
+      expect(versionRes.requiredWorkerVersion).toBe('28.16');
     });
   });
 
   describe('SAFE-WP001 — LINE OA Account Protection & Send Compliance Guard Tests', () => {
     const fs = require('fs');
 
-    it('2. Required Worker = 28.15', () => {
+    it('2. Required Worker = 28.16', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.15');
+      expect(versionRes.requiredWorkerVersion).toBe('28.16');
     });
 
     it('3. Rate guard exists immediately before text irreversible send', () => {
@@ -1632,7 +1643,7 @@ describe('AppController', () => {
       const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
 
       const res: any = await appController.recordAccountProtectionTelemetry(
-        '28.15',
+        '28.16',
         testBotId,
         mockReq,
         { botId: testBotId, sendActions10m: 0, sendActions1h: 0, nextSendAt: 0, errorCooldownUntil: 0 },
@@ -1665,7 +1676,7 @@ describe('AppController', () => {
       const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
 
       const res: any = await appController.recordAccountProtectionTelemetry(
-        '28.15',
+        '28.16',
         'U11111111222222223333333344444444',
         mockReq,
         { botId: testBotId, sendActions10m: 0, sendActions1h: 0, nextSendAt: 0, errorCooldownUntil: 0 },
@@ -1681,7 +1692,7 @@ describe('AppController', () => {
       const mockRes = { statusCode: 200, status(code: number) { this.statusCode = code; } } as any;
 
       await appController.recordAccountProtectionTelemetry(
-        '28.15',
+        '28.16',
         testBotId,
         mockReq,
         { botId: testBotId, sendActions10m: 1, sendActions1h: 1, nextSendAt: 0, errorCooldownUntil: 0 },
@@ -1698,7 +1709,7 @@ describe('AppController', () => {
 
     it('21. existing SAFE / OA / REL / SYNC tests remain passing', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.15'");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.16'");
       expect(scriptContent).toContain("verifyCurrentRecipient");
       expect(scriptContent).toContain("verifyCurrentOAContext");
       expect(scriptContent).toContain("confirmWorkerLeadershipForSend");
@@ -1708,15 +1719,15 @@ describe('AppController', () => {
   describe('SAFE-WP001-R3 — Active Worker Telemetry Heartbeat Tests', () => {
     const fs = require('fs');
 
-    it('1. Worker version = 28.15', () => {
+    it('1. Worker version = 28.16', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.15'");
-      expect(scriptContent).toContain("@version      28.15");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.16'");
+      expect(scriptContent).toContain("@version      28.16");
     });
 
-    it('2. Required Worker = 28.15', () => {
+    it('2. Required Worker = 28.16', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.15');
+      expect(versionRes.requiredWorkerVersion).toBe('28.16');
     });
 
     it('3. processQueue publishes telemetry after leadership passes', () => {
@@ -1800,7 +1811,7 @@ describe('AppController', () => {
       const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
 
       await appController.recordAccountProtectionTelemetry(
-        '28.15',
+        '28.16',
         testBotId,
         mockReq,
         { botId: testBotId, sendActions10m: 1, sendActions1h: 1, nextSendAt: 0, errorCooldownUntil: 0 },
@@ -1825,7 +1836,7 @@ describe('AppController', () => {
 
     it('12. all existing project tests remain passing', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.15'");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.16'");
     });
   });
 
@@ -1866,12 +1877,12 @@ describe('AppController', () => {
 
     it('3. GET /api/runtime/version reports REQUIRED_WORKER_VERSION 28.15', () => {
       const versionRes = appController.getRuntimeVersion();
-      expect(versionRes.requiredWorkerVersion).toBe('28.15');
+      expect(versionRes.requiredWorkerVersion).toBe('28.16');
       expect(versionRes.runtimeContractVersion).toBe(2);
     });
 
     it('4. GET /api/campaign/next rejects requests missing X-LineSync-Worker-Instance header with 409 Conflict', async () => {
-      const res: any = await appController.getNextJob('28.15', testBotId, undefined, mockRes);
+      const res: any = await appController.getNextJob('28.16', testBotId, undefined, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('missing_worker_instance');
     });
@@ -1892,7 +1903,7 @@ describe('AppController', () => {
         execute: qbExecute,
       } as any);
 
-      const res: any = await appController.getNextJob('28.15', testBotId, validInstance, mockRes);
+      const res: any = await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
 
       expect(mockRes.statusCode).toBe(200);
       expect(res.status).toBe('processing');
@@ -1919,7 +1930,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
       } as any);
 
-      const res: any = await appController.getNextJob('28.15', testBotId, validInstance, mockRes);
+      const res: any = await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
       expect(res.status).toBe('processing');
       expect(res.leaseToken).toBeDefined();
     });
@@ -1942,13 +1953,13 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
       } as any);
 
-      const res: any = await appController.getNextJob('28.15', testBotId, validInstance, mockRes);
+      const res: any = await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
       expect(res.status).toBe('processing');
     });
 
     it('8. GET /api/campaign/next ignores active processing job with unexpired lease', async () => {
       jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
-      const res: any = await appController.getNextJob('28.15', testBotId, validInstance, mockRes);
+      const res: any = await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
       expect(res).toEqual({ status: 'empty' });
     });
 
@@ -1959,7 +1970,7 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([mockJob] as any);
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCampPaused as any);
 
-      const res: any = await appController.getNextJob('28.15', testBotId, validInstance, mockRes);
+      const res: any = await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
       expect(res).toEqual({ status: 'empty' });
     });
 
@@ -1970,19 +1981,19 @@ describe('AppController', () => {
     });
 
     it('11. POST /api/campaign/heartbeat rejects invalid/missing OA context header with 409 Conflict missing_oa_context', async () => {
-      const res: any = await appController.heartbeatJobLease('28.15', undefined, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.heartbeatJobLease('28.16', undefined, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('missing_oa_context');
     });
 
     it('12. POST /api/campaign/heartbeat rejects missing X-LineSync-Worker-Instance header with 409 Conflict missing_worker_instance', async () => {
-      const res: any = await appController.heartbeatJobLease('28.15', testBotId, undefined, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.heartbeatJobLease('28.16', testBotId, undefined, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('missing_worker_instance');
     });
 
     it('13. POST /api/campaign/heartbeat rejects request when header OA != body botId with 409 Conflict oa_context_mismatch', async () => {
-      const res: any = await appController.heartbeatJobLease('28.15', testBotId, validInstance, { jobId: 'j1', botId: 'U11111111222222223333333344444444', leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.heartbeatJobLease('28.16', testBotId, validInstance, { jobId: 'j1', botId: 'U11111111222222223333333344444444', leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('oa_context_mismatch');
     });
@@ -1996,7 +2007,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
       } as any);
 
-      const res: any = await appController.heartbeatJobLease('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.heartbeatJobLease('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(res.success).toBe(true);
       expect(res.leaseExpiresAt).toBeGreaterThan(Date.now());
     });
@@ -2012,7 +2023,7 @@ describe('AppController', () => {
       };
       jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
 
-      await appController.heartbeatJobLease('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      await appController.heartbeatJobLease('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(setValues.leaseHeartbeatAt).toBeDefined();
     });
 
@@ -2025,7 +2036,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.heartbeatJobLease('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'wrong_tok' }, mockRes);
+      const res: any = await appController.heartbeatJobLease('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'wrong_tok' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2039,7 +2050,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.heartbeatJobLease('28.15', testBotId, 'ts_1788392185170_other', { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.heartbeatJobLease('28.16', testBotId, 'ts_1788392185170_other', { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2053,7 +2064,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.heartbeatJobLease('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.heartbeatJobLease('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2067,13 +2078,13 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.heartbeatJobLease('28.15', testBotId, validInstance, { jobId: 'j_nonexistent', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.heartbeatJobLease('28.16', testBotId, validInstance, { jobId: 'j_nonexistent', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
 
     it('20. POST /api/campaign/success rejects requests missing X-LineSync-Worker-Instance with 409 Conflict', async () => {
-      const res: any = await appController.markSuccess('28.15', testBotId, undefined, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.markSuccess('28.16', testBotId, undefined, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('missing_worker_instance');
     });
@@ -2087,7 +2098,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'invalid_tok' }, mockRes);
+      const res: any = await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'invalid_tok' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2101,7 +2112,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.markSuccess('28.15', testBotId, 'ts_1788392185170_other', { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.markSuccess('28.16', testBotId, 'ts_1788392185170_other', { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2115,7 +2126,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2132,7 +2143,7 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({ id: 'j1', campaignId: 'c1', lineUserId: 'U12345' } as any);
 
-      const res: any = await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(res.success).toBe(true);
       expect(setValues.status).toBe('success');
       expect(setValues.leaseToken).toBeNull();
@@ -2154,14 +2165,14 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
       jest.spyOn(mockCampaignJobRepo, 'count').mockResolvedValue(0);
 
-      const res: any = await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(res.success).toBe(true);
       expect(mockCamp.status).toBe('completed');
       expect(mockCamp.successCount).toBe(1);
     });
 
     it('26. POST /api/campaign/fail rejects requests missing X-LineSync-Worker-Instance with 409 Conflict', async () => {
-      const res: any = await appController.markFail('28.15', testBotId, undefined, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.markFail('28.16', testBotId, undefined, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('missing_worker_instance');
     });
@@ -2175,7 +2186,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'wrong_tok' }, mockRes);
+      const res: any = await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'wrong_tok' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2189,7 +2200,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.markFail('28.15', testBotId, 'ts_1788392185170_other', { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.markFail('28.16', testBotId, 'ts_1788392185170_other', { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2203,7 +2214,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2220,7 +2231,7 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({ id: 'j1', campaignId: 'c1', lineUserId: 'U12345' } as any);
 
-      const res: any = await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', reason: 'Error test' }, mockRes);
+      const res: any = await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', reason: 'Error test' }, mockRes);
       expect(res.success).toBe(true);
       expect(setValues.status).toBe('failed');
       expect(setValues.errorReason).toBe('Error test');
@@ -2241,12 +2252,12 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({ id: 'j1', campaignId: 'c1', lineUserId: 'U12345', botId: testBotId } as any);
       jest.spyOn(mockCustomerRepo, 'findOne').mockResolvedValue(mockCustomer as any);
 
-      await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', reason: 'บล็อก', isBlocked: true }, mockRes);
+      await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', reason: 'บล็อก', isBlocked: true }, mockRes);
       expect(mockCustomer.isBlocked).toBe(true);
     });
 
     it('32. POST /api/campaign/stop when called with jobId requires valid active worker lease', async () => {
-      const res: any = await appController.stopCampaign('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: undefined }, mockRes);
+      const res: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: undefined }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2259,7 +2270,7 @@ describe('AppController', () => {
         getOne: jest.fn().mockResolvedValue(null),
       } as any);
 
-      const res: any = await appController.stopCampaign('28.15', testBotId, 'ts_1788392185170_different', { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.stopCampaign('28.16', testBotId, 'ts_1788392185170_different', { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2272,7 +2283,7 @@ describe('AppController', () => {
         getOne: jest.fn().mockResolvedValue(null),
       } as any);
 
-      const res: any = await appController.stopCampaign('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2301,7 +2312,7 @@ describe('AppController', () => {
 
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
 
-      const res: any = await appController.stopCampaign('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', reason: 'User stop' }, mockRes);
+      const res: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', reason: 'User stop' }, mockRes);
       expect(res.success).toBe(true);
       expect(mockCamp.status).toBe('stopped_user');
     });
@@ -2317,9 +2328,9 @@ describe('AppController', () => {
       expect(scriptContent).toContain('throw new Error(\'JOB_LEASE_LOST\')');
     });
 
-    it('38. Dashboard index.html displays Required Worker: v28.15', () => {
+    it('38. Dashboard index.html displays Required Worker: v28.16', () => {
       const indexContent = fs.readFileSync('index.html', 'utf8');
-      expect(indexContent).toContain('Required Worker: v28.15');
+      expect(indexContent).toContain('Required Worker: v28.16');
     });
   });
 
@@ -2437,13 +2448,13 @@ describe('AppController', () => {
 
     it('14. success transaction rollback leaves no partial job/counter state', async () => {
       const txSpy = jest.spyOn(mockCampaignJobRepo.manager, 'transaction');
-      const res = await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res = await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(txSpy).toHaveBeenCalled();
     });
 
     it('15. fail transaction rollback leaves no partial job/counter state', async () => {
       const txSpy = jest.spyOn(mockCampaignJobRepo.manager, 'transaction');
-      const res = await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res = await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(txSpy).toHaveBeenCalled();
     });
 
@@ -2456,7 +2467,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2470,7 +2481,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2487,7 +2498,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.getNextJob('28.15', testBotId, validInstance, mockRes);
+      const res: any = await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
       expect(res).toEqual({ status: 'empty' });
     });
 
@@ -2508,7 +2519,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
       } as any);
 
-      const res: any = await appController.getNextJob('28.15', testBotId, validInstance, mockRes);
+      const res: any = await appController.getNextJob('28.16', testBotId, validInstance, mockRes);
       expect(res.status).toBe('processing');
       expect(res.leaseToken).not.toBe('old-token');
       expect(typeof res.leaseToken).toBe('string');
@@ -2521,7 +2532,7 @@ describe('AppController', () => {
     });
 
     it('21. worker stop missing/wrong OA is rejected', async () => {
-      const res: any = await appController.stopCampaign('28.15', testBotId, validInstance, { jobId: 'j1', botId: 'U11111111222222223333333344444444', leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: 'U11111111222222223333333344444444', leaseToken: 'tok1' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('oa_context_mismatch');
     });
@@ -2534,7 +2545,7 @@ describe('AppController', () => {
         getOne: jest.fn().mockResolvedValue(null),
       } as any);
 
-      const res: any = await appController.stopCampaign('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'stale_tok' }, mockRes);
+      const res: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'stale_tok' }, mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('lease_lost');
     });
@@ -2596,14 +2607,14 @@ describe('AppController', () => {
     });
 
     it('28. arbitrary Worker instance string is rejected', async () => {
-      const res: any = await appController.getNextJob('28.15', testBotId, 'arbitrary_invalid_instance', mockRes);
+      const res: any = await appController.getNextJob('28.16', testBotId, 'arbitrary_invalid_instance', mockRes);
       expect(mockRes.statusCode).toBe(409);
       expect(res.status).toBe('missing_worker_instance');
     });
 
     it('29. valid ts_<timestamp>_<random> Worker instance accepted', async () => {
       jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValue([]);
-      const res: any = await appController.getNextJob('28.15', testBotId, 'ts_1788392185170_abc1234', mockRes);
+      const res: any = await appController.getNextJob('28.16', testBotId, 'ts_1788392185170_abc1234', mockRes);
       expect(mockRes.statusCode).toBe(200);
       expect(res).toEqual({ status: 'empty' });
     });
@@ -2654,7 +2665,7 @@ describe('AppController', () => {
         getOne: jest.fn().mockResolvedValue(mockCallingJob),
       } as any);
 
-      const res: any = await appController.stopCampaign('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      const res: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(res.status).toBe('lease_lost');
       expect(mockRes.statusCode).toBe(409);
     });
@@ -2667,7 +2678,7 @@ describe('AppController', () => {
         getOne: jest.fn().mockResolvedValue(mockCallingJob),
       } as any);
 
-      const res: any = await appController.stopCampaign('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'stale_tok' }, mockRes);
+      const res: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'stale_tok' }, mockRes);
       expect(res.status).toBe('lease_lost');
       expect(mockRes.statusCode).toBe(409);
     });
@@ -2686,7 +2697,7 @@ describe('AppController', () => {
       } as any);
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
 
-      const res: any = await appController.stopCampaign('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', reason: 'User stop' }, mockRes);
+      const res: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', reason: 'User stop' }, mockRes);
       expect(res.success).toBe(true);
       expect(mockCamp.status).toBe('stopped_user');
     });
@@ -2699,7 +2710,7 @@ describe('AppController', () => {
         getOne: jest.fn().mockResolvedValue(null),
       } as any);
 
-      await appController.stopCampaign('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(setLockSpy).toHaveBeenCalledWith('pessimistic_write');
     });
 
@@ -2717,7 +2728,7 @@ describe('AppController', () => {
       } as any);
       const findOneSpy = jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
 
-      await appController.stopCampaign('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(findOneSpy).toHaveBeenCalledWith(expect.objectContaining({ lock: { mode: 'pessimistic_write' } }));
     });
 
@@ -2745,7 +2756,7 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
 
-      const res: any = await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', errorOverflow: true }, mockRes);
+      const res: any = await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', errorOverflow: true }, mockRes);
       expect(res.success).toBe(true);
       expect(mockCamp.failedCount).toBe(1);
     });
@@ -2763,7 +2774,7 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
 
-      await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', errorOverflow: true }, mockRes);
+      await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', errorOverflow: true }, mockRes);
       expect(mockCamp.status).toBe('stopped_error');
     });
 
@@ -2781,7 +2792,7 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
 
-      await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', errorOverflow: true }, mockRes);
+      await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', errorOverflow: true }, mockRes);
       expect(setSpy).toHaveBeenCalledWith(expect.objectContaining({ leaseToken: null, leaseOwner: null }));
     });
 
@@ -2794,7 +2805,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 0 }),
       } as any);
 
-      const res: any = await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'stale_tok', errorOverflow: true }, mockRes);
+      const res: any = await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'stale_tok', errorOverflow: true }, mockRes);
       expect(res.status).toBe('lease_lost');
       expect(mockRes.statusCode).toBe(409);
     });
@@ -2813,7 +2824,7 @@ describe('AppController', () => {
       const findOneSpy = jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
       jest.spyOn(mockCampaignJobRepo, 'count').mockResolvedValue(5);
 
-      await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(findOneSpy).toHaveBeenCalledWith(expect.objectContaining({ lock: { mode: 'pessimistic_write' } }));
     });
 
@@ -2831,7 +2842,7 @@ describe('AppController', () => {
       const findOneSpy = jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
       jest.spyOn(mockCampaignJobRepo, 'count').mockResolvedValue(5);
 
-      await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(findOneSpy).toHaveBeenCalledWith(expect.objectContaining({ lock: { mode: 'pessimistic_write' } }));
     });
 
@@ -2851,10 +2862,10 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'count').mockResolvedValue(1);
 
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValueOnce(mockJob1 as any);
-      await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
 
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValueOnce(mockJob2 as any);
-      await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j2', botId: testBotId, leaseToken: 'tok2' }, mockRes);
+      await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j2', botId: testBotId, leaseToken: 'tok2' }, mockRes);
 
       expect(mockCamp.successCount).toBe(2);
     });
@@ -2875,10 +2886,10 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'count').mockResolvedValue(1);
 
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValueOnce(mockJob1 as any);
-      await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
 
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValueOnce(mockJob2 as any);
-      await appController.markFail('28.15', testBotId, validInstance, { jobId: 'j2', botId: testBotId, leaseToken: 'tok2' }, mockRes);
+      await appController.markFail('28.16', testBotId, validInstance, { jobId: 'j2', botId: testBotId, leaseToken: 'tok2' }, mockRes);
 
       expect(mockCamp.successCount).toBe(1);
       expect(mockCamp.failedCount).toBe(1);
@@ -2898,7 +2909,7 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(mockCamp as any);
       jest.spyOn(mockCampaignJobRepo, 'count').mockResolvedValue(0);
 
-      await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(mockCamp.status).toBe('completed');
     });
 
@@ -2912,7 +2923,7 @@ describe('AppController', () => {
       } as any);
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(null);
 
-      await expect(appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes)).rejects.toThrow('missing after fenced transition');
+      await expect(appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes)).rejects.toThrow('missing after fenced transition');
     });
 
     it('18. missing Campaign causes rollback', async () => {
@@ -2927,7 +2938,7 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(mockJob as any);
       jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue(null);
 
-      await expect(appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes)).rejects.toThrow('missing during finalization');
+      await expect(appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes)).rejects.toThrow('missing during finalization');
     });
 
     it('19. Customer save DB error causes rollback', async () => {
@@ -2946,7 +2957,7 @@ describe('AppController', () => {
       jest.spyOn(mockCustomerRepo, 'findOne').mockResolvedValue({ botId: testBotId, lineUserId: 'U1' } as any);
       jest.spyOn(mockCustomerRepo, 'save').mockRejectedValue(new Error('DB Connection Lost'));
 
-      await expect(appController.markFail('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', isBlocked: true, reason: 'บล็อก' }, mockRes)).rejects.toThrow('DB Connection Lost');
+      await expect(appController.markFail('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', isBlocked: true, reason: 'บล็อก' }, mockRes)).rejects.toThrow('DB Connection Lost');
     });
 
     it('20. Telegram is called only AFTER transaction resolves', async () => {
@@ -2964,7 +2975,7 @@ describe('AppController', () => {
       jest.spyOn(mockCampaignJobRepo, 'count').mockResolvedValue(0);
 
       const telegramSpy = jest.spyOn(appController as any, 'checkAndSendTelegramReport').mockResolvedValue(undefined as any);
-      await appController.markSuccess('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      await appController.markSuccess('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
       expect(telegramSpy).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }));
     });
 
@@ -2982,15 +2993,15 @@ describe('AppController', () => {
       expect(finalizationFn).not.toContain('confirmAndCloseImageModal');
     });
 
-    it('23. Worker = 28.15', () => {
+    it('23. Worker = 28.16', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
-      expect(scriptContent).toContain("@version      28.15");
-      expect(scriptContent).toContain("const WORKER_VERSION = '28.15'");
+      expect(scriptContent).toContain("@version      28.16");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.16'");
     });
 
-    it('24. Required Worker = 28.15', () => {
+    it('24. Required Worker = 28.16', () => {
       const { REQUIRED_WORKER_VERSION } = require('./runtime-version');
-      expect(REQUIRED_WORKER_VERSION).toBe('28.15');
+      expect(REQUIRED_WORKER_VERSION).toBe('28.16');
     });
 
     it('25. Runtime Contract = 2', () => {
@@ -3009,6 +3020,238 @@ describe('AppController', () => {
       const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
       expect(scriptContent).toContain('ensureWorkerLeadership');
       expect(scriptContent).toContain('verifyCurrentOAContext');
+      expect(scriptContent).toContain('enforceAccountProtectionGate');
+      expect(scriptContent).toContain('checkAndExecuteCustomerSync');
+    });
+  });
+
+  describe('REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety Tests', () => {
+    const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+    const mockRes = {
+      status: jest.fn().mockReturnThis(),
+      statusCode: 200,
+    } as any;
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockRes.statusCode = 200;
+      mockRes.status.mockImplementation((code: number) => {
+        mockRes.statusCode = code;
+        return mockRes;
+      });
+    });
+
+    it('1. POST /api/campaign/send-part rejects invalid/missing worker version with 409', async () => {
+      const res: any = await appController.recordSendPart('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', partIndex: 0 }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('version_mismatch');
+    });
+
+    it('2. POST /api/campaign/send-part rejects invalid/missing OA context header with 409', async () => {
+      const res: any = await appController.recordSendPart('28.16', undefined, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', partIndex: 0 }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('missing_oa_context');
+    });
+
+    it('3. POST /api/campaign/send-part rejects missing/invalid worker instance with 409', async () => {
+      const res: any = await appController.recordSendPart('28.16', testBotId, 'invalid_instance', { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', partIndex: 0 }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('missing_worker_instance');
+    });
+
+    it('4. POST /api/campaign/send-part rejects header OA != body botId with 409', async () => {
+      const res: any = await appController.recordSendPart('28.16', testBotId, validInstance, { jobId: 'j1', botId: 'U11111111222222223333333344444444', leaseToken: 'tok1', partIndex: 0 }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('oa_context_mismatch');
+    });
+
+    it('5. POST /api/campaign/send-part returns 409 lease_lost when lease is expired or invalid', async () => {
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(null);
+      const res: any = await appController.recordSendPart('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', partIndex: 0 }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('lease_lost');
+    });
+
+    it('6. POST /api/campaign/send-part saves new send part in ledger when lease is valid', async () => {
+      const futureExpiry = new Date(Date.now() + 60000);
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({
+        id: 'j1',
+        campaignId: 'c1',
+        botId: testBotId,
+        lineUserId: 'U12345',
+        status: 'processing',
+        leaseToken: 'tok1',
+        leaseOwner: validInstance,
+        leaseExpiresAt: futureExpiry,
+      } as any);
+
+      jest.spyOn(mockCampaignSendPartRepo, 'findOne').mockResolvedValue(null);
+      const saveSpy = jest.spyOn(mockCampaignSendPartRepo, 'save');
+
+      const res: any = await appController.recordSendPart('28.16', testBotId, validInstance, {
+        jobId: 'j1',
+        botId: testBotId,
+        leaseToken: 'tok1',
+        partIndex: 0,
+        partType: 'image',
+        totalParts: 2,
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(res.recorded).toBe(true);
+      expect(res.partIndex).toBe(0);
+      expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
+        jobId: 'j1',
+        partIndex: 0,
+        partType: 'image',
+        status: 'sent',
+      }));
+    });
+
+    it('7. POST /api/campaign/send-part updates existing send part if already present', async () => {
+      const futureExpiry = new Date(Date.now() + 60000);
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({
+        id: 'j1',
+        campaignId: 'c1',
+        botId: testBotId,
+        lineUserId: 'U12345',
+        status: 'processing',
+        leaseToken: 'tok1',
+        leaseOwner: validInstance,
+        leaseExpiresAt: futureExpiry,
+      } as any);
+
+      const existingPart = { id: 'sp1', jobId: 'j1', partIndex: 0, status: 'pending', sentAt: null, leaseToken: 'tok0' };
+      jest.spyOn(mockCampaignSendPartRepo, 'findOne').mockResolvedValue(existingPart as any);
+      const saveSpy = jest.spyOn(mockCampaignSendPartRepo, 'save');
+
+      const res: any = await appController.recordSendPart('28.16', testBotId, validInstance, {
+        jobId: 'j1',
+        botId: testBotId,
+        leaseToken: 'tok1',
+        partIndex: 0,
+        partType: 'image',
+        totalParts: 2,
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(existingPart.status).toBe('sent');
+      expect(existingPart.leaseToken).toBe('tok1');
+      expect(saveSpy).toHaveBeenCalledWith(existingPart);
+    });
+
+    it('8. POST /api/campaign/reconcile rejects invalid worker version with 409', async () => {
+      const res: any = await appController.reconcileJobParts('28.15', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('version_mismatch');
+    });
+
+    it('9. POST /api/campaign/reconcile returns 409 lease_lost when lease is invalid', async () => {
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue(null);
+      const res: any = await appController.reconcileJobParts('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(res.status).toBe('lease_lost');
+    });
+
+    it('10. POST /api/campaign/reconcile returns sent parts and isFullySent: false when partial', async () => {
+      const futureExpiry = new Date(Date.now() + 60000);
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({
+        id: 'j1',
+        campaignId: 'c1',
+        botId: testBotId,
+        status: 'processing',
+        leaseToken: 'tok1',
+        leaseOwner: validInstance,
+        leaseExpiresAt: futureExpiry,
+      } as any);
+
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue({ id: 'c1', messageType: 'image_link' } as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([
+        { partIndex: 0, partType: 'image', status: 'sent', sentAt: new Date() } as any,
+      ]);
+
+      const res: any = await appController.reconcileJobParts('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      expect(res.success).toBe(true);
+      expect(res.isFullySent).toBe(false);
+      expect(res.totalParts).toBe(2);
+      expect(res.sentParts).toHaveLength(1);
+    });
+
+    it('11. POST /api/campaign/reconcile returns isFullySent: true when all required parts are sent', async () => {
+      const futureExpiry = new Date(Date.now() + 60000);
+      jest.spyOn(mockCampaignJobRepo, 'findOne').mockResolvedValue({
+        id: 'j1',
+        campaignId: 'c1',
+        botId: testBotId,
+        status: 'processing',
+        leaseToken: 'tok1',
+        leaseOwner: validInstance,
+        leaseExpiresAt: futureExpiry,
+      } as any);
+
+      jest.spyOn(mockCampaignRepo, 'findOne').mockResolvedValue({ id: 'c1', messageType: 'image_link' } as any);
+      jest.spyOn(mockCampaignSendPartRepo, 'find').mockResolvedValue([
+        { partIndex: 0, partType: 'image', status: 'sent', sentAt: new Date() } as any,
+        { partIndex: 1, partType: 'text_link', status: 'sent', sentAt: new Date() } as any,
+      ]);
+
+      const res: any = await appController.reconcileJobParts('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+      expect(res.success).toBe(true);
+      expect(res.isFullySent).toBe(true);
+      expect(res.totalParts).toBe(2);
+      expect(res.sentParts).toHaveLength(2);
+    });
+
+    it('12. Userscript LineSyncApp contains recordDurableSendPart and reconcileJobParts', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('async function recordDurableSendPart');
+      expect(scriptContent).toContain('async function reconcileJobParts');
+      expect(scriptContent).toContain('/campaign/send-part');
+      expect(scriptContent).toContain('/campaign/reconcile');
+    });
+
+    it('13. Userscript LineSyncApp contains local part ledger helpers and crash reconciliation in resumeSavedActiveJob', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('PART_LEDGER_KEY');
+      expect(scriptContent).toContain('getLocalPartLedger');
+      expect(scriptContent).toContain('markLocalPartSent');
+      expect(scriptContent).toContain('isLocalPartSent');
+      expect(scriptContent).toContain('clearLocalPartLedger');
+      expect(scriptContent).toContain('reconcileJobParts(savedJobData.jobId, savedJobData.botId, savedLeaseToken)');
+      expect(scriptContent).toContain('CRASH_RECONCILED_SUCCESS');
+    });
+
+    it('14. Userscript LineSyncApp skips already-sent image part (Part 0) in multipart image_link', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('isLocalPartSent(jobData.jobId, 0)');
+      expect(scriptContent).toContain('Part 0 (image) already sent per ledger');
+    });
+
+    it('15. Userscript LineSyncApp skips already-sent text part in multipart image_link', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('isLocalPartSent(jobData.jobId, textPartIndex)');
+      expect(scriptContent).toContain('already sent per ledger for job');
+    });
+
+    it('16. Dashboard index.html displays Required Worker: v28.16', () => {
+      const htmlContent = fs.readFileSync('index.html', 'utf8');
+      expect(htmlContent).toContain('Required Worker: v28.16');
+    });
+
+    it('17. Worker = 28.16, Required Worker = 28.16, Runtime Contract = 2', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain("@version      28.16");
+      expect(scriptContent).toContain("const WORKER_VERSION = '28.16'");
+
+      const { REQUIRED_WORKER_VERSION, RUNTIME_CONTRACT_VERSION } = require('./runtime-version');
+      expect(REQUIRED_WORKER_VERSION).toBe('28.16');
+      expect(RUNTIME_CONTRACT_VERSION).toBe(2);
+    });
+
+    it('18. All prior REL-WP001, REL-WP002, OA, SAFE, SYNC tests remain passing', () => {
+      const scriptContent = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(scriptContent).toContain('ensureWorkerLeadership');
+      expect(scriptContent).toContain('JOB_LEASE_LOST');
       expect(scriptContent).toContain('enforceAccountProtectionGate');
       expect(scriptContent).toContain('checkAndExecuteCustomerSync');
     });

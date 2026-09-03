@@ -10,6 +10,7 @@ import { CustomerGroup } from './entities/customer-group.entity';
 import { CustomerGroupMember } from './entities/customer-group-member.entity';
 import { Campaign } from './entities/campaign.entity';
 import { CampaignJob } from './entities/campaign-job.entity';
+import { CampaignSendPart } from './entities/campaign-send-part.entity';
 import { OaRuntimeState } from './entities/oa-runtime-state.entity';
 import { TelegramService, TelegramConfig } from './telegram.service';
 import { RUNTIME_CONTRACT_VERSION, REQUIRED_WORKER_VERSION } from './runtime-version';
@@ -41,6 +42,9 @@ export class AppController {
 
     @InjectRepository(CampaignJob)
     private campaignJobRepository: Repository<CampaignJob>,
+
+    @InjectRepository(CampaignSendPart)
+    private campaignSendPartRepository: Repository<CampaignSendPart>,
 
     @InjectRepository(OaRuntimeState)
     private oaRuntimeStateRepository: Repository<OaRuntimeState>,
@@ -904,6 +908,36 @@ export class AppController {
         }
         await this.campaignRepository.save(targetCampaign);
 
+        const existingParts = await this.campaignSendPartRepository.find({
+          where: { jobId: selectedJob.id },
+          order: { partIndex: 'ASC' },
+        });
+
+        // 🛡️ REL-WP003 Auto-Reconcile if already fully sent by previous crashed worker
+        const totalRequiredParts = targetCampaign.messageType === 'image_link' ? 2 : 1;
+        if (existingParts.length >= totalRequiredParts && existingParts.every((p) => p.status === 'sent')) {
+          await this.campaignJobRepository.update(
+            { id: selectedJob.id },
+            {
+              status: 'success',
+              sentAt: existingParts[existingParts.length - 1].sentAt || now,
+              leaseToken: null,
+              leaseOwner: null,
+              leaseExpiresAt: null,
+              leaseHeartbeatAt: null,
+            },
+          );
+          targetCampaign.successCount = (targetCampaign.successCount || 0) + 1;
+          const remainingJobs = await this.campaignJobRepository.count({
+            where: { campaignId: targetCampaign.id, status: In(['pending', 'processing']) },
+          });
+          if (remainingJobs === 0) {
+            targetCampaign.status = 'completed';
+          }
+          await this.campaignRepository.save(targetCampaign);
+          continue; // Move to next job!
+        }
+
         return {
           jobId: selectedJob.id,
           campaignId: selectedJob.campaignId,
@@ -916,6 +950,11 @@ export class AppController {
           status: 'processing',
           leaseToken: newLeaseToken,
           leaseExpiresAt: leaseExpiresAt.getTime(),
+          sentParts: existingParts.map((p) => ({
+            partIndex: p.partIndex,
+            partType: p.partType,
+            status: p.status,
+          })),
         };
       }
     }
@@ -986,6 +1025,190 @@ export class AppController {
     }
 
     return { success: true, leaseExpiresAt: newExpiresAt.getTime() };
+  }
+
+  // API สำหรับบันทึกชิ้นส่วนการส่งลงใน Durable Send-Part Ledger (REL-WP003)
+  @Post('campaign/send-part')
+  async recordSendPart(
+    @Headers('x-linesync-worker-version') workerVersion: string | undefined,
+    @Headers('x-linesync-oa-context') workerOaHeader: string | undefined,
+    @Headers('x-linesync-worker-instance') workerInstance: string | undefined,
+    @Body()
+    body: {
+      jobId?: string;
+      botId?: string;
+      leaseToken?: string;
+      partIndex?: number;
+      partType?: string;
+      totalParts?: number;
+    },
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    if (!workerVersion || workerVersion.trim() !== REQUIRED_WORKER_VERSION) {
+      if (res) res.status(HttpStatus.CONFLICT);
+      return { success: false, status: 'version_mismatch', requiredWorkerVersion: REQUIRED_WORKER_VERSION };
+    }
+
+    if (!workerOaHeader || !/^U[0-9a-fA-F]{32}$/.test(workerOaHeader.trim())) {
+      if (res) res.status(HttpStatus.CONFLICT);
+      return { success: false, status: 'missing_oa_context' };
+    }
+
+    if (!this.isValidWorkerInstance(workerInstance)) {
+      if (res) res.status(HttpStatus.CONFLICT);
+      return { success: false, status: 'missing_worker_instance' };
+    }
+
+    if (!body || !body.jobId || !body.botId || !body.leaseToken || typeof body.partIndex !== 'number') {
+      if (res) res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing required parameters (jobId, botId, leaseToken, partIndex required)' };
+    }
+
+    const cleanWorkerBotId = workerOaHeader.trim();
+    const cleanBodyBotId = body.botId.trim();
+    if (cleanWorkerBotId !== cleanBodyBotId) {
+      if (res) res.status(HttpStatus.CONFLICT);
+      return { success: false, status: 'oa_context_mismatch' };
+    }
+
+    const cleanWorkerInstance = workerInstance!.trim();
+    const cleanLeaseToken = body.leaseToken.trim();
+    const cleanJobId = body.jobId.trim();
+    const partIndex = body.partIndex;
+    const partType = (body.partType || 'text').trim();
+    const totalParts = typeof body.totalParts === 'number' && body.totalParts > 0 ? body.totalParts : 1;
+
+    // Verify active valid processing lease
+    const now = new Date();
+    const job = await this.campaignJobRepository.findOne({
+      where: {
+        id: cleanJobId,
+        botId: cleanBodyBotId,
+        status: 'processing',
+        leaseToken: cleanLeaseToken,
+        leaseOwner: cleanWorkerInstance,
+      },
+    });
+
+    if (!job || !job.leaseExpiresAt || job.leaseExpiresAt <= now) {
+      if (res) res.status(HttpStatus.CONFLICT);
+      return { success: false, status: 'lease_lost', message: 'Job lease is invalid or expired' };
+    }
+
+    // Persist or update part in durable ledger
+    let part = await this.campaignSendPartRepository.findOne({
+      where: { jobId: cleanJobId, partIndex },
+    });
+
+    if (!part) {
+      part = this.campaignSendPartRepository.create({
+        jobId: cleanJobId,
+        campaignId: job.campaignId,
+        botId: cleanBodyBotId,
+        lineUserId: job.lineUserId,
+        partIndex,
+        partType,
+        totalParts,
+        status: 'sent',
+        sentAt: now,
+        leaseToken: cleanLeaseToken,
+      });
+    } else {
+      part.status = 'sent';
+      part.sentAt = now;
+      part.leaseToken = cleanLeaseToken;
+    }
+
+    await this.campaignSendPartRepository.save(part);
+
+    return {
+      success: true,
+      jobId: cleanJobId,
+      partIndex,
+      partType,
+      recorded: true,
+    };
+  }
+
+  // API สำหรับตรวจสอบสถานะชิ้นส่วนที่ส่งแล้วเพื่อทำ Crash Reconciliation (REL-WP003)
+  @Post('campaign/reconcile')
+  async reconcileJobParts(
+    @Headers('x-linesync-worker-version') workerVersion: string | undefined,
+    @Headers('x-linesync-oa-context') workerOaHeader: string | undefined,
+    @Headers('x-linesync-worker-instance') workerInstance: string | undefined,
+    @Body() body: { jobId?: string; botId?: string; leaseToken?: string },
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    if (!workerVersion || workerVersion.trim() !== REQUIRED_WORKER_VERSION) {
+      if (res) res.status(HttpStatus.CONFLICT);
+      return { success: false, status: 'version_mismatch', requiredWorkerVersion: REQUIRED_WORKER_VERSION };
+    }
+
+    if (!workerOaHeader || !/^U[0-9a-fA-F]{32}$/.test(workerOaHeader.trim())) {
+      if (res) res.status(HttpStatus.CONFLICT);
+      return { success: false, status: 'missing_oa_context' };
+    }
+
+    if (!this.isValidWorkerInstance(workerInstance)) {
+      if (res) res.status(HttpStatus.CONFLICT);
+      return { success: false, status: 'missing_worker_instance' };
+    }
+
+    if (!body || !body.jobId || !body.botId || !body.leaseToken) {
+      if (res) res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing required parameters (jobId, botId, leaseToken required)' };
+    }
+
+    const cleanWorkerBotId = workerOaHeader.trim();
+    const cleanBodyBotId = body.botId.trim();
+    if (cleanWorkerBotId !== cleanBodyBotId) {
+      if (res) res.status(HttpStatus.CONFLICT);
+      return { success: false, status: 'oa_context_mismatch' };
+    }
+
+    const cleanWorkerInstance = workerInstance!.trim();
+    const cleanLeaseToken = body.leaseToken.trim();
+    const cleanJobId = body.jobId.trim();
+
+    // Verify active valid processing lease
+    const now = new Date();
+    const job = await this.campaignJobRepository.findOne({
+      where: {
+        id: cleanJobId,
+        botId: cleanBodyBotId,
+        status: 'processing',
+        leaseToken: cleanLeaseToken,
+        leaseOwner: cleanWorkerInstance,
+      },
+    });
+
+    if (!job || !job.leaseExpiresAt || job.leaseExpiresAt <= now) {
+      if (res) res.status(HttpStatus.CONFLICT);
+      return { success: false, status: 'lease_lost', message: 'Job lease is invalid or expired' };
+    }
+
+    // Query recorded send parts
+    const parts = await this.campaignSendPartRepository.find({
+      where: { jobId: cleanJobId },
+      order: { partIndex: 'ASC' },
+    });
+
+    const campaign = await this.campaignRepository.findOne({ where: { id: job.campaignId } });
+    const totalParts = campaign && campaign.messageType === 'image_link' ? 2 : 1;
+    const isFullySent = parts.length >= totalParts && parts.every((p) => p.status === 'sent');
+
+    return {
+      success: true,
+      jobId: cleanJobId,
+      isFullySent,
+      totalParts,
+      sentParts: parts.map((p) => ({
+        partIndex: p.partIndex,
+        partType: p.partType,
+        status: p.status,
+        sentAt: p.sentAt,
+      })),
+    };
   }
 
   // API สำหรับ Tampermonkey มารายงานว่าส่งเสร็จแล้ว (พร้อมระบบ Transactional Fenced Lease Validation)

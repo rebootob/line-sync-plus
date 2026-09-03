@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LineSync Plus - Native React Event Bot
 // @namespace    http://tampermonkey.net/
-// @version      28.15
-// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (REL-WP002 Durable Job Lease Active)
+// @version      28.16
+// @description  บอทพิมพ์ข้อความ แนบรูปภาพ LINE OA อัตโนมัติ (REL-WP003 Durable Send-Part Ledger Active)
 // @match        https://chat.line.biz/*
 // @grant        GM_xmlhttpRequest
 // @connect      *
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const WORKER_VERSION = '28.15';
+    const WORKER_VERSION = '28.16';
     const WORKER_LEADER_KEY = 'linesync_worker_leader_v1';
     const WORKER_ELECTION_LOCK = 'linesync_worker_election_v1';
     const WORKER_LEASE_MS = 20000;
@@ -728,6 +728,7 @@
     function clearLocalActiveJobState() {
         stopActiveJobHeartbeat();
         stopActiveFinalizationRetry();
+        clearLocalPartLedger();
         try {
             sessionStorage.removeItem('linesync_jobid');
             sessionStorage.removeItem('linesync_uid');
@@ -739,6 +740,96 @@
             sessionStorage.removeItem('linesync_job_lease_token');
             sessionStorage.removeItem('linesync_job_lease_expires_at');
         } catch (e) {}
+    }
+
+    // 🛡️ REL-WP003 Send-Part Ledger Helpers
+    const PART_LEDGER_KEY = 'linesync_job_part_ledger';
+
+    function getLocalPartLedger(jobId) {
+        try {
+            const raw = sessionStorage.getItem(PART_LEDGER_KEY);
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.jobId === jobId && parsed.parts) {
+                return parsed.parts;
+            }
+        } catch (e) {}
+        return {};
+    }
+
+    function markLocalPartSent(jobId, partIndex, partType) {
+        try {
+            const parts = getLocalPartLedger(jobId);
+            parts[partIndex] = {
+                partIndex,
+                partType,
+                status: 'sent',
+                sentAt: Date.now()
+            };
+            sessionStorage.setItem(PART_LEDGER_KEY, JSON.stringify({ jobId, parts }));
+        } catch (e) {}
+    }
+
+    function isLocalPartSent(jobId, partIndex) {
+        const parts = getLocalPartLedger(jobId);
+        return Boolean(parts[partIndex] && parts[partIndex].status === 'sent');
+    }
+
+    function clearLocalPartLedger() {
+        try {
+            sessionStorage.removeItem(PART_LEDGER_KEY);
+        } catch (e) {}
+    }
+
+    async function recordDurableSendPart(jobId, botId, partIndex, partType, totalParts) {
+        markLocalPartSent(jobId, partIndex, partType);
+        const leaseToken = sessionStorage.getItem('linesync_job_lease_token');
+        if (!leaseToken) {
+            console.warn(`⚠️ [REL-WP003] Missing leaseToken when recording send part ${partIndex} for job ${jobId}`);
+            return;
+        }
+
+        const res = await fetchLeaseAPI('/campaign/send-part', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-LineSync-OA-Context': botId,
+            },
+            body: JSON.stringify({
+                jobId,
+                botId,
+                leaseToken,
+                partIndex,
+                partType,
+                totalParts,
+            }),
+        });
+
+        if (res.state === 'lease_lost') {
+            console.warn(`🛑 [REL-WP003] Backend returned lease_lost while recording send part ${partIndex} for job ${jobId}`);
+            handleJobLeaseLost('SEND_PART_LEASE_LOST');
+            throw new Error('JOB_LEASE_LOST');
+        }
+
+        if (res.state === 'success') {
+            console.log(`✅ [REL-WP003] Send part ${partIndex} (${partType}) recorded in durable backend ledger.`);
+        }
+    }
+
+    async function reconcileJobParts(jobId, botId, leaseToken) {
+        const res = await fetchLeaseAPI('/campaign/reconcile', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-LineSync-OA-Context': botId,
+            },
+            body: JSON.stringify({
+                jobId,
+                botId,
+                leaseToken,
+            }),
+        });
+        return res;
     }
 
     function handleLeadershipLost(reason = 'UNKNOWN') {
@@ -1592,6 +1683,14 @@
                 sessionStorage.setItem('linesync_job_lease_token', job.leaseToken || '');
                 sessionStorage.setItem('linesync_job_lease_expires_at', String(job.leaseExpiresAt || 0));
 
+                if (Array.isArray(job.sentParts)) {
+                    job.sentParts.forEach((p) => {
+                        if (p.status === 'sent') {
+                            markLocalPartSent(job.jobId, p.partIndex, p.partType);
+                        }
+                    });
+                }
+
                 startActiveJobHeartbeat(job.jobId, job.botId, job.leaseToken);
 
                 const targetUrl = getOAContextUrl(job.userId);
@@ -1764,42 +1863,50 @@
                 }
 
                 try {
+                    const isMultipart = (jobData.messageType === 'image_link');
+                    const totalParts = isMultipart ? 2 : 1;
+
                     let hasImageToSend = (jobData.messageType === 'image_link' || jobData.messageType === 'image_only') && jobData.imageUrl;
 
                     if (hasImageToSend) {
-                        if (!hasValidWorkerLeadership()) {
-                            throw new Error('WORKER_LEADERSHIP_LOST');
-                        }
-
-                        if (!verifyCurrentRecipient(jobData.userId)) {
-                            throw new Error('RECIPIENT_UNVERIFIED');
-                        }
-
-                        if (!expectedJobBotId || !isValidChatContextId(expectedJobBotId) || !verifyCurrentOAContext(expectedJobBotId)) {
-                            throw new Error('OA_CONTEXT_MISMATCH');
-                        }
-
-                        console.log("📸 1. กำลังแนบรูปภาพส่งขึ้นเป็นอันดับแรก...");
-                        const imageData = await fetchImageBlob(jobData.imageUrl);
-                        if (imageData && imageData.blob) {
-                            const file = new File([imageData.blob], 'broadcast_image.png', { type: imageData.contentType || 'image/png' });
-                            
-                            const fileInput = deepQuerySelector('input[type="file"][accept*="image"]') || deepQuerySelector('input[type="file"]');
-                            if (fileInput) {
-                                const dt = new DataTransfer();
-                                dt.items.add(file);
-                                fileInput.files = dt.files;
-                                fileInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-                                console.log("✅ แนบไฟล์รูปภาพผ่าน File Input สำเร็จ!");
-                            } else {
-                                const dt = new DataTransfer();
-                                dt.items.add(file);
-                                const pasteEvent = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
-                                chatInput.dispatchEvent(pasteEvent);
-                                console.log("✅ จำลอง Paste รูปภาพใส่ช่องพิมพ์สำเร็จ!");
+                        if (isLocalPartSent(jobData.jobId, 0)) {
+                            console.log(`⏩ [REL-WP003] Part 0 (image) already sent per ledger for job ${jobData.jobId}. Skipping upload.`);
+                        } else {
+                            if (!hasValidWorkerLeadership()) {
+                                throw new Error('WORKER_LEADERSHIP_LOST');
                             }
 
-                            await confirmAndCloseImageModal(jobData.userId, expectedJobBotId);
+                            if (!verifyCurrentRecipient(jobData.userId)) {
+                                throw new Error('RECIPIENT_UNVERIFIED');
+                            }
+
+                            if (!expectedJobBotId || !isValidChatContextId(expectedJobBotId) || !verifyCurrentOAContext(expectedJobBotId)) {
+                                throw new Error('OA_CONTEXT_MISMATCH');
+                            }
+
+                            console.log("📸 1. กำลังแนบรูปภาพส่งขึ้นเป็นอันดับแรก...");
+                            const imageData = await fetchImageBlob(jobData.imageUrl);
+                            if (imageData && imageData.blob) {
+                                const file = new File([imageData.blob], 'broadcast_image.png', { type: imageData.contentType || 'image/png' });
+
+                                const fileInput = deepQuerySelector('input[type="file"][accept*="image"]') || deepQuerySelector('input[type="file"]');
+                                if (fileInput) {
+                                    const dt = new DataTransfer();
+                                    dt.items.add(file);
+                                    fileInput.files = dt.files;
+                                    fileInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+                                    console.log("✅ แนบไฟล์รูปภาพผ่าน File Input สำเร็จ!");
+                                } else {
+                                    const dt = new DataTransfer();
+                                    dt.items.add(file);
+                                    const pasteEvent = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
+                                    chatInput.dispatchEvent(pasteEvent);
+                                    console.log("✅ จำลอง Paste รูปภาพใส่ช่องพิมพ์สำเร็จ!");
+                                }
+
+                                await confirmAndCloseImageModal(jobData.userId, expectedJobBotId);
+                                await recordDurableSendPart(jobData.jobId, expectedJobBotId, 0, 'image', totalParts);
+                            }
                         }
                     }
 
@@ -1821,37 +1928,45 @@
                         }
                     }
 
+                    const textPartIndex = isMultipart ? 1 : 0;
+                    const textPartType = isMultipart ? 'text_link' : (jobData.messageType === 'link_only' ? 'link' : (jobData.messageType === 'text_link' ? 'text_link' : 'text'));
+
                     if (textToSend && textToSend.trim() !== '') {
-                        if (!hasValidWorkerLeadership()) {
-                            throw new Error('WORKER_LEADERSHIP_LOST');
-                        }
-
-                        if (!verifyCurrentRecipient(jobData.userId)) {
-                            throw new Error('RECIPIENT_UNVERIFIED');
-                        }
-
-                        if (!expectedJobBotId || !isValidChatContextId(expectedJobBotId) || !verifyCurrentOAContext(expectedJobBotId)) {
-                            throw new Error('OA_CONTEXT_MISMATCH');
-                        }
-
-                        console.log("✍️ 5. พิมพ์ข้อความ/ลิงก์ลงในช่องแชต...");
-                        chatInput.focus();
-                        chatInput.click();
-
-                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-                        if (nativeInputValueSetter) {
-                            nativeInputValueSetter.call(chatInput, textToSend);
+                        if (isLocalPartSent(jobData.jobId, textPartIndex)) {
+                            console.log(`⏩ [REL-WP003] Part ${textPartIndex} (${textPartType}) already sent per ledger for job ${jobData.jobId}. Skipping text send.`);
                         } else {
-                            chatInput.value = textToSend;
+                            if (!hasValidWorkerLeadership()) {
+                                throw new Error('WORKER_LEADERSHIP_LOST');
+                            }
+
+                            if (!verifyCurrentRecipient(jobData.userId)) {
+                                throw new Error('RECIPIENT_UNVERIFIED');
+                            }
+
+                            if (!expectedJobBotId || !isValidChatContextId(expectedJobBotId) || !verifyCurrentOAContext(expectedJobBotId)) {
+                                throw new Error('OA_CONTEXT_MISMATCH');
+                            }
+
+                            console.log("✍️ 5. พิมพ์ข้อความ/ลิงก์ลงในช่องแชต...");
+                            chatInput.focus();
+                            chatInput.click();
+
+                            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+                            if (nativeInputValueSetter) {
+                                nativeInputValueSetter.call(chatInput, textToSend);
+                            } else {
+                                chatInput.value = textToSend;
+                            }
+
+                            chatInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+                            chatInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+                            chatInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: textToSend }));
+
+                            await sleep(1200);
+
+                            await sendChatMessage(chatInput, jobData.userId, expectedJobBotId);
+                            await recordDurableSendPart(jobData.jobId, expectedJobBotId, textPartIndex, textPartType, totalParts);
                         }
-
-                        chatInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-                        chatInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-                        chatInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: textToSend }));
-
-                        await sleep(1200);
-
-                        await sendChatMessage(chatInput, jobData.userId, expectedJobBotId);
 
                         await sleep(3000);
                         console.log("✅ ส่งแคมเปญสำเร็จ 100%!");
@@ -2056,6 +2171,34 @@
         }
 
         startActiveJobHeartbeat(savedJobData.jobId, savedJobData.botId, savedLeaseToken);
+
+        // 🛡️ REL-WP003 Crash Reconciliation with Durable Send-Part Ledger
+        try {
+            const reconcileRes = await reconcileJobParts(savedJobData.jobId, savedJobData.botId, savedLeaseToken);
+            if (reconcileRes.state === 'lease_lost') {
+                console.warn(`🛑 [REL-WP003] Lease lost during page-load crash reconciliation for job ${savedJobData.jobId}. Relinquishing active job.`);
+                handleJobLeaseLost('RECONCILE_LEASE_LOST');
+                return;
+            }
+            if (reconcileRes.state === 'success' && reconcileRes.data) {
+                const { isFullySent, sentParts } = reconcileRes.data;
+                if (Array.isArray(sentParts)) {
+                    sentParts.forEach((p) => {
+                        if (p.status === 'sent') {
+                            markLocalPartSent(savedJobData.jobId, p.partIndex, p.partType);
+                        }
+                    });
+                }
+                if (isFullySent) {
+                    console.log(`🛡️ [REL-WP003] Crash Reconciliation: Job ${savedJobData.jobId} was already fully sent before crash/reload. Finalizing without repeating send.`);
+                    emitDiagnostic('CRASH_RECONCILED_SUCCESS', { jobId: savedJobData.jobId, userId: savedJobData.userId, botId: savedJobData.botId });
+                    await finishJob(savedJobData.jobId, savedJobData.userId, true, '', false, savedJobData.botId);
+                    return;
+                }
+            }
+        } catch (reconcileErr) {
+            console.warn("⚠️ [REL-WP003] Non-fatal error during crash reconciliation. Proceeding with local ledger.", reconcileErr);
+        }
 
         emitDiagnostic('PAGE_LOAD_ACTIVE_JOB', { jobId: savedJobData.jobId, userId: savedJobData.userId, botId: savedJobData.botId });
 
