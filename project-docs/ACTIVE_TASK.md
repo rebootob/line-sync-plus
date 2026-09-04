@@ -1,11 +1,11 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: MON-WP002
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: NONE
+STATUS: STANDBY
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: PENDING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_OWNER_DIRECTION
 PHASE_0: CLOSED / PASS
 PHASE_1: IN PROGRESS
 ```
@@ -14,7 +14,7 @@ PHASE_1: IN PROGRESS
 
 ## 📋 Work Package Status Summary
 
-- **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `READY_FOR_CHATGPT_REVIEW`
+- **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 - **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
   - **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 - **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
@@ -320,7 +320,7 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
-## 📊 MON-WP002 — Queue / Lease / Reconciliation Monitoring (STATUS: READY_FOR_CHATGPT_REVIEW)
+## 📊 MON-WP002 — Queue / Lease / Reconciliation Monitoring (STATUS: CLOSED / PASS)
 
 > [!IMPORTANT]
 > **Boundary & Invariants**:
@@ -357,15 +357,26 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
   - 23/23 tests pass cleanly.
 - **Total Test Suite**: 317/317 unit tests PASS (0 failures, LOCAL REPORTED evidence only; no GitHub CI status checks).
 
+### Acceptance Evidence (Independent Review)
+- **Accepted Review HEAD**: `5b34269397afbd9046610c366d9f0c27bf3d5532`
+- **Accepted Review Result**: `PASS`
+- **Work Package Status**: `CLOSED / PASS`
+- **Evidence Classification**: LOCAL REPORTED evidence (317/317 PASS, 23/23 focused PASS, no GitHub CI)
+- **Live LINE UAT**: No Live LINE UAT was required/performed (observability endpoints remain read-only)
+- **Worker Version**: `28.16` (unchanged)
+- **Required Worker Version**: `28.16` (unchanged)
+- **Runtime Contract Version**: `2` (unchanged)
+- **Safety Invariant**: Never automatically resend ambiguous physical sends
+
 ---
 
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `MON-WP002`
+- **Active Work Package**: `NONE`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `IN PROGRESS`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`
-- **MON-WP002 Status**: `READY_FOR_CHATGPT_REVIEW`
+- **MON-WP002 Status**: `CLOSED / PASS`
 - **Next Candidate**: `NONE`
-- **Next Candidate Status**: `PENDING_REVIEW`
+- **Next Candidate Status**: `AWAITING_OWNER_DIRECTION`

@@ -22,14 +22,14 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `MON-WP002`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
-* **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `READY_FOR_CHATGPT_REVIEW`
+* **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -124,21 +124,25 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Dashboard UI**: Compact responsive card in `index.html` polling every 6 seconds, displaying `? Unknown` for null/unavailable metrics, displaying numeric 0 only on genuine success, displaying warnings for positive anomalies, and falling back gracefully on network errors.
 - **Worker Script**: `run/LineSyncApp.js` UNTOUCHED (v28.16).
 - **Unit Tests**: 23 tests in `src/app.controller.spec.ts` under MON-WP002, full test suite: 317/317 passing cleanly (LOCAL REPORTED evidence only; no GitHub CI/check runs existed).
-- **Current Review Baseline**:
-  - Code Baseline: `74359ed58c3a02dd574a78dce7f2330632e28c5b`
+- **Current Acceptance Evidence**:
+  - Accepted Review HEAD: `5b34269397afbd9046610c366d9f0c27bf3d5532`
+  - Accepted Review Result: `PASS`
+  - Work Package Status: `CLOSED / PASS`
   - Worker Version: `28.16` (unchanged)
+  - Required Worker Version: `28.16` (unchanged)
   - Runtime Contract: `2` (unchanged)
-  - Live LINE UAT: None (Read-only observability)
-  - Status: `READY_FOR_CHATGPT_REVIEW`
+  - Evidence Classification: LOCAL REPORTED evidence (317/317 PASS, 23/23 focused PASS, no GitHub CI)
+  - Live LINE UAT: None required/performed (observability endpoints remain read-only)
+  - Safety Invariant: Never automatically resend ambiguous physical sends
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `MON-WP002`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
 * **MON-WP001**: `CLOSED / PASS`
 * **MON-WP001-R1**: `CLOSED / PASS`
-* **MON-WP002**: `READY_FOR_CHATGPT_REVIEW`
+* **MON-WP002**: `CLOSED / PASS`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
-Awaiting independent ChatGPT review of MON-WP002. Do not start next work package.
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
+Awaiting project owner direction for next work package. Do not start any task without explicit authorization.

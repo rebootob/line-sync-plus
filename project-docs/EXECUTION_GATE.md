@@ -1,14 +1,15 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 1
+CONTROL_VERSION: 2
 
-TASK_ID: MON-WP002
+TASK_ID:
+MON-WP002-CLOSE
 
 TITLE:
-Queue / Lease / Reconciliation Monitoring
+Close MON-WP002 After Independent Review
 
 STATUS:
-READY_FOR_CHATGPT_REVIEW
+CLOSED_PASS
 
 AUTHORIZED_BY:
 Project Owner
@@ -22,32 +23,35 @@ Antigravity
 CANONICAL_BRANCH:
 main
 
-CODE_BASELINE_HEAD:
-74359ed58c3a02dd574a78dce7f2330632e28c5b
+ACCEPTED_REVIEW_HEAD:
+5b34269397afbd9046610c366d9f0c27bf3d5532
 
-BASELINE_POLICY:
-NON_DOCUMENT_CODE_MUST_MATCH_CODE_BASELINE
+ACCEPTED_REVIEW_RESULT:
+PASS
 
-If non-project-docs code changed after CODE_BASELINE_HEAD before
-MON-WP002 starts:
+NEXT_TASK:
+NONE
 
-STOP_REASON:
-CODE_BASELINE_DRIFT
-
-CONTROL_UPDATE_POLICY:
-CURRENT_EXPLICIT_OWNER_CONTROL_UPDATE_ONLY
-
-IMPORTANT:
-
-This gate authorizes MON-WP002 implementation in a FUTURE execution run.
-
-DO NOT execute MON-WP002 during this control update run.
-
-After creating and pushing this control update:
-STOP.
+NEXT_TASK_STATUS:
+AWAITING_OWNER_DIRECTION
 
 --------------------------------------------------
-MON-WP002 OBJECTIVE
+ACCEPTED EVIDENCE SUMMARY
+--------------------------------------------------
+
+- MON-WP002 focused tests: 23/23 PASS
+- full suite: 317/317 PASS
+- evidence classification: LOCAL REPORTED evidence
+- no GitHub CI/status/workflow evidence
+- no Live LINE UAT was required/performed
+- Worker remains 28.16
+- Required Worker remains 28.16
+- Runtime Contract remains 2
+- never automatically resend ambiguous physical sends
+- observability endpoints remain read-only
+
+--------------------------------------------------
+MON-WP002 OBJECTIVE (COMPLETED / CLOSED_PASS)
 --------------------------------------------------
 
 Implement read-only operational monitoring for the active LINE OA:
@@ -71,14 +75,14 @@ No resend.
 No reconciliation action.
 
 --------------------------------------------------
-ALLOWED IMPLEMENTATION FILES
+IMPLEMENTATION FILES
 --------------------------------------------------
 
 - src/app.controller.ts
 - src/app.controller.spec.ts
 - index.html
 
-Supporting docs allowed after implementation:
+Supporting docs:
 
 - project-docs/ACTIVE_TASK.md
 - project-docs/CHAT_HANDOFF.md
@@ -87,10 +91,8 @@ Supporting docs allowed after implementation:
 - project-docs/EXECUTION_GATE.md
 
 --------------------------------------------------
-PROHIBITED FILES
+PROHIBITED FILES (VERIFIED UNTOUCHED)
 --------------------------------------------------
-
-Do not modify:
 
 - run/LineSyncApp.js
 - src/runtime-version.ts
@@ -114,7 +116,7 @@ Runtime Contract remains:
 BACKEND
 --------------------------------------------------
 
-Implement:
+Implemented:
 
 GET /api/ops/queue
 
@@ -355,7 +357,7 @@ Do NOT expose:
 DASHBOARD
 --------------------------------------------------
 
-Add compact monitoring for:
+Compact monitoring for:
 
 - Pending
 - Processing
@@ -382,15 +384,15 @@ unknown must never render green
 
 pending/processing/active lease positive values are informational
 
-Use polling consistent with MON-WP001.
+Polling: 6000ms consistent with MON-WP001.
 
 No write/retry/reset/reconcile controls.
 
 --------------------------------------------------
-MINIMUM TESTS
+TESTS (317/317 PASS)
 --------------------------------------------------
 
-Cover at least:
+Covered:
 
 - loopback accepted
 - non-loopback forbidden
@@ -416,61 +418,19 @@ Cover at least:
 - active OA scoping
 - no active OA does not run count queries
 
-Run focused tests first.
-Then full test suite.
-
-Local tests must be labeled:
+Local tests labeled:
 LOCAL REPORTED evidence
 
-Do not claim GitHub CI unless CI actually ran.
+No GitHub CI/status/workflow evidence.
 
 --------------------------------------------------
-AFTER MON-WP002 IMPLEMENTATION
+CLOSURE STATUS
 --------------------------------------------------
 
-Set:
+TASK_ID: MON-WP002-CLOSE
+STATUS: CLOSED_PASS
+ACCEPTED_REVIEW_HEAD: 5b34269397afbd9046610c366d9f0c27bf3d5532
+ACCEPTED_REVIEW_RESULT: PASS
 
-STATUS:
-READY_FOR_CHATGPT_REVIEW
-
-Supporting docs:
-
-ACTIVE_WORK_PACKAGE: MON-WP002
-MON-WP001: CLOSED / PASS
-MON-WP001-R1: CLOSED / PASS
-MON-WP002: READY_FOR_CHATGPT_REVIEW
-PHASE_0: CLOSED / PASS
-PHASE_1: IN PROGRESS
-NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: PENDING_REVIEW
-
-Record:
-
-- code baseline
-- Worker 28.16 unchanged
-- Runtime Contract 2 unchanged
-- no Live LINE UAT
-- focused tests
-- full-suite tests
-- local evidence status
-- exact changed files
-
-Commit message for MON-WP002:
-
-ops: add queue lease reconciliation monitoring
-
-Push origin main.
-
-Fetch origin.
-
-Prove:
-
-- HEAD
-- origin/main
-- HEAD == origin/main
-- working tree clean
-- exact changed files
-
-STOP.
-
-Do not start MON-WP003.
+NEXT_TASK: NONE
+NEXT_TASK_STATUS: AWAITING_OWNER_DIRECTION

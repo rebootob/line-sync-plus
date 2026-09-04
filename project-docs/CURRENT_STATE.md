@@ -51,12 +51,20 @@
 
 ---
 
-## 📊 Queue / Lease / Reconciliation Monitoring (MON-WP002 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 📊 Queue / Lease / Reconciliation Monitoring (MON-WP002 STATUS: CLOSED / PASS)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
 - **Scope**: Phase 1 Observability & Monitoring. Read-only diagnostic endpoint and UI card.
+- **Accepted Review Evidence**:
+  - Accepted Review HEAD: `5b34269397afbd9046610c366d9f0c27bf3d5532`
+  - Accepted Review Result: `PASS`
+  - Status: `CLOSED / PASS`
+  - Automated Validation: 317/317 unit tests PASS (23 dedicated to MON-WP002, 0 failures, LOCAL REPORTED evidence only; no GitHub CI status checks).
+  - Worker remains `v28.16`, Required Worker remains `28.16`, Runtime Contract remains `2`.
+  - Zero Live LINE UAT required/performed (read-only observability).
+  - Safety Invariant: Never automatically resend ambiguous physical sends.
 - **Implemented Capabilities**:
   - `GET /api/ops/queue`: Loopback-only endpoint (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`). Returns 403 Forbidden for external IPs. Socket remote address enforced.
   - Truthful Status Enum: `healthy | degraded | attention`
@@ -66,10 +74,7 @@
   - Scoped Metrics: Strictly scoped by `activeBotId`. When no active OA is selected, global cross-OA counts are NOT queried; metric counts are returned as `null`, and overall status is `attention`.
   - Metrics tracked: `queue.pending`, `queue.processing`, `leases.active`, `leases.expired`, `leases.missing`, `leases.residual`, `reconciliation.jobs`, `reconciliation.parts`, `reconciliation.staleArmed`, `reconciliation.pausedCampaigns`.
   - Dashboard: Real-time Queue, Lease & Reconciliation card in `index.html` polling every 6 seconds, rendering `? Unknown` for unavailable/failed metrics and visible warning for anomalies.
-- **Automated Validation**: 317/317 unit tests PASS (23 dedicated to MON-WP002, 0 failures, LOCAL REPORTED evidence only; no GitHub CI status checks).
   - Zero Secret Exposure: Excludes `leaseToken`, `dispatchToken`, Telegram credentials, cookies, customer PII, and message payloads.
-  - Dashboard UI: Added top-level responsive Operational Health card in `index.html` polling `GET /api/ops/health` every 6 seconds. Renders `? Unknown` for null/unavailable metrics, zero only when positively returned as numeric 0, and never renders unknown states as green.
-  - Automated Unit Tests: 23 dedicated unit tests in `src/app.controller.spec.ts` bringing total test suite to 294/294 passing.
 
 ---
 
@@ -179,11 +184,11 @@
 - **Phase 0 Status**: `CLOSED / PASS`.
 - **Phase 1 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003` (`CLOSED / PASS`).
-- **Active Work Package**: `MON-WP002`.
+- **Active Work Package**: `NONE`.
 - **Work Package Status**:
   - `MON-WP001`: `CLOSED / PASS`.
   - `MON-WP001-R1`: `CLOSED / PASS`.
-  - `MON-WP002`: `READY_FOR_CHATGPT_REVIEW`.
+  - `MON-WP002`: `CLOSED / PASS`.
   - `REL-WP003`: `CLOSED / PASS`.
   - `REL-WP003-R1`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP003-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
@@ -193,4 +198,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `NONE` (Status: `PENDING_REVIEW`).
+- **Next Candidate**: `NONE` (Status: `AWAITING_OWNER_DIRECTION`).
