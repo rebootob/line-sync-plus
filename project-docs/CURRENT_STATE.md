@@ -218,7 +218,7 @@
 - **Scope & Closure Decisions**:
   - Project Owner explicitly chose not to make Backup / Recovery / Retention work a Phase 1 closure requirement.
   - Backup / Recovery / Retention classification: `DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE` (not implemented; OPS-WP002 is neither created nor authorized).
-  - Phase 2 execution gate is NOT installed. Phase 2 (Campaign Builder v2) remains future roadmap candidate only.
+  - Phase 2 is now authorized under P2-WP001.
 - **Runtime Invariants**:
   - Worker Version: `28.16` | Required Worker Version: `28.16` | Runtime Contract: `2`
   - Observability endpoints remain strictly read-only.
@@ -226,14 +226,36 @@
 
 ---
 
+## 🎯 Campaign Authoring Contract & OA Isolation (P2-WP001 STATUS: AUTHORIZED_FOR_EXECUTION)
+
+- **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
+- **Backend Required Version**: `28.16` (`src/runtime-version.ts` - UNTOUCHED).
+- **Runtime Contract Version**: `2` (`src/runtime-version.ts` - UNTOUCHED).
+- **Scope**: Phase 2 Campaign Builder v2. Server-side authoritative authoring contract and active OA isolation before UI preview/reuse work.
+- **Code Baseline HEAD**: `7204f6b1c08ffa4f4ab6b7b071f3d34d1900bf7b`.
+- **Authorized Files**: `src/app.controller.ts`, `src/app.controller.spec.ts`, `index.html`.
+- **Prohibited**: `run/**`, Worker version, `runtime-version.ts`, `entities/**`, database/schema, send plans, ledger/ARM/CONFIRM, LINE DOM/send behavior, Telegram.
+- **Contract Highlights**:
+  - Authoritative message type contract: `text`, `text_link`, `image_only`, `image_link`, `link_only` (fail-closed HTTP 400 for unknown).
+  - Strict URL validation: HTTP/HTTPS only; reject javascript/data/file/ftp. Local uploads remain valid.
+  - Future-only schedule validation; reject invalid/past/current datetimes without silent fallback.
+  - Active OA scoped reads: `/campaigns`, `/campaigns/templates`, `/campaigns/scheduled`, `/campaigns/:id`. Cross-OA campaign detail behaves as not found.
+  - Active OA scoped mutations: `/campaign/pause`, `/campaign/resume`, `/campaign/reschedule`. Fenced by botId == activeBotId.
+  - State-safe mutation transitions (pause from pending/scheduled/processing; resume from paused; reschedule from scheduled/paused).
+- **Testing & Safety**: 42 focused Jest tests, `npm test -- --runInBand`, `npm run build`. Zero Live LINE sends.
+
+---
+
 ## 🚀 Work Packages Overview
 
 - **Phase 0 Status**: `CLOSED / PASS`.
 - **Phase 1 Status**: `CLOSED / PASS`.
-- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003` (`CLOSED / PASS`).
-- **Active Work Package**: `NONE`.
-- **Status**: `STANDBY`.
+- **Phase 2 Status**: `IN PROGRESS`.
+- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003` (`CLOSED / PASS`).
+- **Active Work Package**: `P2-WP001`.
+- **Status**: `AUTHORIZED_FOR_EXECUTION`.
 - **Work Package Status**:
+  - `P2-WP001`: `AUTHORIZED_FOR_EXECUTION`.
   - `MON-WP001`: `CLOSED / PASS`.
   - `MON-WP001-R1`: `CLOSED / PASS`.
   - `MON-WP002`: `CLOSED / PASS`.
@@ -247,4 +269,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `NONE` (Status: `AWAITING_OWNER_DIRECTION`).
+- **Next Candidate**: `NONE` (Status: `PENDING_REVIEW`).

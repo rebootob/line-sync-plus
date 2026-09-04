@@ -1,22 +1,23 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: NONE
-STATUS: STANDBY
+ACTIVE_WORK_PACKAGE: P2-WP001
+STATUS: AUTHORIZED_FOR_EXECUTION
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_OWNER_DIRECTION
+NEXT_CANDIDATE_STATUS: PENDING_REVIEW
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
-MON-WP001: CLOSED / PASS
-MON-WP002: CLOSED / PASS
-MON-WP003: CLOSED / PASS
+PHASE_2: IN PROGRESS
+PHASE_2_TITLE: Campaign Builder v2
+P2-WP001: AUTHORIZED_FOR_EXECUTION
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
+- **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `AUTHORIZED_FOR_EXECUTION`
 - **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`
 - **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 - **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
@@ -431,19 +432,78 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 - **Scope & Closure Decisions**:
   - Project Owner explicitly chose not to make Backup / Recovery / Retention work a Phase 1 closure requirement.
   - Backup / Recovery / Retention status: `DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE` (not implemented; OPS-WP002 is neither created nor authorized).
-  - Phase 2 execution gate is NOT installed. Phase 2 (Campaign Builder v2) remains future roadmap candidate only.
+  - Phase 2 is now authorized under P2-WP001.
+
+---
+
+## 🎯 P2-WP001 — Campaign Authoring Contract & OA Isolation (STATUS: AUTHORIZED_FOR_EXECUTION)
+
+> [!IMPORTANT]
+> **Boundary & Invariants**:
+> - **Code Baseline HEAD**: `7204f6b1c08ffa4f4ab6b7b071f3d34d1900bf7b`
+> - **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts`, `index.html`
+> - **Prohibited**: `run/**`, Worker version changes, `runtime-version.ts` changes, `entities/**`, DB schema/migrations, campaign send-plan changes, ARM/CONFIRM changes, send ledger changes, lease/reconciliation behavior changes, LINE DOM/send behavior, Telegram behavior, analytics redesign, UI redesign outside compatibility changes.
+> - **Worker Version**: `28.16` (UNTOUCHED) | **Required Worker**: `28.16` (UNTOUCHED) | **Runtime Contract**: `2` (UNTOUCHED)
+> - **Permanent Policy**: Never automatically resend an ambiguous physical send. True exactly-once physical LINE delivery is not guaranteed.
+
+### Objective
+Make campaign creation, campaign reads, template reuse, scheduled-campaign reads, pause, resume and reschedule operations fail-closed, active-OA isolated and governed by an authoritative server-side campaign authoring contract. Do this BEFORE Campaign Preview / Template Reuse V2 UI work.
+
+### Specification Details
+
+1. **Authoritative Message Type Contract**:
+   - Allowed: `text`, `text_link`, `image_only`, `image_link`, `link_only`. Any other messageType => HTTP 400 / fail closed.
+   - `text`: non-empty message REQUIRED; imageUrl & linkUrl prohibited.
+   - `text_link`: non-empty message REQUIRED; valid linkUrl REQUIRED; imageUrl prohibited.
+   - `image_only`: valid imageUrl REQUIRED; linkUrl prohibited; message not required.
+   - `image_link`: valid imageUrl REQUIRED; non-empty message REQUIRED; valid linkUrl REQUIRED.
+   - `link_only`: valid linkUrl REQUIRED; imageUrl prohibited; message optional.
+   - Trim textual inputs before validation/persistence. Never silently coerce unknown messageType to text.
+
+2. **URL Validation**:
+   - Parse as URL; protocol must be `http:` or `https:`. Reject malformed values or unsupported protocols (`javascript:`, `data:`, `file:`, `ftp:`).
+   - Local uploaded image URLs (`http://localhost:<port>/api/uploads/...`) must remain valid.
+   - Frontend must send only fields relevant to selected message type so hidden stale form values cannot violate the contract.
+
+3. **Schedule Contract**:
+   - If `scheduledAt` absent/blank: immediate/pending.
+   - If supplied: valid datetime representing future time; invalid/past/current => reject. NEVER silently convert to immediate send.
+   - Frontend `datetime-local` normalized to unambiguous ISO timestamp before POST where practical.
+
+4. **Active OA Isolation — Reads**:
+   - Endpoints scoped to botId: `GET /api/campaigns`, `GET /api/campaigns/templates`, `GET /api/campaigns/scheduled`, `GET /api/campaigns/:id`.
+   - Requires valid `botId` matching current `activeBotId`. Returns only campaigns with `campaign.botId == botId`. Cross-OA campaign detail behaves as not found.
+   - `index.html` updated to pass `currentActiveBotId` explicitly.
+
+5. **Active OA Isolation — Mutations**:
+   - Fencing applied to: `POST /api/campaign/pause`, `POST /api/campaign/resume`, `POST /api/campaign/reschedule`.
+   - Dashboard sends `botId`. Requires valid `botId == current activeBotId` and campaign exists with matching `id` and `botId`. Never mutate another OA's campaign.
+
+6. **State-Safe Mutations**:
+   - `PAUSE`: Allowed only from `pending`, `scheduled`, `processing`. Rejects `paused`, `paused_reconcile`, `completed`, `failed`, `stopped_*`, terminal/unknown states.
+   - `RESUME`: Allowed ONLY from `paused`. Never normal-resume `paused_reconcile`. If `scheduledAt` remains in future => `scheduled`; otherwise => `pending`.
+   - `RESCHEDULE`: Allowed ONLY when `scheduled` or `paused`. New `scheduledAt` required, valid, future only. Paused remains paused; scheduled remains scheduled. Never reschedule completed/failed/stopped/processing/paused_reconcile campaigns.
+
+7. **Preserve Existing Safety**:
+   - Active OA runtime fencing, target OA membership, blocked/duplicate target exclusion, durable leases, heartbeats, pre-send lease renewal, send-part ARM/CONFIRM, ambiguity quarantine, reconciliation fencing, account protection all preserved.
+
+8. **Tests & Validation**:
+   - 42 focused Jest tests covering authoring contract, schedule, OA read/mutation isolation, state safety, and frontend contract.
+   - Zero Live LINE send UAT required for P2-WP001. Master Bot remains PAUSED.
 
 ---
 
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `NONE`
-- **Status**: `STANDBY`
+- **Active Work Package**: `P2-WP001`
+- **Status**: `AUTHORIZED_FOR_EXECUTION`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `CLOSED / PASS`
+- **Phase 2 Status**: `IN PROGRESS`
+- **P2-WP001 Status**: `AUTHORIZED_FOR_EXECUTION`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`
 - **MON-WP002 Status**: `CLOSED / PASS`
 - **MON-WP003 Status**: `CLOSED / PASS`
 - **Next Candidate**: `NONE`
-- **Next Candidate Status**: `AWAITING_OWNER_DIRECTION`
+- **Next Candidate Status**: `PENDING_REVIEW`

@@ -253,7 +253,9 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `MON-WP002 — Queue / Lease / Reconciliation Monitoring`: **CLOSED / PASS**
   - `MON-WP003 — Alerts / Incident Visibility`: **CLOSED / PASS**
   - *Backup / Recovery / Retention*: **DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE** (OPS-WP002 not authorized)
-- **Phase 2 — Campaign Builder v2** *(Future Roadmap Only)*: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
+- **Phase 2 — Campaign Builder v2**: **IN PROGRESS**
+  - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **AUTHORIZED_FOR_EXECUTION**
+  - Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
 - **Phase 5 — Analytics & Optimization**: Performance reporting, delivery throughput metrics, and campaign success analytics.
@@ -271,14 +273,11 @@ Over the course of safety hardening, 26 work packages were identified, implement
 
 Phase 0 Foundation is **CLOSED / PASS**.
 Phase 1 (Operations & Monitoring) is **CLOSED / PASS**.
-MON-WP001 / MON-WP001-R1 is **CLOSED / PASS** (Accepted review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`, Result: PASS).
-MON-WP002 is **CLOSED / PASS** (Accepted review HEAD: `5b34269397afbd9046610c366d9f0c27bf3d5532`, Result: PASS).
-MON-WP003 is **CLOSED / PASS** (Accepted review HEAD: `acb1185e1a5ff21c2c346d326669392cacdfa639`, Result: PASS).
-Phase 1 Scope Note: Project Owner explicitly chose not to make Backup / Recovery / Retention work a Phase 1 closure requirement (classified as `DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE`; OPS-WP002 is neither created nor authorized).
-Active Work Package: **NONE**.
-Status: **STANDBY**.
-Next Candidate: **NONE** (Status: **AWAITING_OWNER_DIRECTION**).
-Phase 2 (Campaign Builder v2) remains future roadmap candidate only (not active, authorized, started, or in progress).
+Phase 2 (Campaign Builder v2) is **IN PROGRESS**.
+P2-WP001 is **AUTHORIZED_FOR_EXECUTION** (Code Baseline HEAD: `7204f6b1c08ffa4f4ab6b7b071f3d34d1900bf7b`).
+Active Work Package: **P2-WP001**.
+Status: **AUTHORIZED_FOR_EXECUTION**.
+Next Candidate: **NONE** (Status: **PENDING_REVIEW**).
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-Awaiting project owner authorization and direction before starting next candidate.
+Control plane authorization complete. Ready for P2-WP001 implementation in next authorized execution run.

@@ -22,16 +22,19 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **STATUS**: `STANDBY`
+* **ACTIVE_WORK_PACKAGE**: `P2-WP001`
+* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
+* **PHASE_2**: `IN PROGRESS`
+* **PHASE_2_TITLE**: `Campaign Builder v2`
+* **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `AUTHORIZED_FOR_EXECUTION`
+* **NEXT_CANDIDATE**: `NONE`
+* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 * **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`
-* **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -165,18 +168,27 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Scope & Closure Decisions**:
   - Project Owner explicitly chose not to make Backup / Recovery / Retention work a Phase 1 closure requirement.
   - Backup / Recovery / Retention status: `DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE` (not implemented; OPS-WP002 is neither created nor authorized).
-  - Phase 2 execution gate is NOT installed. Phase 2 (Campaign Builder v2) remains future roadmap candidate only.
+  - Phase 2 is now authorized under P2-WP001.
+
+## Authorized P2-WP001 Campaign Authoring Contract & OA Isolation Summary
+
+- **Task**: P2-WP001 (Campaign Authoring Contract & OA Isolation)
+- **Status**: AUTHORIZED_FOR_EXECUTION
+- **Code Baseline HEAD**: `7204f6b1c08ffa4f4ab6b7b071f3d34d1900bf7b`
+- **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts`, `index.html`
+- **Prohibited Files**: `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), entities, DB schema/migrations, send plan/ledger/ARM/CONFIRM, LINE DOM/send behavior, Telegram.
+- **Objective**: Authoritative message type contract (text, text_link, image_only, image_link, link_only), URL validation (http/https only), schedule validation (future only, reject past/invalid), active-OA scoped reads (`/campaigns`, `/templates`, `/scheduled`, `/:id`), active-OA scoped mutations (`/pause`, `/resume`, `/reschedule`), state-safe transitions.
+- **Safety Invariant**: Never automatically resend ambiguous physical sends. True exactly-once physical LINE delivery is not guaranteed.
+- **Validation Scope**: 42 focused Jest tests, `npm test -- --runInBand`, `npm run build`. Zero Live LINE sends.
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **STATUS**: `STANDBY`
+* **ACTIVE_WORK_PACKAGE**: `P2-WP001`
+* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
-* **MON-WP001**: `CLOSED / PASS`
-* **MON-WP001-R1**: `CLOSED / PASS`
-* **MON-WP002**: `CLOSED / PASS`
-* **MON-WP003**: `CLOSED / PASS`
+* **PHASE_2**: `IN PROGRESS`
+* **P2-WP001**: `AUTHORIZED_FOR_EXECUTION`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
-Awaiting project owner direction for next work package. Do not start any task without explicit authorization.
+* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
+Control plane authorization complete. In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP001 within authorized scope. Do not start next task without explicit authorization.
