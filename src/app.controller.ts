@@ -2617,31 +2617,35 @@ export class AppController {
       return { success: false, message: 'Forbidden: Request must originate from local loopback' };
     }
 
-    // 1. Database Health Check (lightweight read-only operation)
+    // 1. Database Health Check (lightweight read-only ping)
     let dbOk = false;
     try {
       await this.campaignRepository.query('SELECT 1');
       dbOk = true;
-    } catch (err) {
+    } catch {
       dbOk = false;
     }
 
     // 2. Active OA & OA Alignment
     let activeBotId: string | null = null;
-    let oaActive = false;
+    let oaActive: boolean | null = null;
+    let oaLookupFailed = false;
     let oaAligned: boolean | 'unknown' = 'unknown';
 
     if (dbOk) {
       try {
         const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
-        activeBotId = state ? state.activeBotId : null;
+        activeBotId = state?.activeBotId ? state.activeBotId.trim() : null;
         oaActive = !!activeBotId;
-      } catch (err) {
-        oaActive = false;
+      } catch {
+        oaLookupFailed = true;
+        oaActive = null;
       }
+    } else {
+      oaActive = null;
     }
 
-    const workerBotId = AppController.workerBotId;
+    const workerBotId = AppController.workerBotId ? AppController.workerBotId.trim() : null;
     const workerSeenAt = AppController.workerSeenAt;
 
     // 3. Worker Freshness (Threshold: 30000ms / 30s)
@@ -2657,30 +2661,29 @@ export class AppController {
       }
     }
 
-    if (oaActive && workerBotId) {
+    if (oaActive === true && activeBotId && workerBotId) {
       oaAligned = (activeBotId === workerBotId);
     } else {
       oaAligned = 'unknown';
     }
 
-    // 4. Queue and Campaign Counts
-    let pendingCount = 0;
-    let processingCount = 0;
-    let reconcileRequiredCount = 0;
-    let pausedReconcileCount = 0;
-    let stoppedErrorCount = 0;
+    // 4. Queue and Campaign Counts (scoped ONLY to activeBotId)
+    let metricsOk = false;
+    let metricsQueryFailed = false;
+    let pendingCount: number | null = null;
+    let processingCount: number | null = null;
+    let reconcileRequiredCount: number | null = null;
+    let pausedReconcileCount: number | null = null;
+    let stoppedErrorCount: number | null = null;
 
-    if (dbOk) {
+    if (dbOk && oaActive === true && activeBotId) {
       try {
-        const jobWhere: any = activeBotId ? { botId: activeBotId } : {};
-        const campWhere: any = activeBotId ? { botId: activeBotId } : {};
-
         const [pCount, procCount, recCount, prCount, seCount] = await Promise.all([
-          this.campaignJobRepository.count({ where: { ...jobWhere, status: 'pending' } }),
-          this.campaignJobRepository.count({ where: { ...jobWhere, status: 'processing' } }),
-          this.campaignJobRepository.count({ where: { ...jobWhere, status: 'reconcile_required' } }),
-          this.campaignRepository.count({ where: { ...campWhere, status: 'paused_reconcile' } }),
-          this.campaignRepository.count({ where: { ...campWhere, status: 'stopped_error' } }),
+          this.campaignJobRepository.count({ where: { botId: activeBotId, status: 'pending' } }),
+          this.campaignJobRepository.count({ where: { botId: activeBotId, status: 'processing' } }),
+          this.campaignJobRepository.count({ where: { botId: activeBotId, status: 'reconcile_required' } }),
+          this.campaignRepository.count({ where: { botId: activeBotId, status: 'paused_reconcile' } }),
+          this.campaignRepository.count({ where: { botId: activeBotId, status: 'stopped_error' } }),
         ]);
 
         pendingCount = pCount;
@@ -2688,21 +2691,31 @@ export class AppController {
         reconcileRequiredCount = recCount;
         pausedReconcileCount = prCount;
         stoppedErrorCount = seCount;
-      } catch (err) {
-        // Safe fallback on count query failure
+        metricsOk = true;
+      } catch {
+        metricsQueryFailed = true;
+        pendingCount = null;
+        processingCount = null;
+        reconcileRequiredCount = null;
+        pausedReconcileCount = null;
+        stoppedErrorCount = null;
+        metricsOk = false;
       }
     }
 
     // 5. System Status Calculation
-    let systemStatus: 'healthy' | 'degraded' | 'attention' = 'healthy';
-    if (!dbOk) {
+    let systemStatus: 'healthy' | 'degraded' | 'attention';
+
+    if (!dbOk || oaLookupFailed || metricsQueryFailed) {
       systemStatus = 'degraded';
     } else if (
-      reconcileRequiredCount > 0 ||
-      pausedReconcileCount > 0 ||
-      stoppedErrorCount > 0 ||
-      oaAligned === false ||
-      workerState === 'stale'
+      oaActive !== true ||
+      workerState !== 'online' ||
+      oaAligned !== true ||
+      !metricsOk ||
+      (reconcileRequiredCount ?? 0) > 0 ||
+      (pausedReconcileCount ?? 0) > 0 ||
+      (stoppedErrorCount ?? 0) > 0
     ) {
       systemStatus = 'attention';
     } else {

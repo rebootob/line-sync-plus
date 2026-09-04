@@ -746,10 +746,12 @@
 
                 // Active OA
                 if (activeOaEl) {
-                    if (data.oa && data.oa.active) {
+                    if (data.oa && data.oa.active === true) {
                         activeOaEl.innerHTML = `<span style="color:#15803d;">✅ Selected</span>`;
-                    } else {
+                    } else if (data.oa && data.oa.active === false) {
                         activeOaEl.innerHTML = `<span style="color:#b45309;">⚠️ None</span>`;
+                    } else {
+                        activeOaEl.innerHTML = `<span style="color:#64748b;">? Unknown</span>`;
                     }
                 }
 
@@ -793,13 +795,21 @@
 
                 // Need Reconciliation
                 if (reconcileEl) {
-                    const reqCount = data.queue?.reconcileRequired || 0;
-                    const campPausedCount = data.campaigns?.pausedReconcile || 0;
-                    const errCount = data.campaigns?.stoppedError || 0;
-                    if (reqCount > 0 || campPausedCount > 0 || errCount > 0) {
-                        reconcileEl.innerHTML = `<span style="color:#b45309; font-weight:bold;">⚠️ ${reqCount} job(s) [${campPausedCount} paused, ${errCount} err]</span>`;
+                    const hasReq = data.queue && typeof data.queue.reconcileRequired === 'number';
+                    const hasPaused = data.campaigns && typeof data.campaigns.pausedReconcile === 'number';
+                    const hasErr = data.campaigns && typeof data.campaigns.stoppedError === 'number';
+
+                    if (!hasReq || !hasPaused || !hasErr) {
+                        reconcileEl.innerHTML = `<span style="color:#64748b;">? Unknown</span>`;
                     } else {
-                        reconcileEl.innerHTML = `<span style="color:#15803d;">✅ 0</span>`;
+                        const reqCount = data.queue.reconcileRequired;
+                        const campPausedCount = data.campaigns.pausedReconcile;
+                        const errCount = data.campaigns.stoppedError;
+                        if (reqCount > 0 || campPausedCount > 0 || errCount > 0) {
+                            reconcileEl.innerHTML = `<span style="color:#b45309; font-weight:bold;">⚠️ ${reqCount} job(s) [${campPausedCount} paused, ${errCount} err]</span>`;
+                        } else {
+                            reconcileEl.innerHTML = `<span style="color:#15803d;">✅ 0</span>`;
+                        }
                     }
                 }
             } catch (e) {

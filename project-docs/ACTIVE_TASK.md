@@ -1,7 +1,7 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: MON-WP001
+ACTIVE_WORK_PACKAGE: MON-WP001-R1
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
@@ -14,7 +14,8 @@ PHASE_1: IN PROGRESS
 
 ## 📋 Work Package Status Summary
 
-- **MON-WP001 — Operational Health & Readiness**: `READY_FOR_CHATGPT_REVIEW`
+- **MON-WP001 — Operational Health & Readiness**: `CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW`
+  - **MON-WP001-R1 — Truthful Health State Corrective**: `READY_FOR_CHATGPT_REVIEW`
 - **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -39,7 +40,8 @@ PHASE_1: IN PROGRESS
 
 ---
 
-## 🩺 MON-WP001 — Operational Health & Readiness (READY_FOR_CHATGPT_REVIEW)
+## 🩺 MON-WP001 — Operational Health & Readiness (STATUS: CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW)
+### 🩺 MON-WP001-R1 — Truthful Health State Corrective (READY_FOR_CHATGPT_REVIEW)
 
 > [!IMPORTANT]
 > **Boundary & Invariants**:
@@ -51,34 +53,36 @@ PHASE_1: IN PROGRESS
 ### Backend Implementation (`src/app.controller.ts`)
 - **Endpoint**: `GET /api/ops/health`
 - **Security Check**: Enforces loopback client IP (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`). Returns HTTP 403 Forbidden for non-loopback requests.
+- **Truthful Status Truth**:
+  - `healthy`: Positively known ready state (`dbOk === true`, `oa.active === true`, `worker === 'online'`, `oa.aligned === true`, metric reads succeeded, and 0 reconciliation/stopped_error items).
+  - `attention`: Operational readiness issue (no active OA selected, worker unknown/stale, alignment unknown/mismatched, or reconciliation/stopped_error present).
+  - `degraded`: Health data infrastructure failure (DB ping failure, OA runtime DB lookup failure, or queue/campaign metric query failure).
 - **Payload Schema**:
   ```json
   {
-    "status": "ok | degraded",
-    "timestamp": "ISO-8601",
-    "service": {
-      "name": "line-sync-plus",
-      "version": "1.0.0",
-      "uptimeSeconds": 123
-    },
-    "contract": {
-      "runtimeContractVersion": 2,
-      "requiredWorkerVersion": "28.16"
+    "success": true,
+    "status": "healthy | degraded | attention",
+    "backend": {
+      "ok": true,
+      "uptimeSec": 123
     },
     "database": {
-      "ok": true,
-      "error": null
+      "ok": true
     },
-    "system": {
-      "masterBotPaused": false,
-      "activeBotId": "bot123"
+    "runtime": {
+      "runtimeContract": 2,
+      "requiredWorkerVersion": "28.16"
+    },
+    "masterBot": {
+      "enabled": false
+    },
+    "oa": {
+      "active": true,
+      "aligned": true
     },
     "worker": {
-      "status": "online | stale | unknown",
-      "lastSeenAt": "ISO-8601 | null",
-      "lastSeenAgeSeconds": 12,
-      "botId": "bot123",
-      "alignedWithActiveBot": true
+      "state": "online | stale | unknown",
+      "ageMs": 12000
     },
     "queue": {
       "pending": 0,
@@ -88,34 +92,36 @@ PHASE_1: IN PROGRESS
     "campaigns": {
       "pausedReconcile": 0,
       "stoppedError": 0
-    }
+    },
+    "checkedAt": "ISO-8601"
   }
   ```
-- **Database Connectivity**: Executes `SELECT 1`. On connection error, marks `database.ok = false`, `status = 'degraded'`, and records sanitized error message without crashing.
-- **Worker Freshness**: Truthful classification based on `AppController.workerSeenAt`:
-  - `<= 30s`: `'online'`
-  - `> 30s`: `'stale'`
-  - `null` / unrecorded: `'unknown'`
-- **OA Alignment**: `alignedWithActiveBot`: `true` if matching `activeBotId`, `false` if mismatched, `unknown` if either is not present.
-- **Scoped Queue & Campaign Counts**: Counts scoped by `activeBotId` for `pending`, `processing`, and `reconcile_required` jobs, and `paused_reconcile` and `stopped_error` campaigns.
+- **Truthful Active OA Scoping**: Queue and campaign metrics are strictly scoped to `activeBotId`. When no active OA is selected, global cross-OA counts are NOT queried; metric counts are returned as `null` / unavailable, and overall status is `attention`.
+- **Truthful Metric Query Failure Handling**: Metric count query exceptions are NOT converted to 0; metrics are set to `null` / unavailable and status becomes `degraded`.
+- **Truthful OA Runtime Lookup Failure**: OA query exceptions do NOT become "No Active OA" (`oa.active = null`, status `degraded`).
 
 ### Dashboard Implementation (`index.html`)
 - **UI Component**: Responsive `Operational Health` card placed prominently at the top of the dashboard.
-- **Metrics Displayed**: System Status, Backend, Database, Master Bot, Active OA, Worker Freshness, OA Alignment, Queue Pending, Queue Processing, Need Reconciliation.
+- **Truthful Rendering**:
+  - Null/unavailable metrics render as `? Unknown` (never converted to 0 via `|| 0`).
+  - Zero is displayed only when the backend positively returned numeric `0`.
+  - Unknown/unready states never render green.
+  - Network/API errors render all fields gracefully as `? Unknown`.
 - **Truthful Polling**: Refreshes every 6 seconds via `GET /api/ops/health`.
-- **Graceful Fallback**: Network or server errors render badges as `? Unknown` / warning style; never masks failures as green.
 
 ### Automated Unit Testing (`src/app.controller.spec.ts`)
-- 15 dedicated unit tests under `describe('MON-WP001 — Operational Health & Readiness Tests')`:
-  - Rejects non-loopback IPs with 403 Forbidden.
-  - Allows loopback IPv4 `127.0.0.1`, IPv6 `::1`, and IPv4-mapped IPv6 `::ffff:127.0.0.1`.
-  - Returns `ok` and `database.ok: true` on successful DB ping.
-  - Returns `degraded` and `database.ok: false` on DB error.
-  - Truthful worker status: `unknown` when no worker seen, `online` when seen within 30s, `stale` when seen >30s ago.
-  - OA alignment: `unknown` when workerBotId or activeBotId missing, `true` when aligned, `false` when mismatched.
-  - Scoped queue and campaign counts calculated properly.
-  - Zero sensitive fields exposed.
-- **Total Test Suite**: 286/286 unit tests PASS (0 failures).
+- 23 dedicated unit tests under `describe('MON-WP001 — Operational Health & Readiness Tests')`:
+  - Loopback IP enforcement (rejects remote IP with 403 Forbidden).
+  - DB ping failure reports `database.ok: false` and `degraded` status.
+  - Worker freshness: `online` (<=30s), `stale` (>30s with `attention`), `unknown` (`attention`).
+  - OA alignment: `aligned: true`, `mismatch: false` (`attention`), `unknown` (`attention`).
+  - Metric query failure returns `null` counts and `degraded` status (never masks failure as 0).
+  - No active OA does not aggregate all OAs (spies confirm 0 calls to count repositories) and returns `null` metrics with `attention` status.
+  - OA runtime lookup failure returns `degraded` status and `oa.active: null`.
+  - Numeric zero returned only when count queries genuinely succeed with `healthy` status.
+  - Non-mutating health inspection (does not update `workerSeenAt`).
+  - Strict secret & PII exclusion verified.
+- **Total Test Suite**: 294/294 unit tests PASS (0 failures).
 
 ---
 
@@ -310,8 +316,9 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `MON-WP001`
+- **Active Work Package**: `MON-WP001-R1`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `IN PROGRESS`
-- **MON-WP001 Status**: `READY_FOR_CHATGPT_REVIEW`
-- **Next Candidate**: `NONE` (Awaiting review of MON-WP001)
+- **MON-WP001 Status**: `CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW`
+- **MON-WP001-R1 Status**: `READY_FOR_CHATGPT_REVIEW`
+- **Next Candidate**: `NONE` (Awaiting review of MON-WP001-R1)

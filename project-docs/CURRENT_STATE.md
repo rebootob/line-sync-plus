@@ -28,7 +28,7 @@
 
 ---
 
-## 🩺 Operational Health & Readiness (MON-WP001 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🩺 Operational Health & Readiness (MON-WP001 STATUS: CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW; MON-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
@@ -36,13 +36,17 @@
 - **Scope**: Phase 1 Observability & Monitoring. Read-only diagnostic endpoint and UI card.
 - **Implemented Capabilities**:
   - `GET /api/ops/health`: Loopback-only endpoint (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`). Returns 403 Forbidden for external IPs.
+  - Truthful Status Enum: `healthy | degraded | attention`
+    - `healthy`: Positively verified ready state (DB ping OK, active OA selected, worker online, OA aligned, metric reads succeeded, and 0 reconciliation/stopped_error items).
+    - `attention`: Operational not-ready condition (no active OA, worker unknown/stale, alignment unknown/mismatch, or reconciliation items present).
+    - `degraded`: Health data infrastructure failure (DB ping failure, OA runtime lookup exception, or metric count query failure).
   - Database Health Check: Performs a lightweight `SELECT 1` ping. On DB failure, reports `database.ok = false` and `status = 'degraded'` without throwing an uncaught exception.
   - Truthful Worker Freshness: Analyzes static in-memory `AppController.workerSeenAt` without mutating observation timestamps or generating side effects. Classified as `'online'` (<=30s), `'stale'` (>30s), or `'unknown'` (null/missing).
-  - OA Context Alignment: Checks whether `workerBotId === activeBotId`. Returns `alignedWithActiveBot: true | false | "unknown"`.
-  - Scoped Metrics: Reports queue counts (`pending`, `processing`, `reconcileRequired`) and campaign states (`pausedReconcile`, `stoppedError`) scoped by `activeBotId`.
+  - OA Context Alignment: Checks whether `workerBotId === activeBotId`. Returns `aligned: true | false | "unknown"`.
+  - Scoped Metrics: Reports queue counts (`pending`, `processing`, `reconcileRequired`) and campaign states (`pausedReconcile`, `stoppedError`) scoped strictly by `activeBotId`. When no active OA is selected, global cross-OA counts are NOT queried; metric counts are returned as `null`, and overall status is `attention`.
   - Zero Secret Exposure: Excludes `leaseToken`, `dispatchToken`, Telegram credentials, cookies, customer PII, and message payloads.
-  - Dashboard UI: Added top-level responsive Operational Health card in `index.html` polling `GET /api/ops/health` every 6 seconds, rendering state gracefully with `? Unknown` fallback on communication error.
-  - Automated Unit Tests: 15 dedicated unit tests in `src/app.controller.spec.ts` bringing total test suite to 286/286 passing.
+  - Dashboard UI: Added top-level responsive Operational Health card in `index.html` polling `GET /api/ops/health` every 6 seconds. Renders `? Unknown` for null/unavailable metrics, zero only when positively returned as numeric 0, and never renders unknown states as green.
+  - Automated Unit Tests: 23 dedicated unit tests in `src/app.controller.spec.ts` bringing total test suite to 294/294 passing.
 
 ---
 
@@ -152,9 +156,10 @@
 - **Phase 0 Status**: `CLOSED / PASS`.
 - **Phase 1 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003` (`CLOSED / PASS`).
-- **Active Work Package**: `MON-WP001` (`READY_FOR_CHATGPT_REVIEW`).
+- **Active Work Package**: `MON-WP001-R1` (`READY_FOR_CHATGPT_REVIEW`).
 - **Work Package Status**:
-  - `MON-WP001`: `READY_FOR_CHATGPT_REVIEW`.
+  - `MON-WP001`: `CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW`.
+  - `MON-WP001-R1`: `READY_FOR_CHATGPT_REVIEW`.
   - `REL-WP003`: `CLOSED / PASS`.
   - `REL-WP003-R1`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP003-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
@@ -164,4 +169,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `NONE` (Awaiting review of MON-WP001).
+- **Next Candidate**: `NONE` (Awaiting review of MON-WP001-R1).

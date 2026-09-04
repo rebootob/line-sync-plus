@@ -22,10 +22,11 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `MON-WP001`
+* **ACTIVE_WORK_PACKAGE**: `MON-WP001-R1`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
-* **MON-WP001 — Operational Health & Readiness**: `READY_FOR_CHATGPT_REVIEW`
+* **MON-WP001 — Operational Health & Readiness**: `CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW`
+* **MON-WP001-R1 — Truthful Health State Corrective**: `READY_FOR_CHATGPT_REVIEW`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -90,19 +91,25 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 9. **Operator Resolution**: `confirmed_not_sent_retry` returned `success = true`, zero physical LINE sends.
 10. **Cleanup Verification**: DB inspection verified `CAMPAIGN FOUND = 0`, `JOB FOUND = 0`, `PARTS FOUND = 0`. Clean baseline restored.
 
-## Implemented MON-WP001 Operational Health Summary
+## Implemented MON-WP001 / MON-WP001-R1 Operational Health Summary
 
 - **Endpoint**: `GET /api/ops/health` (loopback only: `127.0.0.1`, `::1`, `::ffff:127.0.0.1`).
-- **Data Returned**: Overall status (`ok` / `degraded`), contract versions, database status via `SELECT 1` ping, master bot status, active OA, truthful worker status (`online` <=30s, `stale` >30s, `unknown`), OA alignment (`alignedWithActiveBot`), scoped queue counts (`pending`, `processing`, `reconcileRequired`), scoped campaign counts (`pausedReconcile`, `stoppedError`).
+- **Data Returned**: Truthful status enum (`healthy | degraded | attention`), contract versions, database ping status (`SELECT 1`), master bot state, active OA (`true | false | null`), truthful worker status (`online` <=30s, `stale` >30s, `unknown`), OA alignment (`aligned: true | false | "unknown"`), scoped queue counts (`pending`, `processing`, `reconcileRequired` as `number | null`), scoped campaign counts (`pausedReconcile`, `stoppedError` as `number | null`).
+- **Truthful Failure & Absent Scoping**:
+  - Failed metric query returns `null` (never masked as 0) with `degraded` status.
+  - No active OA returns `null` metrics (does NOT query global counts across all OAs) with `oa.active: false` and `attention` status.
+  - Unknown readiness (worker unknown/stale, alignment unknown/mismatched) returns `attention` status (never `healthy`).
+  - Infrastructure failures (DB ping error, OA runtime lookup error, metric query error) return `degraded` status.
 - **Security & Privacy**: Zero tokens, zero credentials, zero PII, zero LINE chat data exposed. Read-only operation with zero side-effects on worker observation timestamps or heartbeats.
-- **Dashboard UI**: Compact responsive card in `index.html` polling every 6 seconds, graceful fallback to `? Unknown` on error.
+- **Dashboard UI**: Compact responsive card in `index.html` polling every 6 seconds, displaying `? Unknown` for null/unavailable metrics, displaying numeric 0 only on genuine success, and falling back gracefully on network errors.
 - **Worker Script**: `run/LineSyncApp.js` UNTOUCHED (v28.16).
-- **Unit Tests**: 15 new tests added, 286/286 unit tests passing cleanly.
+- **Unit Tests**: 23 tests in `src/app.controller.spec.ts` under MON-WP001, full test suite: 294/294 passing cleanly.
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `MON-WP001`
+* **ACTIVE_WORK_PACKAGE**: `MON-WP001-R1`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
-* **MON-WP001**: `READY_FOR_CHATGPT_REVIEW`
-Submit MON-WP001 implementation, tests (286/286 passing), and documentation to ChatGPT review. Await ChatGPT review result before proceeding.
+* **MON-WP001**: `CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW`
+* **MON-WP001-R1**: `READY_FOR_CHATGPT_REVIEW`
+Submit MON-WP001-R1 implementation, tests (294/294 passing), and documentation to ChatGPT review. Await ChatGPT review result before proceeding.

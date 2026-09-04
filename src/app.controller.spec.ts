@@ -3868,6 +3868,8 @@ describe('AppController', () => {
         statusCode: 200,
       };
       mockCampaignRepo.query.mockResolvedValue([{ 1: 1 }]);
+      mockCampaignJobRepo.count.mockReset();
+      mockCampaignRepo.count.mockReset();
       mockCampaignJobRepo.count.mockResolvedValue(0);
       mockCampaignRepo.count.mockResolvedValue(0);
       mockOaRuntimeStateRepo.findOne.mockResolvedValue({ id: 'global', activeBotId: testBotId });
@@ -3922,13 +3924,14 @@ describe('AppController', () => {
       expect(res.status).toBe('attention');
     });
 
-    it('7. no worker evidence returns unknown with null ageMs', async () => {
+    it('7. no worker evidence returns unknown with null ageMs and attention status', async () => {
       (AppController as any).workerSeenAt = null;
       (AppController as any).workerBotId = null;
       const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
       const res: any = await appController.getOpsHealth(mockReq, mockRes);
       expect(res.worker.state).toBe('unknown');
       expect(res.worker.ageMs).toBeNull();
+      expect(res.status).toBe('attention');
     });
 
     it('8. OA aligned returns true when workerBotId equals activeBotId', async () => {
@@ -4008,10 +4011,12 @@ describe('AppController', () => {
       const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
       let res: any = await appController.getOpsHealth(mockReq, mockRes);
       expect(res.masterBot.enabled).toBe(true);
+      expect(res.status).toBe('healthy');
 
       AppController.isBotEnabled = false;
       res = await appController.getOpsHealth(mockReq, mockRes);
       expect(res.masterBot.enabled).toBe(false);
+      expect(res.status).toBe('healthy');
     });
 
     it('15. version and runtime values match 28.16 and 2', async () => {
@@ -4019,6 +4024,98 @@ describe('AppController', () => {
       const res: any = await appController.getOpsHealth(mockReq, mockRes);
       expect(res.runtime.requiredWorkerVersion).toBe('28.16');
       expect(res.runtime.runtimeContract).toBe(2);
+    });
+
+    // 🛡️ MON-WP001-R1 FOCUSED REGRESSION TESTS
+    it('16. count query failure does not become zero', async () => {
+      mockCampaignJobRepo.count.mockRejectedValueOnce(new Error('Job count timeout'));
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+
+      expect(res.queue.pending).toBeNull();
+      expect(res.queue.processing).toBeNull();
+      expect(res.queue.reconcileRequired).toBeNull();
+      expect(res.campaigns.pausedReconcile).toBeNull();
+      expect(res.campaigns.stoppedError).toBeNull();
+    });
+
+    it('17. count query failure -> not healthy and returns degraded', async () => {
+      mockCampaignRepo.count.mockRejectedValueOnce(new Error('Campaign count error'));
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+
+      expect(res.status).not.toBe('healthy');
+      expect(res.status).toBe('degraded');
+      expect(res.database.ok).toBe(true); // DB ping succeeded, but count read failed
+    });
+
+    it('18. no active OA does not aggregate all OA metrics and sets metrics unavailable/null', async () => {
+      mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ id: 'global', activeBotId: null });
+      const jobCountSpy = jest.spyOn(mockCampaignJobRepo, 'count');
+      const campCountSpy = jest.spyOn(mockCampaignRepo, 'count');
+
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+
+      // Must not query cross-OA global counts
+      expect(jobCountSpy).not.toHaveBeenCalled();
+      expect(campCountSpy).not.toHaveBeenCalled();
+      expect(res.queue.pending).toBeNull();
+      expect(res.queue.processing).toBeNull();
+      expect(res.queue.reconcileRequired).toBeNull();
+      expect(res.campaigns.pausedReconcile).toBeNull();
+      expect(res.campaigns.stoppedError).toBeNull();
+    });
+
+    it('19. no active OA -> attention status and oa.active = false', async () => {
+      mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ id: 'global', activeBotId: null });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+
+      expect(res.oa.active).toBe(false);
+      expect(res.status).toBe('attention');
+    });
+
+    it('20. worker unknown -> attention status', async () => {
+      (AppController as any).workerSeenAt = null;
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+
+      expect(res.worker.state).toBe('unknown');
+      expect(res.status).toBe('attention');
+    });
+
+    it('21. OA alignment unknown -> attention status', async () => {
+      (AppController as any).workerBotId = null;
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+
+      expect(res.oa.aligned).toBe('unknown');
+      expect(res.status).toBe('attention');
+    });
+
+    it('22. OA runtime lookup failure -> degraded and does not mask as No Active OA', async () => {
+      mockOaRuntimeStateRepo.findOne.mockRejectedValueOnce(new Error('State table corrupted'));
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+
+      expect(res.status).toBe('degraded');
+      expect(res.oa.active).toBeNull();
+      expect(res.queue.pending).toBeNull();
+    });
+
+    it('23. numeric zero returned only when count queries genuinely succeed', async () => {
+      mockCampaignJobRepo.count.mockResolvedValue(0);
+      mockCampaignRepo.count.mockResolvedValue(0);
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+
+      expect(res.queue.pending).toBe(0);
+      expect(res.queue.processing).toBe(0);
+      expect(res.queue.reconcileRequired).toBe(0);
+      expect(res.campaigns.pausedReconcile).toBe(0);
+      expect(res.campaigns.stoppedError).toBe(0);
+      expect(res.status).toBe('healthy');
     });
   });
 });
