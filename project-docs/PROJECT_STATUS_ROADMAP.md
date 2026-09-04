@@ -256,9 +256,10 @@ Over the course of safety hardening, 26 work packages were identified, implement
 - **Phase 2 — Campaign Builder v2**: **IN PROGRESS**
   - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **CLOSED / PASS**
   - `P2-WP001-R1 — Fail-Closed scheduledAt Type Validation Corrective`: **CLOSED / PASS**
-  - `P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2`: **PENDING_CORRECTIVE_ACCEPTANCE**
+  - `P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2`: **PENDING_CLOSURE_VERIFICATION**
   - `P2-WP002-R1 — Stale Preview Race & OA Template Cache Fencing`: **SUPERSEDED_BY_R2**
-  - `P2-WP002-R2 — Non-Destructive Stale Response Discard`: **READY_FOR_CHATGPT_REVIEW**
+  - `P2-WP002-R2 — Non-Destructive Stale Response Discard`: **IMPLEMENTATION_PASS / PENDING_CLOSURE**
+  - `P2-WP002-CLOSE — P2-WP002 Final Acceptance & Evidence Sync`: **AUTHORIZED_FOR_EXECUTION**
   - Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -280,12 +281,13 @@ Phase 1 (Operations & Monitoring) is **CLOSED / PASS**.
 Phase 2 (Campaign Builder v2) is **IN PROGRESS**.
 P2-WP001 is **CLOSED / PASS** (Accepted Final HEAD: `37b078de425e2fd3267652e142d76959f408c701`).
 P2-WP001-R1 is **CLOSED / PASS**.
-P2-WP002 is **PENDING_CORRECTIVE_ACCEPTANCE** (Code Baseline HEAD: `819dc422ef7e41d322eca93ff5a8daf3adf5ecab`).
+P2-WP002 is **PENDING_CLOSURE_VERIFICATION** (Code Baseline HEAD: `b6103e9c322ff257dcfda475217186e740e4893a`).
 P2-WP002-R1 is **SUPERSEDED_BY_R2**.
-P2-WP002-R2 is **READY_FOR_CHATGPT_REVIEW**.
-Active Work Package: **P2-WP002-R2**.
-Status: **READY_FOR_CHATGPT_REVIEW**.
-Next Candidate: **NONE** (Status: **PENDING_REVIEW**).
+P2-WP002-R2 is **IMPLEMENTATION_PASS / PENDING_CLOSURE**.
+P2-WP002-CLOSE is **AUTHORIZED_FOR_EXECUTION**.
+Active Work Package: **P2-WP002-CLOSE**.
+Status: **AUTHORIZED_FOR_EXECUTION**.
+Next Candidate: **NONE** (Status: **PENDING_CLOSURE**).
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-P2-WP002-R2 implementation complete & ready for review (Non-Destructive Stale Response Discard).
+P2-WP002-CLOSE authorized for final acceptance, evidence sync, and docs-only closure verification.
