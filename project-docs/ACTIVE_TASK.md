@@ -1,11 +1,11 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: NONE
-STATUS: STANDBY
+ACTIVE_WORK_PACKAGE: P2-WP003
+STATUS: AUTHORIZED_FOR_EXECUTION
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_OWNER_DIRECTION
+NEXT_CANDIDATE_STATUS: PENDING_REVIEW
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: IN PROGRESS
@@ -16,13 +16,15 @@ P2-WP002: CLOSED / PASS
 P2-WP002-R1: SUPERSEDED_BY_R2
 P2-WP002-R2: CLOSED / PASS
 P2-WP002-CLOSE: CLOSED_PASS
-ACCEPTED_FINAL_CODE_HEAD: b6103e9c322ff257dcfda475217186e740e4893a
+P2-WP003: AUTHORIZED_FOR_EXECUTION
+CODE_BASELINE_HEAD: ef5d5b47e33e1e63648dd33dde40c35a638c2de2
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
+- **P2-WP003 — Scheduled Queue Controls V2**: `AUTHORIZED_FOR_EXECUTION`
 - **P2-WP002-CLOSE — P2-WP002 Final Acceptance & Evidence Sync**: `CLOSED_PASS`
 - **P2-WP002-R2 — Non-Destructive Stale Response Discard**: `CLOSED / PASS`
 - **P2-WP002-R1 — Stale Preview Race & OA Template Cache Fencing**: `SUPERSEDED_BY_R2`
@@ -470,8 +472,8 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `NONE`
-- **Status**: `STANDBY`
+- **Active Work Package**: `P2-WP003`
+- **Status**: `AUTHORIZED_FOR_EXECUTION`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `CLOSED / PASS`
 - **Phase 2 Status**: `IN PROGRESS`
@@ -481,10 +483,11 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 - **P2-WP002-R1 Status**: `SUPERSEDED_BY_R2`
 - **P2-WP002-R2 Status**: `CLOSED / PASS`
 - **P2-WP002-CLOSE Status**: `CLOSED_PASS`
-- **ACCEPTED_FINAL_CODE_HEAD**: `b6103e9c322ff257dcfda475217186e740e4893a`
+- **P2-WP003 Status**: `AUTHORIZED_FOR_EXECUTION`
+- **CODE_BASELINE_HEAD**: `ef5d5b47e33e1e63648dd33dde40c35a638c2de2`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`
 - **MON-WP002 Status**: `CLOSED / PASS`
 - **MON-WP003 Status**: `CLOSED / PASS`
 - **Next Candidate**: `NONE`
-- **Next Candidate Status**: `AWAITING_OWNER_DIRECTION`
+- **Next Candidate Status**: `PENDING_REVIEW`

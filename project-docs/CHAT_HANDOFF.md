@@ -21,8 +21,8 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **STATUS**: `STANDBY`
+* **ACTIVE_WORK_PACKAGE**: `P2-WP003`
+* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
@@ -33,9 +33,10 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP002-R1**: `SUPERSEDED_BY_R2`
 * **P2-WP002-R2**: `CLOSED / PASS`
 * **P2-WP002-CLOSE**: `CLOSED_PASS`
-* **ACCEPTED_FINAL_CODE_HEAD**: `b6103e9c322ff257dcfda475217186e740e4893a`
+* **P2-WP003**: `AUTHORIZED_FOR_EXECUTION`
+* **CODE_BASELINE_HEAD**: `ef5d5b47e33e1e63648dd33dde40c35a638c2de2`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
+* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
@@ -127,8 +128,8 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **STATUS**: `STANDBY`
+* **ACTIVE_WORK_PACKAGE**: `P2-WP003`
+* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
@@ -138,7 +139,8 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP002-R1**: `SUPERSEDED_BY_R2`
 * **P2-WP002-R2**: `CLOSED / PASS`
 * **P2-WP002-CLOSE**: `CLOSED_PASS`
+* **P2-WP003**: `AUTHORIZED_FOR_EXECUTION`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
+* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
 
-P2-WP002 is fully CLOSED / PASS. Standby for explicit Project Owner direction. Do not start next work package without explicit authorization.
+Control plane authorization complete for P2-WP003 (Scheduled Queue Controls V2). In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP003 within authorized scope. Do not start next task without explicit authorization.
