@@ -2,21 +2,22 @@
 
 ```yaml
 ACTIVE_WORK_PACKAGE: MON-WP003
-STATUS: AUTHORIZED_FOR_EXECUTION
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
+NEXT_CANDIDATE_STATUS: PENDING_REVIEW
 PHASE_0: CLOSED / PASS
 PHASE_1: IN PROGRESS
 MON-WP001: CLOSED / PASS
 MON-WP002: CLOSED / PASS
-MON-WP003: AUTHORIZED_FOR_EXECUTION
+MON-WP003: READY_FOR_CHATGPT_REVIEW
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
-- **MON-WP003 — Alerts / Incident Visibility**: `AUTHORIZED_FOR_EXECUTION`
+- **MON-WP003 — Alerts / Incident Visibility**: `READY_FOR_CHATGPT_REVIEW`
 - **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 - **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
   - **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
@@ -373,7 +374,7 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
-## 🚨 MON-WP003 — Alerts / Incident Visibility (STATUS: AUTHORIZED_FOR_EXECUTION)
+## 🚨 MON-WP003 — Alerts / Incident Visibility (STATUS: READY_FOR_CHATGPT_REVIEW)
 
 > [!IMPORTANT]
 > **Boundary & Invariants**:
@@ -385,16 +386,40 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 > - **Incident Lifecycle**: Session-memory only (in-memory `firstSeen` and `lastSeen`); no DB or localStorage persistence.
 > - **Zero Side-Effects**: Read-only visualization; zero recovery, zero mutation, zero resend, zero auto-reconciliation, zero action buttons.
 
+### Implementation Summary (`index.html`)
+- **UI Component**: Responsive `Incident Visibility & Active Alerts` card placed prominently above the Operational Health card.
+- **Incident Derivation Engine**: Pure function `deriveIncidents(healthData, queueData, sessionTracker, nowInput)` wrapped in clear sentinels (`// === MON-WP003 INCIDENT DERIVATION ENGINE START ===` / `// === MON-WP003 INCIDENT DERIVATION ENGINE END ===`).
+- **Severities**: Full priority hierarchy enforced (`CRITICAL > WARNING > UNKNOWN > INFO > CLEAR`). Unknown never renders green. CLEAR permitted only when monitoring sources are positively available with zero active anomalies.
+- **Rules Implemented**:
+  - `HEALTH_UNAVAILABLE` (UNKNOWN), `QUEUE_UNAVAILABLE` (UNKNOWN)
+  - `HEALTH_DEGRADED` (CRITICAL), `QUEUE_DEGRADED` (CRITICAL)
+  - `OA_NOT_ACTIVE` (WARNING)
+  - `OA_MISMATCH` (CRITICAL)
+  - `WORKER_STALE` (WARNING), `WORKER_UNKNOWN` (UNKNOWN)
+  - `EXPIRED_LEASE` (WARNING), `MISSING_LEASE` (WARNING), `RESIDUAL_LEASE` (WARNING)
+  - `RECONCILE_JOB` (CRITICAL), `RECONCILE_PART` (CRITICAL), `STALE_ARMED` (CRITICAL), `PAUSED_RECONCILE` (CRITICAL)
+  - `QUEUE_ACTIVITY` (INFO; positive pending/processing/active leases alone never become WARNING or CRITICAL)
+- **Lifecycle Tracking**: In-memory `firstSeen` / `lastSeen` tracking per dashboard session. Resolved incidents disappear from active list; reappearing incidents receive fresh `firstSeen`.
+- **Zero Third Polling Loop**: Hooked directly into existing `updateOpsHealthUI()` and `updateOpsQueueUI()` execution paths. Failed responses explicitly invalidate snapshots to prevent stale zero reuse.
+
+### Validation Evidence
+- **Focused Validation**: 23/23 tests PASS via temporary local harness extracting the exact function from `index.html` via Node VM.
+- **Full Test Suite**: 317/317 PASS (0 failures, `npm test -- --runInBand`).
+- **Evidence Classification**: LOCAL REPORTED evidence (no GitHub CI status checks).
+- **Code Baseline HEAD**: `f8ef40a422657eba8ad50be05f97026e34a18f03`.
+- **Live LINE UAT**: None required/performed.
+
 ---
 
 ## 🚀 Work Package Execution Status
 
 - **Active Work Package**: `MON-WP003`
-- **Status**: `AUTHORIZED_FOR_EXECUTION`
+- **Status**: `READY_FOR_CHATGPT_REVIEW`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `IN PROGRESS`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`
 - **MON-WP002 Status**: `CLOSED / PASS`
-- **MON-WP003 Status**: `AUTHORIZED_FOR_EXECUTION`
+- **MON-WP003 Status**: `READY_FOR_CHATGPT_REVIEW`
 - **Next Candidate**: `NONE`
+- **Next Candidate Status**: `PENDING_REVIEW`

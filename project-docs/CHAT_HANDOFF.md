@@ -23,14 +23,15 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 ## Work Package Status
 
 * **ACTIVE_WORK_PACKAGE**: `MON-WP003`
-* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
-* **MON-WP003 — Alerts / Incident Visibility**: `AUTHORIZED_FOR_EXECUTION`
+* **MON-WP003 — Alerts / Incident Visibility**: `READY_FOR_CHATGPT_REVIEW`
 * **NEXT_CANDIDATE**: `NONE`
+* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -136,24 +137,29 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
   - Live LINE UAT: None required/performed (observability endpoints remain read-only)
   - Safety Invariant: Never automatically resend ambiguous physical sends
 
-## Authorized MON-WP003 Alerts / Incident Visibility Gate Summary
+## Implemented MON-WP003 Alerts / Incident Visibility Summary
 
 - **Task**: MON-WP003 (Dashboard V1)
-- **Status**: AUTHORIZED_FOR_EXECUTION
+- **Status**: READY_FOR_CHATGPT_REVIEW
 - **Implementation Scope**: `index.html` ONLY (Dashboard-only incident visibility consuming `/api/ops/health` and `/api/ops/queue`).
-- **Prohibited**: `src/**`, `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), LINE/Telegram send, DB mutation.
-- **Polling**: Reuses existing 6000ms monitoring poll; no duplicate loops.
+- **Prohibited Files**: `src/**`, `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), LINE/Telegram send, DB mutation all untouched.
+- **Polling**: Reuses existing 6000ms monitoring poll; zero duplicate loops.
 - **Incident Lifecycle**: In-memory `firstSeen`/`lastSeen` per dashboard session; no DB/localStorage persistence.
+- **Validation**:
+  - Local focused harness: 23/23 tests PASS (extracted directly from `index.html` via Node VM).
+  - Full test suite: 317/317 PASS (LOCAL REPORTED evidence; no GitHub CI status checks).
+  - Zero LINE/Telegram activity.
 
 ## Exact Recommended Next Step
 
 * **ACTIVE_WORK_PACKAGE**: `MON-WP003`
-* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
 * **MON-WP001**: `CLOSED / PASS`
 * **MON-WP001-R1**: `CLOSED / PASS`
 * **MON-WP002**: `CLOSED / PASS`
-* **MON-WP003**: `AUTHORIZED_FOR_EXECUTION`
+* **MON-WP003**: `READY_FOR_CHATGPT_REVIEW`
 * **NEXT_CANDIDATE**: `NONE`
-MON-WP003 execution gate installed. Awaiting fresh new run to begin implementation per control lifecycle.
+* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
+Awaiting independent ChatGPT review of MON-WP003. Do not start any other work package.

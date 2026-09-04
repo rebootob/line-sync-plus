@@ -136,6 +136,23 @@
             </div>
         </div>
 
+        <!-- 🚨 MON-WP003 Alerts / Incident Visibility Section -->
+        <div id="opsIncidentsSection" style="margin-bottom: 15px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <strong style="font-size: 13px; color: #1e293b;">🚨 Incident Visibility &amp; Active Alerts</strong>
+                    <span id="opsIncidentOverallBadge" class="badge" style="background:#f1f5f9; color:#475569; font-size:11px; border: 1px solid #cbd5e1;">❓ UNKNOWN</span>
+                    <span id="opsIncidentCountBadge" style="font-size: 11px; color: #64748b; font-weight: 500;">(0 active)</span>
+                </div>
+                <span id="opsIncidentLastEvaluated" style="font-size: 11px; color: #94a3b8;">Evaluated: -</span>
+            </div>
+            <div id="opsIncidentListContainer" style="font-size: 12px;">
+                <div style="padding: 8px 12px; border-radius: 6px; background: #f8fafc; color: #64748b; border: 1px solid #edf2f7;">
+                    Initializing incident monitor...
+                </div>
+            </div>
+        </div>
+
         <!-- 🏥 MON-WP001 Operational Health & Readiness Section -->
         <div id="opsHealthSection" style="margin-bottom: 15px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
@@ -703,6 +720,422 @@
 
         setInterval(updateAccountProtectionTelemetryUI, 2000);
 
+        // 🚨 MON-WP003 Alerts / Incident Visibility State & Logic
+        let latestHealthSnapshot = null;
+        let latestQueueSnapshot = null;
+        const incidentSessionTracker = new Map();
+
+        // === MON-WP003 INCIDENT DERIVATION ENGINE START ===
+        function deriveIncidents(healthData, queueData, sessionTracker, nowInput) {
+            const now = nowInput ? new Date(nowInput) : new Date();
+            const tracker = sessionTracker || new Map();
+            const isMap = tracker && typeof tracker.set === 'function' && typeof tracker.get === 'function';
+            const getTracker = (k) => (isMap ? tracker.get(k) : tracker[k]);
+            const setTracker = (k, v) => (isMap ? tracker.set(k, v) : (tracker[k] = v));
+            const hasTracker = (k) => (isMap ? tracker.has(k) : Object.prototype.hasOwnProperty.call(tracker, k));
+            const deleteTracker = (k) => (isMap ? tracker.delete(k) : delete tracker[k]);
+            const trackerKeys = () => (isMap ? Array.from(tracker.keys()) : Object.keys(tracker));
+
+            const healthAvailable = Boolean(healthData && typeof healthData === 'object' && healthData.success === true);
+            const queueAvailable = Boolean(queueData && typeof queueData === 'object' && queueData.success === true);
+
+            const rawIncidents = [];
+
+            // 1. Health availability & degradation
+            if (!healthAvailable) {
+                rawIncidents.push({
+                    code: 'HEALTH_UNAVAILABLE',
+                    severity: 'UNKNOWN',
+                    title: 'Health Monitoring Unavailable',
+                    message: 'Operational health endpoint is unreachable or returned invalid data',
+                    value: null
+                });
+            } else if (healthData.status === 'degraded') {
+                rawIncidents.push({
+                    code: 'HEALTH_DEGRADED',
+                    severity: 'CRITICAL',
+                    title: 'Operational Health Degraded',
+                    message: 'Database ping, OA lookup, or core health query failed',
+                    value: null
+                });
+            }
+
+            // 2. Queue availability & degradation
+            if (!queueAvailable) {
+                rawIncidents.push({
+                    code: 'QUEUE_UNAVAILABLE',
+                    severity: 'UNKNOWN',
+                    title: 'Queue Monitoring Unavailable',
+                    message: 'Queue/lease/reconciliation endpoint is unreachable or returned invalid data',
+                    value: null
+                });
+            } else if (queueData.status === 'degraded') {
+                rawIncidents.push({
+                    code: 'QUEUE_DEGRADED',
+                    severity: 'CRITICAL',
+                    title: 'Queue Monitoring Degraded',
+                    message: 'Queue, lease, or reconciliation metric read query failed',
+                    value: null
+                });
+            }
+
+            // 3. Active OA
+            if (healthAvailable && healthData.oa && healthData.oa.active === false) {
+                rawIncidents.push({
+                    code: 'OA_NOT_ACTIVE',
+                    severity: 'WARNING',
+                    title: 'No Active LINE OA Selected',
+                    message: 'Dashboard currently has no active LINE Official Account selected',
+                    value: null
+                });
+            } else if (queueAvailable && queueData.oa && queueData.oa.active === false) {
+                rawIncidents.push({
+                    code: 'OA_NOT_ACTIVE',
+                    severity: 'WARNING',
+                    title: 'No Active LINE OA Selected',
+                    message: 'Dashboard currently has no active LINE Official Account selected',
+                    value: null
+                });
+            }
+
+            // 4. OA Mismatch
+            if (healthAvailable && healthData.oa && healthData.oa.aligned === false) {
+                rawIncidents.push({
+                    code: 'OA_MISMATCH',
+                    severity: 'CRITICAL',
+                    title: 'OA Context Mismatch',
+                    message: 'Active worker OA does not match dashboard OA context',
+                    value: null
+                });
+            }
+
+            // 5. Worker State
+            if (healthAvailable && healthData.worker) {
+                if (healthData.worker.state === 'stale') {
+                    const ageStr = (typeof healthData.worker.ageMs === 'number') ? `${Math.round(healthData.worker.ageMs / 1000)}s` : null;
+                    rawIncidents.push({
+                        code: 'WORKER_STALE',
+                        severity: 'WARNING',
+                        title: 'Worker Heartbeat Stale',
+                        message: 'Worker has not reported heartbeat within expected threshold (>30s)',
+                        value: ageStr
+                    });
+                } else if (healthData.worker.state === 'unknown') {
+                    rawIncidents.push({
+                        code: 'WORKER_UNKNOWN',
+                        severity: 'UNKNOWN',
+                        title: 'Worker State Unknown',
+                        message: 'Worker presence has not been detected or reported',
+                        value: null
+                    });
+                }
+            }
+
+            // 6. Leases
+            if (queueAvailable && queueData.leases) {
+                if (typeof queueData.leases.expired === 'number' && queueData.leases.expired > 0) {
+                    rawIncidents.push({
+                        code: 'EXPIRED_LEASE',
+                        severity: 'WARNING',
+                        title: 'Expired Job Leases',
+                        message: 'Processing jobs observed with expired lease expiration timestamps',
+                        value: queueData.leases.expired
+                    });
+                }
+                if (typeof queueData.leases.missing === 'number' && queueData.leases.missing > 0) {
+                    rawIncidents.push({
+                        code: 'MISSING_LEASE',
+                        severity: 'WARNING',
+                        title: 'Missing Lease Fields',
+                        message: 'Processing jobs observed with null lease token, owner, or expiration',
+                        value: queueData.leases.missing
+                    });
+                }
+                if (typeof queueData.leases.residual === 'number' && queueData.leases.residual > 0) {
+                    rawIncidents.push({
+                        code: 'RESIDUAL_LEASE',
+                        severity: 'WARNING',
+                        title: 'Residual Lease Fields',
+                        message: 'Non-processing jobs observed with residual lease fields still populated',
+                        value: queueData.leases.residual
+                    });
+                }
+            }
+
+            // 7. Reconciliation
+            if (queueAvailable && queueData.reconciliation) {
+                if (typeof queueData.reconciliation.jobs === 'number' && queueData.reconciliation.jobs > 0) {
+                    rawIncidents.push({
+                        code: 'RECONCILE_JOB',
+                        severity: 'CRITICAL',
+                        title: 'Reconciliation Required: Campaign Jobs',
+                        message: 'Jobs quarantined in reconcile_required state requiring operator review',
+                        value: queueData.reconciliation.jobs
+                    });
+                }
+                if (typeof queueData.reconciliation.parts === 'number' && queueData.reconciliation.parts > 0) {
+                    rawIncidents.push({
+                        code: 'RECONCILE_PART',
+                        severity: 'CRITICAL',
+                        title: 'Reconciliation Required: Send Parts',
+                        message: 'Send parts quarantined in reconcile_required state requiring operator review',
+                        value: queueData.reconciliation.parts
+                    });
+                }
+                if (typeof queueData.reconciliation.staleArmed === 'number' && queueData.reconciliation.staleArmed > 0) {
+                    rawIncidents.push({
+                        code: 'STALE_ARMED',
+                        severity: 'CRITICAL',
+                        title: 'Stale Armed Send Parts',
+                        message: 'Armed send parts older than 60s detected in send-part ledger',
+                        value: queueData.reconciliation.staleArmed
+                    });
+                }
+                if (typeof queueData.reconciliation.pausedCampaigns === 'number' && queueData.reconciliation.pausedCampaigns > 0) {
+                    rawIncidents.push({
+                        code: 'PAUSED_RECONCILE',
+                        severity: 'CRITICAL',
+                        title: 'Campaigns Paused for Reconciliation',
+                        message: 'Campaigns paused due to ambiguity quarantine',
+                        value: queueData.reconciliation.pausedCampaigns
+                    });
+                }
+            } else if (healthAvailable) {
+                if (healthData.queue && typeof healthData.queue.reconcileRequired === 'number' && healthData.queue.reconcileRequired > 0) {
+                    rawIncidents.push({
+                        code: 'RECONCILE_JOB',
+                        severity: 'CRITICAL',
+                        title: 'Reconciliation Required: Campaign Jobs',
+                        message: 'Jobs quarantined in reconcile_required state requiring operator review',
+                        value: healthData.queue.reconcileRequired
+                    });
+                }
+                if (healthData.campaigns && typeof healthData.campaigns.pausedReconcile === 'number' && healthData.campaigns.pausedReconcile > 0) {
+                    rawIncidents.push({
+                        code: 'PAUSED_RECONCILE',
+                        severity: 'CRITICAL',
+                        title: 'Campaigns Paused for Reconciliation',
+                        message: 'Campaigns paused due to ambiguity quarantine',
+                        value: healthData.campaigns.pausedReconcile
+                    });
+                }
+            }
+
+            // 8. Queue Activity (INFO only)
+            let hasActivity = false;
+            const actParts = [];
+            if (queueAvailable) {
+                const p = (queueData.queue && typeof queueData.queue.pending === 'number') ? queueData.queue.pending : 0;
+                const pr = (queueData.queue && typeof queueData.queue.processing === 'number') ? queueData.queue.processing : 0;
+                const al = (queueData.leases && typeof queueData.leases.active === 'number') ? queueData.leases.active : 0;
+                if (p > 0 || pr > 0 || al > 0) {
+                    hasActivity = true;
+                    if (p > 0) actParts.push(`${p} pending`);
+                    if (pr > 0) actParts.push(`${pr} processing`);
+                    if (al > 0) actParts.push(`${al} active lease(s)`);
+                }
+            } else if (healthAvailable && healthData.queue) {
+                const p = typeof healthData.queue.pending === 'number' ? healthData.queue.pending : 0;
+                const pr = typeof healthData.queue.processing === 'number' ? healthData.queue.processing : 0;
+                if (p > 0 || pr > 0) {
+                    hasActivity = true;
+                    if (p > 0) actParts.push(`${p} pending`);
+                    if (pr > 0) actParts.push(`${pr} processing`);
+                }
+            }
+            if (hasActivity) {
+                rawIncidents.push({
+                    code: 'QUEUE_ACTIVITY',
+                    severity: 'INFO',
+                    title: 'Queue Activity in Progress',
+                    message: `Normal queue processing: ${actParts.join(', ')}`,
+                    value: null
+                });
+            }
+
+            // Deduplicate by code
+            const dedupedMap = new Map();
+            for (const inc of rawIncidents) {
+                if (!dedupedMap.has(inc.code)) {
+                    dedupedMap.set(inc.code, inc);
+                }
+            }
+
+            // Session-memory lifecycle: update firstSeen / lastSeen
+            const activeIncidents = [];
+            const activeCodes = new Set();
+
+            for (const [code, inc] of dedupedMap.entries()) {
+                activeCodes.add(code);
+                if (hasTracker(code)) {
+                    const existing = getTracker(code);
+                    inc.firstSeen = existing.firstSeen;
+                    inc.lastSeen = now;
+                    setTracker(code, { firstSeen: inc.firstSeen, lastSeen: now });
+                } else {
+                    inc.firstSeen = now;
+                    inc.lastSeen = now;
+                    setTracker(code, { firstSeen: now, lastSeen: now });
+                }
+                activeIncidents.push(inc);
+            }
+
+            // Prune resolved incidents from tracker
+            for (const code of trackerKeys()) {
+                if (!activeCodes.has(code)) {
+                    deleteTracker(code);
+                }
+            }
+
+            // Sort active incidents by severity priority: CRITICAL > WARNING > UNKNOWN > INFO
+            const severityRank = {
+                CRITICAL: 1,
+                WARNING: 2,
+                UNKNOWN: 3,
+                INFO: 4
+            };
+            activeIncidents.sort((a, b) => {
+                const rA = severityRank[a.severity] || 99;
+                const rB = severityRank[b.severity] || 99;
+                if (rA !== rB) return rA - rB;
+                return a.code.localeCompare(b.code);
+            });
+
+            // Determine overall severity
+            const hasCritical = activeIncidents.some(i => i.severity === 'CRITICAL');
+            const hasWarning = activeIncidents.some(i => i.severity === 'WARNING');
+            const hasUnknown = activeIncidents.some(i => i.severity === 'UNKNOWN') || !healthAvailable || !queueAvailable;
+            const hasInfo = activeIncidents.some(i => i.severity === 'INFO');
+
+            let overallSeverity = 'CLEAR';
+            if (hasCritical) {
+                overallSeverity = 'CRITICAL';
+            } else if (hasWarning) {
+                overallSeverity = 'WARNING';
+            } else if (hasUnknown) {
+                overallSeverity = 'UNKNOWN';
+            } else if (hasInfo) {
+                overallSeverity = 'INFO';
+            } else {
+                overallSeverity = 'CLEAR';
+            }
+
+            return {
+                overallSeverity,
+                activeCount: activeIncidents.length,
+                incidents: activeIncidents,
+                evaluatedAt: now
+            };
+        }
+        // === MON-WP003 INCIDENT DERIVATION ENGINE END ===
+
+        function renderIncidentVisibilityUI() {
+            const overallBadge = document.getElementById('opsIncidentOverallBadge');
+            const countBadge = document.getElementById('opsIncidentCountBadge');
+            const evalAtEl = document.getElementById('opsIncidentLastEvaluated');
+            const container = document.getElementById('opsIncidentListContainer');
+
+            const result = deriveIncidents(latestHealthSnapshot, latestQueueSnapshot, incidentSessionTracker);
+
+            if (evalAtEl) {
+                evalAtEl.textContent = `Evaluated: ${new Date(result.evaluatedAt).toLocaleTimeString()}`;
+            }
+
+            if (countBadge) {
+                countBadge.textContent = `(${result.activeCount} active)`;
+            }
+
+            // Render Overall Badge
+            if (overallBadge) {
+                if (result.overallSeverity === 'CRITICAL') {
+                    overallBadge.textContent = '🚨 CRITICAL';
+                    overallBadge.style.background = '#fee2e2';
+                    overallBadge.style.color = '#b91c1c';
+                    overallBadge.style.border = '1px solid #fca5a5';
+                } else if (result.overallSeverity === 'WARNING') {
+                    overallBadge.textContent = '⚠️ WARNING';
+                    overallBadge.style.background = '#fef3c7';
+                    overallBadge.style.color = '#b45309';
+                    overallBadge.style.border = '1px solid #fcd34d';
+                } else if (result.overallSeverity === 'UNKNOWN') {
+                    overallBadge.textContent = '❓ UNKNOWN';
+                    overallBadge.style.background = '#f1f5f9';
+                    overallBadge.style.color = '#475569';
+                    overallBadge.style.border = '1px solid #cbd5e1';
+                } else if (result.overallSeverity === 'INFO') {
+                    overallBadge.textContent = 'ℹ️ INFO';
+                    overallBadge.style.background = '#dbeafe';
+                    overallBadge.style.color = '#1d4ed8';
+                    overallBadge.style.border = '1px solid #93c5fd';
+                } else {
+                    overallBadge.textContent = '✅ CLEAR';
+                    overallBadge.style.background = '#dcfce7';
+                    overallBadge.style.color = '#15803d';
+                    overallBadge.style.border = '1px solid #86efac';
+                }
+            }
+
+            // Render Incident List
+            if (container) {
+                if (result.activeCount === 0 && result.overallSeverity === 'CLEAR') {
+                    container.innerHTML = `
+                        <div style="padding: 8px 12px; border-radius: 6px; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 14px;">✅</span>
+                            <div>
+                                <strong>All Systems Clear</strong>
+                                <span style="font-size: 11px; color: #166534; margin-left: 6px;">No active warnings, errors, or anomalies detected.</span>
+                            </div>
+                        </div>`;
+                } else if (result.activeCount === 0 && result.overallSeverity === 'UNKNOWN') {
+                    container.innerHTML = `
+                        <div style="padding: 8px 12px; border-radius: 6px; background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 14px;">❓</span>
+                            <div>
+                                <strong>Monitoring State Unknown</strong>
+                                <span style="font-size: 11px; color: #64748b; margin-left: 6px;">Awaiting complete truthful telemetry from monitoring endpoints.</span>
+                            </div>
+                        </div>`;
+                } else {
+                    let html = '<div style="display: flex; flex-direction: column; gap: 6px;">';
+                    for (const inc of result.incidents) {
+                        let sevBg = '#f1f5f9';
+                        let sevColor = '#475569';
+                        let sevBorder = '#cbd5e1';
+                        if (inc.severity === 'CRITICAL') {
+                            sevBg = '#fee2e2'; sevColor = '#b91c1c'; sevBorder = '#fca5a5';
+                        } else if (inc.severity === 'WARNING') {
+                            sevBg = '#fef3c7'; sevColor = '#b45309'; sevBorder = '#fcd34d';
+                        } else if (inc.severity === 'INFO') {
+                            sevBg = '#dbeafe'; sevColor = '#1d4ed8'; sevBorder = '#93c5fd';
+                        }
+
+                        const firstSeenStr = inc.firstSeen ? new Date(inc.firstSeen).toLocaleTimeString() : '-';
+                        const lastSeenStr = inc.lastSeen ? new Date(inc.lastSeen).toLocaleTimeString() : '-';
+                        const valHtml = (inc.value !== null && inc.value !== undefined)
+                            ? `<span style="background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 4px; font-weight: 600;">${inc.value}</span>`
+                            : '';
+
+                        html += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; background: #fafafa; border: 1px solid #e5e7eb; flex-wrap: wrap; gap: 6px;">
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span style="background: ${sevBg}; color: ${sevColor}; border: 1px solid ${sevBorder}; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase;">${inc.severity}</span>
+                                    <strong style="color: #1e293b; font-size: 12px;">${inc.title}</strong>
+                                    ${valHtml}
+                                    <span style="color: #64748b; font-size: 11px;">${inc.message}</span>
+                                </div>
+                                <div style="font-size: 11px; color: #64748b; display: flex; gap: 10px; margin-left: auto;">
+                                    <span>First seen: <strong style="color: #334155;">${firstSeenStr}</strong></span>
+                                    <span>Last seen: <strong style="color: #334155;">${lastSeenStr}</strong></span>
+                                </div>
+                            </div>`;
+                    }
+                    html += '</div>';
+                    container.innerHTML = html;
+                }
+            }
+        }
+        renderIncidentVisibilityUI();
+
         // 🏥 MON-WP001 Operational Health & Readiness UI
         async function updateOpsHealthUI() {
             const overallEl = document.getElementById('opsOverallStatus');
@@ -729,6 +1162,8 @@
                 if (pendingEl) pendingEl.textContent = '? Unknown';
                 if (procEl) procEl.textContent = '? Unknown';
                 if (reconcileEl) reconcileEl.innerHTML = '<span style="color:#64748b;">? Unknown</span>';
+                latestHealthSnapshot = { success: false, status: 'unavailable' };
+                if (typeof renderIncidentVisibilityUI === 'function') renderIncidentVisibilityUI();
             }
 
             try {
@@ -742,6 +1177,9 @@
                     setOpsUnknown();
                     return;
                 }
+
+                latestHealthSnapshot = data;
+                if (typeof renderIncidentVisibilityUI === 'function') renderIncidentVisibilityUI();
 
                 // Checked At
                 if (checkedEl && data.checkedAt) {
@@ -894,6 +1332,8 @@
                 els.forEach(el => {
                     if (el) el.innerHTML = '<span style="color:#64748b;">? Unknown</span>';
                 });
+                latestQueueSnapshot = { success: false, status: 'unavailable' };
+                if (typeof renderIncidentVisibilityUI === 'function') renderIncidentVisibilityUI();
             }
 
             try {
@@ -907,6 +1347,9 @@
                     setQueueUnknown();
                     return;
                 }
+
+                latestQueueSnapshot = data;
+                if (typeof renderIncidentVisibilityUI === 'function') renderIncidentVisibilityUI();
 
                 if (checkedEl && data.checkedAt) {
                     const d = new Date(data.checkedAt);

@@ -251,7 +251,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `MON-WP001 — Operational Health & Readiness`: **CLOSED / PASS**
   - `MON-WP001-R1 — Truthful Health State Corrective`: **CLOSED / PASS**
   - `MON-WP002 — Queue / Lease / Reconciliation Monitoring`: **CLOSED / PASS**
-  - `MON-WP003 — Alerts / Incident Visibility`: **AUTHORIZED_FOR_EXECUTION**
+  - `MON-WP003 — Alerts / Incident Visibility`: **READY_FOR_CHATGPT_REVIEW**
 - **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -262,7 +262,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
 ## 11. Technical Evolution
 
 - **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003 CLOSED / PASS).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), and 317 passing local unit tests (local reported evidence only; no GitHub CI status checks existed).
+- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), dashboard-only Incident Visibility card (`index.html`) with in-memory session lifecycle, and 317 passing local unit tests + 23 passing incident engine validation tests (local reported evidence only; no GitHub CI status checks existed).
 
 ---
 
@@ -272,10 +272,9 @@ Phase 0 Foundation is **CLOSED / PASS**.
 Phase 1 (Operations & Monitoring) is **IN PROGRESS**.
 MON-WP001 / MON-WP001-R1 is **CLOSED / PASS** (Accepted review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`, Result: PASS).
 MON-WP002 is **CLOSED / PASS** (Accepted review HEAD: `5b34269397afbd9046610c366d9f0c27bf3d5532`, Result: PASS).
-MON-WP003 is **AUTHORIZED_FOR_EXECUTION** (Code Baseline HEAD: `f8ef40a422657eba8ad50be05f97026e34a18f03`).
+MON-WP003 is **READY_FOR_CHATGPT_REVIEW** (Code Baseline HEAD: `f8ef40a422657eba8ad50be05f97026e34a18f03`).
 Active Work Package: **MON-WP003**.
-Status: **AUTHORIZED_FOR_EXECUTION**.
-Next Candidate: **NONE**.
+Next Candidate: **NONE** (Status: **PENDING_REVIEW**).
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-Awaiting fresh new run to begin MON-WP003 execution per control lifecycle.
+Awaiting independent ChatGPT review of MON-WP003.

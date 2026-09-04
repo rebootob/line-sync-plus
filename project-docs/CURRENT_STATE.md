@@ -78,20 +78,24 @@
 
 ---
 
-## 🚨 Alerts / Incident Visibility — Dashboard V1 (MON-WP003 STATUS: AUTHORIZED_FOR_EXECUTION)
+## 🚨 Alerts / Incident Visibility — Dashboard V1 (MON-WP003 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
 - **Scope**: Phase 1 Observability & Monitoring. Dashboard-only incident visibility V1 (`index.html`).
-- **Execution Gate Status**: `AUTHORIZED_FOR_EXECUTION` (Code Baseline HEAD: `f8ef40a422657eba8ad50be05f97026e34a18f03`).
-- **Design Invariants**:
-  - Reuses existing `/api/ops/health` and `/api/ops/queue` snapshots.
-  - Zero new backend endpoints, zero modifications to `src/**`.
-  - Reuses existing 6000ms monitoring poll; no duplicate polling loops.
-  - Session-memory lifecycle for `firstSeen` and `lastSeen`; no DB or localStorage persistence.
-  - Severity hierarchy: `CRITICAL > WARNING > UNKNOWN > INFO > CLEAR`. Unknown never renders green.
-  - Zero mutation, zero recovery, zero resend, zero action buttons.
+- **Execution Gate Status**: `READY_FOR_CHATGPT_REVIEW` (Code Baseline HEAD: `f8ef40a422657eba8ad50be05f97026e34a18f03`).
+- **Implemented Capabilities**:
+  - Compact `Incident Visibility & Active Alerts` card in `index.html` placed above the Operational Health card.
+  - Reuses existing `/api/ops/health` and `/api/ops/queue` snapshots with zero third polling loop.
+  - Pure incident derivation function `deriveIncidents(healthData, queueData, sessionTracker, nowInput)` wrapped in sentinels.
+  - Full severity precedence: `CRITICAL > WARNING > UNKNOWN > INFO > CLEAR`. Unknown never renders green. CLEAR permitted only when required monitoring sources are positively available and no anomalies exist.
+  - In-memory dashboard-session `firstSeen` and `lastSeen` tracking; no DB or localStorage persistence.
+  - Zero token, credential, PII, or chat payload exposure. Zero operator-action buttons.
+- **Validation Evidence**:
+  - Local focused harness: 23/23 tests PASS (extracted directly from `index.html` via Node VM).
+  - Full test suite: 317/317 PASS (LOCAL REPORTED evidence; no GitHub CI status checks).
+  - Zero LINE/Telegram activity.
 
 ---
 
@@ -202,12 +206,12 @@
 - **Phase 1 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003` (`CLOSED / PASS`).
 - **Active Work Package**: `MON-WP003`.
-- **Status**: `AUTHORIZED_FOR_EXECUTION`.
+- **Status**: `READY_FOR_CHATGPT_REVIEW`.
 - **Work Package Status**:
   - `MON-WP001`: `CLOSED / PASS`.
   - `MON-WP001-R1`: `CLOSED / PASS`.
   - `MON-WP002`: `CLOSED / PASS`.
-  - `MON-WP003`: `AUTHORIZED_FOR_EXECUTION`.
+  - `MON-WP003`: `READY_FOR_CHATGPT_REVIEW`.
   - `REL-WP003`: `CLOSED / PASS`.
   - `REL-WP003-R1`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP003-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
@@ -217,4 +221,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `NONE`.
+- **Next Candidate**: `NONE` (Status: `PENDING_REVIEW`).
