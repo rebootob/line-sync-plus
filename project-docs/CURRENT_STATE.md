@@ -226,7 +226,7 @@
 
 ---
 
-## 🎯 Campaign Authoring Contract & OA Isolation Corrective (P2-WP001-R1 STATUS: CORRECTIVE_AUTHORIZED)
+## 🎯 Campaign Authoring Contract & OA Isolation Corrective (P2-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts` - UNTOUCHED).
@@ -235,6 +235,7 @@
 - **Code Baseline HEAD**: `f8b18700ac51120d42ac717514a659a2ccb97e09`.
 - **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts`.
 - **Prohibited**: `index.html`, `run/**`, Worker version, `runtime-version.ts`, `entities/**`, database/schema, send plans, ledger/ARM/CONFIRM, LINE send logic, lease/reconciliation, Telegram.
+- **Testing & Safety**: 11 new focused P2-WP001-R1 Jest tests, full test suite 370/370 PASS (`npm test -- --runInBand`), `npm run build` PASS (0 errors), `git diff --check` PASS (0 errors). Zero Live LINE sends.
 
 ---
 
@@ -245,10 +246,10 @@
 - **Phase 2 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003` (`CLOSED / PASS`).
 - **Active Work Package**: `P2-WP001-R1`.
-- **Status**: `CORRECTIVE_AUTHORIZED`.
+- **Status**: `READY_FOR_CHATGPT_REVIEW`.
 - **Work Package Status**:
-  - `P2-WP001-R1`: `CORRECTIVE_AUTHORIZED`.
-  - `P2-WP001`: `CORRECTIVE_REQUIRED`.
+  - `P2-WP001-R1`: `READY_FOR_CHATGPT_REVIEW`.
+  - `P2-WP001`: `PENDING_CORRECTIVE_ACCEPTANCE`.
   - `MON-WP001`: `CLOSED / PASS`.
   - `MON-WP001-R1`: `CLOSED / PASS`.
   - `MON-WP002`: `CLOSED / PASS`.

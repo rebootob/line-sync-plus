@@ -254,8 +254,8 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `MON-WP003 — Alerts / Incident Visibility`: **CLOSED / PASS**
   - *Backup / Recovery / Retention*: **DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE** (OPS-WP002 not authorized)
 - **Phase 2 — Campaign Builder v2**: **IN PROGRESS**
-  - `P2-WP001-R1 — Fail-Closed scheduledAt Type Validation Corrective`: **CORRECTIVE_AUTHORIZED**
-  - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **CORRECTIVE_REQUIRED**
+  - `P2-WP001-R1 — Fail-Closed scheduledAt Type Validation Corrective`: **READY_FOR_CHATGPT_REVIEW**
+  - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **PENDING_CORRECTIVE_ACCEPTANCE**
   - Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -266,7 +266,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
 ## 11. Technical Evolution
 
 - **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003 CLOSED / PASS).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), dashboard-only Incident Visibility card (`index.html`) with in-memory session lifecycle, authoritative campaign authoring contract (message type enforcement, protocol-restricted URL validation, future-only scheduling, active-OA read/mutation isolation, state-safe mutation transitions), and 359 passing local unit tests (local reported evidence only; no GitHub CI status checks existed).
+- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), dashboard-only Incident Visibility card (`index.html`) with in-memory session lifecycle, authoritative campaign authoring contract (message type enforcement, protocol-restricted URL validation, future-only scheduling, active-OA read/mutation isolation, state-safe mutation transitions, fail-closed scheduledAt type validation), and 370 passing local unit tests (local reported evidence only; no GitHub CI status checks existed).
 
 ---
 
@@ -275,10 +275,10 @@ Over the course of safety hardening, 26 work packages were identified, implement
 Phase 0 Foundation is **CLOSED / PASS**.
 Phase 1 (Operations & Monitoring) is **CLOSED / PASS**.
 Phase 2 (Campaign Builder v2) is **IN PROGRESS**.
-P2-WP001-R1 is **CORRECTIVE_AUTHORIZED** (Code Baseline HEAD: `f8b18700ac51120d42ac717514a659a2ccb97e09`).
+P2-WP001-R1 is **READY_FOR_CHATGPT_REVIEW** (Code Baseline HEAD: `f8b18700ac51120d42ac717514a659a2ccb97e09`).
 Active Work Package: **P2-WP001-R1**.
-Status: **CORRECTIVE_AUTHORIZED**.
+Status: **READY_FOR_CHATGPT_REVIEW**.
 Next Candidate: **NONE** (Status: **PENDING_REVIEW**).
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-P2-WP001-R1 authorized for implementation. Fail-closed scheduledAt type validation corrective.
+P2-WP001-R1 implementation complete and verified locally. Ready for independent ChatGPT review.

@@ -767,8 +767,12 @@ export class AppController {
     let scheduledDate: Date | null = null;
     let initialStatus = 'pending';
 
-    if (body.scheduledAt !== undefined && body.scheduledAt !== null) {
-      const schedTrim = typeof body.scheduledAt === 'string' ? body.scheduledAt.trim() : '';
+    if ('scheduledAt' in body && body.scheduledAt !== undefined) {
+      if (typeof body.scheduledAt !== 'string') {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'scheduledAt must be a string' };
+      }
+      const schedTrim = body.scheduledAt.trim();
       if (schedTrim !== '') {
         const parsedDate = new Date(schedTrim);
         if (isNaN(parsedDate.getTime())) {

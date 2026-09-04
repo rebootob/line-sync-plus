@@ -4902,6 +4902,171 @@ describe('AppController', () => {
       expect(res.message).toContain('future');
     });
 
+    // P2-WP001-R1 Corrective Test Suite (11 required scenarios)
+    describe('P2-WP001-R1 Fail-Closed scheduledAt Type Validation', () => {
+      it('R1-1. scheduledAt property absent => pending accepted', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Absent scheduledAt',
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(res.success).toBe(true);
+        expect(res.status).toBe('pending');
+      });
+
+      it('R1-2. blank string => pending accepted', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Blank scheduledAt',
+          scheduledAt: '',
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(res.success).toBe(true);
+        expect(res.status).toBe('pending');
+      });
+
+      it('R1-3. whitespace string => pending accepted', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Whitespace scheduledAt',
+          scheduledAt: '   ',
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(res.success).toBe(true);
+        expect(res.status).toBe('pending');
+      });
+
+      it('R1-4. number => HTTP 400', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Number scheduledAt',
+          scheduledAt: 123456789 as any,
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+        expect(res.message).toContain('scheduledAt must be a string');
+      });
+
+      it('R1-5. boolean => HTTP 400', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Boolean scheduledAt',
+          scheduledAt: true as any,
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+        expect(res.message).toContain('scheduledAt must be a string');
+      });
+
+      it('R1-6. object => HTTP 400', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Object scheduledAt',
+          scheduledAt: { date: '2026-09-05' } as any,
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+        expect(res.message).toContain('scheduledAt must be a string');
+      });
+
+      it('R1-7. array => HTTP 400', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Array scheduledAt',
+          scheduledAt: ['2026-09-05T00:00:00Z'] as any,
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+        expect(res.message).toContain('scheduledAt must be a string');
+      });
+
+      it('R1-8. explicit null => HTTP 400', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Explicit null scheduledAt',
+          scheduledAt: null as any,
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+        expect(res.message).toContain('scheduledAt must be a string');
+      });
+
+      it('R1-9. malformed non-empty string => HTTP 400', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Malformed string scheduledAt',
+          scheduledAt: 'not-a-valid-date',
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+        expect(res.message).toContain('Invalid scheduledAt');
+      });
+
+      it('R1-10. past/current valid datetime => HTTP 400', async () => {
+        const mockRes = createMockRes();
+        const pastDate = new Date(Date.now() - 60000).toISOString();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Past scheduledAt',
+          scheduledAt: pastDate,
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+        expect(res.message).toContain('future');
+      });
+
+      it('R1-11. future valid datetime => scheduled accepted', async () => {
+        const mockRes = createMockRes();
+        const futureDate = new Date(Date.now() + 3600000).toISOString();
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Future scheduledAt',
+          scheduledAt: futureDate,
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(res.success).toBe(true);
+        expect(res.status).toBe('scheduled');
+      });
+    });
+
     // ==========================================
     // OA READ ISOLATION (Tests 18 - 23)
     // ==========================================

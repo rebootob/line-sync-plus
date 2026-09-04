@@ -2,7 +2,7 @@
 
 ```yaml
 ACTIVE_WORK_PACKAGE: P2-WP001-R1
-STATUS: CORRECTIVE_AUTHORIZED
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: PENDING_CORRECTIVE_REVIEW
@@ -10,16 +10,16 @@ PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: IN PROGRESS
 PHASE_2_TITLE: Campaign Builder v2
-P2-WP001: CORRECTIVE_REQUIRED
-P2-WP001-R1: CORRECTIVE_AUTHORIZED
+P2-WP001: PENDING_CORRECTIVE_ACCEPTANCE
+P2-WP001-R1: READY_FOR_CHATGPT_REVIEW
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
-- **P2-WP001-R1 — Fail-Closed scheduledAt Type Validation**: `CORRECTIVE_AUTHORIZED`
-- **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `CORRECTIVE_REQUIRED`
+- **P2-WP001-R1 — Fail-Closed scheduledAt Type Validation**: `READY_FOR_CHATGPT_REVIEW`
+- **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `PENDING_CORRECTIVE_ACCEPTANCE`
 - **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`
 - **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 - **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`

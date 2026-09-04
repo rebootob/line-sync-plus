@@ -9,7 +9,7 @@ TITLE:
 Fail-Closed scheduledAt Type Validation
 
 STATUS:
-CORRECTIVE_AUTHORIZED
+READY_FOR_CHATGPT_REVIEW
 
 CODE_BASELINE_HEAD:
 f8b18700ac51120d42ac717514a659a2ccb97e09
@@ -31,9 +31,9 @@ PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: IN PROGRESS
 PHASE_2_TITLE: Campaign Builder v2
-P2-WP001: CORRECTIVE_REQUIRED
+P2-WP001: PENDING_CORRECTIVE_ACCEPTANCE
 ACTIVE_WORK_PACKAGE: P2-WP001-R1
-P2-WP001-R1: CORRECTIVE_AUTHORIZED
+P2-WP001-R1: READY_FOR_CHATGPT_REVIEW
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: PENDING_CORRECTIVE_REVIEW
 
@@ -149,7 +149,15 @@ npm test -- --runInBand
 npm run build
 git diff --check
 
-Record ACTUAL results as LOCAL REPORTED evidence.
+Record ACTUAL results as LOCAL REPORTED evidence:
+
+- `npm test -- --runInBand`: PASS
+  - Test Suites: 1 passed, 1 total
+  - Tests: 370 passed, 370 total (359 existing + 11 new P2-WP001-R1 tests)
+  - Snapshots: 0 total
+  - Time: 2.85 s
+- `npm run build`: PASS (nest build completed with 0 errors)
+- `git diff --check`: PASS (0 whitespace errors)
 
 --------------------------------------------------
 UAT
