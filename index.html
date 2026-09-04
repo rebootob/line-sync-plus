@@ -1486,8 +1486,10 @@
 
                 const data = await res.json();
                 if (data.success) {
+                    currentActiveBotId = targetBotId;
                     alert(`✅ สลับไปยัง LINE OA Context [ ${targetBotId.substring(0, 10)}... ] เรียบร้อยแล้ว!`);
                     selectedUsers.clear();
+                    clearCampaignTemplateState();
                     invalidateCampaignPreview();
                     await loadData();
                 } else {
@@ -1800,6 +1802,8 @@
         }
 
         let currentPreviewSnapshot = null;
+        let previewRequestGeneration = 0;
+        let templateRequestGeneration = 0;
 
         function getAuthoringSnapshot() {
             const isSched = document.getElementById('enableScheduleCheckbox') ? document.getElementById('enableScheduleCheckbox').checked : false;
@@ -1817,6 +1821,7 @@
         }
 
         function invalidateCampaignPreview() {
+            previewRequestGeneration += 1;
             currentPreviewSnapshot = null;
             const submitBtn = document.getElementById('btnSubmitCampaign');
             if (submitBtn) submitBtn.disabled = true;
@@ -1824,6 +1829,19 @@
             if (container) {
                 container.replaceChildren();
                 container.style.display = 'none';
+            }
+        }
+
+        function clearCampaignTemplateState() {
+            campaignTemplates = [];
+            const select = document.getElementById('templateReuseSelect');
+            if (select) {
+                select.replaceChildren();
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = '-- พิมพ์สร้างใหม่ หรือ เลือกแคมเปญเดิมที่เคยส่ง --';
+                select.appendChild(defaultOpt);
+                select.value = '';
             }
         }
 
@@ -1950,9 +1968,30 @@
         }
 
         async function loadTemplatePresetDropdown() {
+            const reqBotId = currentActiveBotId;
+            const reqGen = ++templateRequestGeneration;
             try {
-                const res = await fetch(`${API_BASE}/campaigns/templates?botId=${encodeURIComponent(currentActiveBotId)}`);
-                campaignTemplates = await res.json();
+                if (!reqBotId) {
+                    clearCampaignTemplateState();
+                    return;
+                }
+                const res = await fetch(`${API_BASE}/campaigns/templates?botId=${encodeURIComponent(reqBotId)}`);
+                if (!res.ok) {
+                    clearCampaignTemplateState();
+                    return;
+                }
+                const data = await res.json();
+
+                if (reqBotId !== currentActiveBotId || reqGen !== templateRequestGeneration) {
+                    return;
+                }
+
+                if (!Array.isArray(data)) {
+                    clearCampaignTemplateState();
+                    return;
+                }
+
+                campaignTemplates = data;
                 const select = document.getElementById('templateReuseSelect');
                 if (!select) return;
 
@@ -1962,18 +2001,19 @@
                 defaultOpt.textContent = '-- พิมพ์สร้างใหม่ หรือ เลือกแคมเปญเดิมที่เคยส่ง --';
                 select.appendChild(defaultOpt);
 
-                if (Array.isArray(campaignTemplates)) {
-                    campaignTemplates.forEach(t => {
-                        const opt = document.createElement('option');
-                        opt.value = t.id;
-                        const labelType = getThaiMessageTypeLabel(t.messageType);
-                        const nameOrMsg = t.name || (t.message ? (t.message.length > 30 ? t.message.substring(0, 30) + '...' : t.message) : 'ไม่มีชื่อ');
-                        opt.textContent = `[${labelType}] ${nameOrMsg}`;
-                        select.appendChild(opt);
-                    });
-                }
+                campaignTemplates.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    const labelType = getThaiMessageTypeLabel(t.messageType);
+                    const nameOrMsg = t.name || (t.message ? (t.message.length > 30 ? t.message.substring(0, 30) + '...' : t.message) : 'ไม่มีชื่อ');
+                    opt.textContent = `[${labelType}] ${nameOrMsg}`;
+                    select.appendChild(opt);
+                });
             } catch (e) {
                 console.error(e);
+                if (reqBotId === currentActiveBotId && reqGen === templateRequestGeneration) {
+                    clearCampaignTemplateState();
+                }
             }
         }
 
@@ -2037,6 +2077,9 @@
                 payload.scheduledAt = scheduledAt;
             }
 
+            const requestSnapshot = getAuthoringSnapshot();
+            const reqGen = ++previewRequestGeneration;
+
             const container = document.getElementById('campaignPreviewContainer');
             try {
                 const res = await fetch(`${API_BASE}/campaign/preview`, {
@@ -2045,13 +2088,24 @@
                     body: JSON.stringify(payload),
                 });
                 const data = await res.json();
-                if (!res.ok || !data.success) {
+
+                if (
+                    reqGen !== previewRequestGeneration ||
+                    getAuthoringSnapshot() !== requestSnapshot ||
+                    currentActiveBotId !== botId ||
+                    !res.ok ||
+                    !data.success
+                ) {
                     invalidateCampaignPreview();
-                    alert(`❌ ไม่สามารถแสดงพรีวิวได้: ${data.message || 'ข้อมูลไม่ถูกต้อง'}`);
+                    if (!res.ok || !data.success) {
+                        if (reqGen === previewRequestGeneration && getAuthoringSnapshot() === requestSnapshot && currentActiveBotId === botId) {
+                            alert(`❌ ไม่สามารถแสดงพรีวิวได้: ${data.message || 'ข้อมูลไม่ถูกต้อง'}`);
+                        }
+                    }
                     return;
                 }
 
-                currentPreviewSnapshot = getAuthoringSnapshot();
+                currentPreviewSnapshot = requestSnapshot;
                 const submitBtn = document.getElementById('btnSubmitCampaign');
                 if (submitBtn) submitBtn.disabled = false;
 

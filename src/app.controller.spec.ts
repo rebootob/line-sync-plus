@@ -5854,7 +5854,7 @@ describe('AppController', () => {
 
       it('34. successful preview enables confirm', () => {
         const indexHtml = fs.readFileSync('index.html', 'utf8');
-        expect(indexHtml).toContain('currentPreviewSnapshot = getAuthoringSnapshot();');
+        expect(indexHtml).toContain('currentPreviewSnapshot = requestSnapshot;');
         expect(indexHtml).toContain("const submitBtn = document.getElementById('btnSubmitCampaign');");
         expect(indexHtml).toContain('if (submitBtn) submitBtn.disabled = false;');
       });
@@ -5922,6 +5922,110 @@ describe('AppController', () => {
       it('45. existing /campaign/add call remains final creation action', () => {
         const indexHtml = fs.readFileSync('index.html', 'utf8');
         expect(indexHtml).toContain("fetch(`${API_BASE}/campaign/add`,");
+      });
+    });
+
+    describe('P2-WP002-R1 Stale Preview Race & OA Template Cache Fencing Tests', () => {
+      it('1. preview request captures snapshot BEFORE fetch response', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const previewFn = indexHtml.split('async function generateCampaignPreview()')[1].split('container.replaceChildren()')[0];
+        const snapshotPos = previewFn.indexOf('const requestSnapshot = getAuthoringSnapshot();');
+        const fetchPos = previewFn.indexOf('fetch(`${API_BASE}/campaign/preview`');
+        expect(snapshotPos).toBeGreaterThan(-1);
+        expect(fetchPos).toBeGreaterThan(-1);
+        expect(snapshotPos).toBeLessThan(fetchPos);
+      });
+
+      it('2. form edit during in-flight preview causes old response to be discarded', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('previewRequestGeneration += 1;');
+        expect(indexHtml).toContain('getAuthoringSnapshot() !== requestSnapshot');
+      });
+
+      it('3. stale response cannot re-enable Confirm', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const previewFn = indexHtml.split('async function generateCampaignPreview()')[1];
+        expect(previewFn).toContain('reqGen !== previewRequestGeneration');
+        expect(previewFn).toContain('return;');
+      });
+
+      it('4. two preview requests resolving out of order keep only newest result', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('let previewRequestGeneration = 0;');
+        expect(indexHtml).toContain('const reqGen = ++previewRequestGeneration;');
+        expect(indexHtml).toContain('reqGen !== previewRequestGeneration');
+      });
+
+      it('5. OA switch during in-flight preview discards previous-OA response', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const previewFn = indexHtml.split('async function generateCampaignPreview()')[1];
+        expect(previewFn).toContain('currentActiveBotId !== botId');
+      });
+
+      it('6. OA switch clears campaignTemplates', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const clearFn = indexHtml.split('function clearCampaignTemplateState()')[1];
+        expect(clearFn).toContain('campaignTemplates = [];');
+        const switchOaFn = indexHtml.split('async function switchOaContext()')[1];
+        expect(switchOaFn).toContain('clearCampaignTemplateState();');
+      });
+
+      it('7. OA switch clears/reset template dropdown', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('select.replaceChildren();');
+        expect(indexHtml).toContain("defaultOpt.textContent = '-- พิมพ์สร้างใหม่ หรือ เลือกแคมเปญเดิมที่เคยส่ง --';");
+      });
+
+      it('8. template fetch failure clears cache and stale options', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1].split('function applyTemplatePreset()')[0];
+        expect(templateFn).toContain('if (!res.ok) {');
+        expect(templateFn).toContain('clearCampaignTemplateState();');
+      });
+
+      it('9. template fetch failure still leaves safe default/manual-create option', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const clearFn = indexHtml.split('function clearCampaignTemplateState()')[1].split('// 5. ระบบ Modal')[0];
+        expect(clearFn).toContain('select.appendChild(defaultOpt);');
+        expect(clearFn).toContain("defaultOpt.value = '';");
+      });
+
+      it('10. old OA template response arriving after OA switch is discarded', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1];
+        expect(templateFn).toContain('reqBotId !== currentActiveBotId');
+      });
+
+      it('11. template response applies only when requested OA == currentActiveBotId', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1];
+        expect(templateFn).toContain('if (reqBotId !== currentActiveBotId');
+      });
+
+      it('12. template request generation prevents older response overwriting newer', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('let templateRequestGeneration = 0;');
+        expect(indexHtml).toContain('const reqGen = ++templateRequestGeneration;');
+        expect(indexHtml).toContain('reqGen !== templateRequestGeneration');
+      });
+
+      it('13. template DOM still uses textContent / safe DOM', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1];
+        expect(templateFn).toContain('select.replaceChildren();');
+        expect(templateFn).toContain("opt.textContent = `[${labelType}] ${nameOrMsg}`;");
+      });
+
+      it('14. template selection still invalidates preview', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const applyFn = indexHtml.split('function applyTemplatePreset()')[1].split('async function generateCampaignPreview()')[0];
+        expect(applyFn).toContain('invalidateCampaignPreview();');
+      });
+
+      it('15. submit still blocks when current state != successful-preview snapshot', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('const currentSnap = getAuthoringSnapshot();');
+        expect(indexHtml).toContain('if (!currentPreviewSnapshot || currentSnap !== currentPreviewSnapshot)');
       });
     });
   });
