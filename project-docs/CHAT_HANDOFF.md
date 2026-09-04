@@ -22,16 +22,16 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `MON-WP003`
-* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **STATUS**: `STANDBY`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
-* **MON-WP003 — Alerts / Incident Visibility**: `READY_FOR_CHATGPT_REVIEW`
+* **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -140,7 +140,9 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 ## Implemented MON-WP003 Alerts / Incident Visibility Summary
 
 - **Task**: MON-WP003 (Dashboard V1)
-- **Status**: READY_FOR_CHATGPT_REVIEW
+- **Status**: CLOSED / PASS
+- **Accepted Review HEAD**: `acb1185e1a5ff21c2c346d326669392cacdfa639`
+- **Accepted Review Result**: `PASS`
 - **Implementation Scope**: `index.html` ONLY (Dashboard-only incident visibility consuming `/api/ops/health` and `/api/ops/queue`).
 - **Prohibited Files**: `src/**`, `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), LINE/Telegram send, DB mutation all untouched.
 - **Polling**: Reuses existing 6000ms monitoring poll; zero duplicate loops.
@@ -152,14 +154,14 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `MON-WP003`
-* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **STATUS**: `STANDBY`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
 * **MON-WP001**: `CLOSED / PASS`
 * **MON-WP001-R1**: `CLOSED / PASS`
 * **MON-WP002**: `CLOSED / PASS`
-* **MON-WP003**: `READY_FOR_CHATGPT_REVIEW`
+* **MON-WP003**: `CLOSED / PASS`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
-Awaiting independent ChatGPT review of MON-WP003. Do not start any other work package.
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
+Awaiting project owner direction for next work package. Do not start any task without explicit authorization.

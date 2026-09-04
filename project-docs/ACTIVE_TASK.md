@@ -1,23 +1,23 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: MON-WP003
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: NONE
+STATUS: STANDBY
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: PENDING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_OWNER_DIRECTION
 PHASE_0: CLOSED / PASS
 PHASE_1: IN PROGRESS
 MON-WP001: CLOSED / PASS
 MON-WP002: CLOSED / PASS
-MON-WP003: READY_FOR_CHATGPT_REVIEW
+MON-WP003: CLOSED / PASS
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
-- **MON-WP003 — Alerts / Incident Visibility**: `READY_FOR_CHATGPT_REVIEW`
+- **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`
 - **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 - **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
   - **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
@@ -374,7 +374,7 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
-## 🚨 MON-WP003 — Alerts / Incident Visibility (STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🚨 MON-WP003 — Alerts / Incident Visibility (STATUS: CLOSED / PASS)
 
 > [!IMPORTANT]
 > **Boundary & Invariants**:
@@ -402,24 +402,31 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 - **Lifecycle Tracking**: In-memory `firstSeen` / `lastSeen` tracking per dashboard session. Resolved incidents disappear from active list; reappearing incidents receive fresh `firstSeen`.
 - **Zero Third Polling Loop**: Hooked directly into existing `updateOpsHealthUI()` and `updateOpsQueueUI()` execution paths. Failed responses explicitly invalidate snapshots to prevent stale zero reuse.
 
-### Validation Evidence
+### Validation & Acceptance Evidence
+- **Accepted Review HEAD**: `acb1185e1a5ff21c2c346d326669392cacdfa639`
+- **Accepted Review Result**: `PASS`
+- **Work Package Status**: `CLOSED / PASS`
 - **Focused Validation**: 23/23 tests PASS via temporary local harness extracting the exact function from `index.html` via Node VM.
 - **Full Test Suite**: 317/317 PASS (0 failures, `npm test -- --runInBand`).
 - **Evidence Classification**: LOCAL REPORTED evidence (no GitHub CI status checks).
 - **Code Baseline HEAD**: `f8ef40a422657eba8ad50be05f97026e34a18f03`.
-- **Live LINE UAT**: None required/performed.
+- **Live LINE UAT**: None required/performed (observability endpoints remain read-only).
+- **Worker Version**: `28.16` (unchanged)
+- **Required Worker Version**: `28.16` (unchanged)
+- **Runtime Contract Version**: `2` (unchanged)
+- **Safety Invariant**: Never automatically resend ambiguous physical sends
 
 ---
 
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `MON-WP003`
-- **Status**: `READY_FOR_CHATGPT_REVIEW`
+- **Active Work Package**: `NONE`
+- **Status**: `STANDBY`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `IN PROGRESS`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`
 - **MON-WP002 Status**: `CLOSED / PASS`
-- **MON-WP003 Status**: `READY_FOR_CHATGPT_REVIEW`
+- **MON-WP003 Status**: `CLOSED / PASS`
 - **Next Candidate**: `NONE`
-- **Next Candidate Status**: `PENDING_REVIEW`
+- **Next Candidate Status**: `AWAITING_OWNER_DIRECTION`

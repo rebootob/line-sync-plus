@@ -78,13 +78,22 @@
 
 ---
 
-## 🚨 Alerts / Incident Visibility — Dashboard V1 (MON-WP003 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🚨 Alerts / Incident Visibility — Dashboard V1 (MON-WP003 STATUS: CLOSED / PASS)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
 - **Scope**: Phase 1 Observability & Monitoring. Dashboard-only incident visibility V1 (`index.html`).
-- **Execution Gate Status**: `READY_FOR_CHATGPT_REVIEW` (Code Baseline HEAD: `f8ef40a422657eba8ad50be05f97026e34a18f03`).
+- **Execution Gate Status**: `CLOSED / PASS` (Code Baseline HEAD: `f8ef40a422657eba8ad50be05f97026e34a18f03`).
+- **Accepted Review Evidence**:
+  - Accepted Review HEAD: `acb1185e1a5ff21c2c346d326669392cacdfa639`
+  - Accepted Review Result: `PASS`
+  - Status: `CLOSED / PASS`
+  - Automated Validation: 317/317 unit tests PASS (0 failures, LOCAL REPORTED evidence; no GitHub CI status checks).
+  - Focused Incident Validation: 23/23 PASS via extracted engine harness.
+  - Worker remains `v28.16`, Required Worker remains `28.16`, Runtime Contract remains `2`.
+  - Zero Live LINE UAT required/performed (read-only observability).
+  - Safety Invariant: Never automatically resend ambiguous physical sends.
 - **Implemented Capabilities**:
   - Compact `Incident Visibility & Active Alerts` card in `index.html` placed above the Operational Health card.
   - Reuses existing `/api/ops/health` and `/api/ops/queue` snapshots with zero third polling loop.
@@ -92,10 +101,6 @@
   - Full severity precedence: `CRITICAL > WARNING > UNKNOWN > INFO > CLEAR`. Unknown never renders green. CLEAR permitted only when required monitoring sources are positively available and no anomalies exist.
   - In-memory dashboard-session `firstSeen` and `lastSeen` tracking; no DB or localStorage persistence.
   - Zero token, credential, PII, or chat payload exposure. Zero operator-action buttons.
-- **Validation Evidence**:
-  - Local focused harness: 23/23 tests PASS (extracted directly from `index.html` via Node VM).
-  - Full test suite: 317/317 PASS (LOCAL REPORTED evidence; no GitHub CI status checks).
-  - Zero LINE/Telegram activity.
 
 ---
 
@@ -205,13 +210,13 @@
 - **Phase 0 Status**: `CLOSED / PASS`.
 - **Phase 1 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003` (`CLOSED / PASS`).
-- **Active Work Package**: `MON-WP003`.
-- **Status**: `READY_FOR_CHATGPT_REVIEW`.
+- **Active Work Package**: `NONE`.
+- **Status**: `STANDBY`.
 - **Work Package Status**:
   - `MON-WP001`: `CLOSED / PASS`.
   - `MON-WP001-R1`: `CLOSED / PASS`.
   - `MON-WP002`: `CLOSED / PASS`.
-  - `MON-WP003`: `READY_FOR_CHATGPT_REVIEW`.
+  - `MON-WP003`: `CLOSED / PASS`.
   - `REL-WP003`: `CLOSED / PASS`.
   - `REL-WP003-R1`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP003-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
@@ -221,4 +226,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `NONE` (Status: `PENDING_REVIEW`).
+- **Next Candidate**: `NONE` (Status: `AWAITING_OWNER_DIRECTION`).
