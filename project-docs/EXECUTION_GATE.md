@@ -1,15 +1,15 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 2
+CONTROL_VERSION: 1
 
 TASK_ID:
-MON-WP002-CLOSE
+MON-WP003
 
 TITLE:
-Close MON-WP002 After Independent Review
+Alerts / Incident Visibility — Dashboard V1
 
 STATUS:
-CLOSED_PASS
+AUTHORIZED_FOR_EXECUTION
 
 AUTHORIZED_BY:
 Project Owner
@@ -23,85 +23,61 @@ Antigravity
 CANONICAL_BRANCH:
 main
 
-ACCEPTED_REVIEW_HEAD:
-5b34269397afbd9046610c366d9f0c27bf3d5532
+CODE_BASELINE_HEAD:
+f8ef40a422657eba8ad50be05f97026e34a18f03
 
-ACCEPTED_REVIEW_RESULT:
-PASS
+BASELINE_POLICY:
+NON_DOCUMENT_CODE_MUST_MATCH_CODE_BASELINE
 
-NEXT_TASK:
-NONE
+CONTROL_UPDATE_POLICY:
+CURRENT_EXPLICIT_OWNER_CONTROL_UPDATE_ONLY
 
-NEXT_TASK_STATUS:
-AWAITING_OWNER_DIRECTION
+OBJECTIVE:
 
---------------------------------------------------
-ACCEPTED EVIDENCE SUMMARY
---------------------------------------------------
+Provide clear operator-facing incident visibility using the
+already accepted read-only monitoring data from:
 
-- MON-WP002 focused tests: 23/23 PASS
-- full suite: 317/317 PASS
-- evidence classification: LOCAL REPORTED evidence
-- no GitHub CI/status/workflow evidence
-- no Live LINE UAT was required/performed
-- Worker remains 28.16
-- Required Worker remains 28.16
-- Runtime Contract remains 2
-- never automatically resend ambiguous physical sends
-- observability endpoints remain read-only
+GET /api/ops/health
+GET /api/ops/queue
+
+MON-WP003 V1 is DASHBOARD-ONLY.
+
+Do not create another backend monitoring endpoint unless a
+proven blocker makes the V1 impossible.
 
 --------------------------------------------------
-MON-WP002 OBJECTIVE (COMPLETED / CLOSED_PASS)
+AUTHORIZED IMPLEMENTATION SCOPE
 --------------------------------------------------
 
-Implement read-only operational monitoring for the active LINE OA:
+Implementation file:
 
-- pending jobs
-- processing jobs
-- active valid leases
-- expired leases
-- processing jobs with missing lease fields
-- residual lease fields on non-processing jobs
-- reconcile_required jobs
-- reconcile_required send parts
-- stale armed send parts
-- paused_reconcile campaigns
-
-OBSERVABILITY ONLY.
-
-No recovery.
-No mutation.
-No resend.
-No reconciliation action.
-
---------------------------------------------------
-IMPLEMENTATION FILES
---------------------------------------------------
-
-- src/app.controller.ts
-- src/app.controller.spec.ts
 - index.html
 
-Supporting docs:
+Supporting docs after implementation:
 
+- project-docs/EXECUTION_GATE.md
 - project-docs/ACTIVE_TASK.md
 - project-docs/CHAT_HANDOFF.md
 - project-docs/CURRENT_STATE.md
 - project-docs/PROJECT_STATUS_ROADMAP.md
-- project-docs/EXECUTION_GATE.md
 
---------------------------------------------------
-PROHIBITED FILES (VERIFIED UNTOUCHED)
---------------------------------------------------
+PROHIBITED:
 
-- run/LineSyncApp.js
-- src/runtime-version.ts
-- src/entities/**
-- src/database-init.service.ts
-- src/telegram.service.ts
-- package/dependency files
-- migrations/schema
-- secrets/configuration
+- src/**
+- run/**
+- package*.json
+- entities/**
+- database-init.service.ts
+- telegram.service.ts
+- schema/migrations
+- Worker version changes
+- Runtime Contract changes
+- LINE send
+- Telegram send
+- lease mutation/reclaim
+- reconciliation mutation
+- auto recovery
+- ack/snooze/retry/reset/reconcile controls
 
 Worker remains:
 28.16
@@ -113,234 +89,164 @@ Runtime Contract remains:
 2
 
 --------------------------------------------------
-BACKEND
+DESIGN
 --------------------------------------------------
 
-Implemented:
+Add one compact Incident Visibility section/card to the Dashboard.
 
-GET /api/ops/queue
+It must consume the existing monitoring snapshots from
+/api/ops/health and /api/ops/queue.
 
-Loopback only:
+Prefer reusing the existing 6000ms monitoring polling.
 
-- 127.0.0.1
-- ::1
-- ::ffff:127.0.0.1
+DO NOT add a third polling loop that duplicates both monitoring API
+requests every 6 seconds.
 
-Remote:
-HTTP 403.
+Existing health/queue UI functions may publish their latest
+truthful snapshots for the Incident Visibility renderer.
 
-Use socket remote address.
-Do not trust X-Forwarded-For over socket address.
-
-Endpoint is read-only.
-
-No:
-- save
-- update
-- delete
-- state mutation
-- lease renewal
-- reclaim
-- reconciliation resolution
-- worker observation mutation
+Never treat a failed/unknown response as the previous known-good state.
 
 --------------------------------------------------
-ACTIVE OA SCOPING
+INCIDENT SEVERITIES
 --------------------------------------------------
 
-All metrics must be strictly scoped to authoritative activeBotId.
+Support:
 
-Do NOT expose activeBotId.
+CRITICAL
+WARNING
+UNKNOWN
+INFO
+CLEAR
 
-No active OA:
+Overall priority:
 
-- do not aggregate globally
-- all counts = null
-- oa.active = false
-- status = attention
+CRITICAL
+> WARNING
+> UNKNOWN
+> INFO
+> CLEAR
 
-OA lookup failure:
+A known CRITICAL/WARNING must not be hidden by another UNKNOWN source.
 
-- all counts = null
-- oa.active = null
-- status = degraded
+UNKNOWN must never render green.
 
-Never convert failure to zero.
-
---------------------------------------------------
-METRICS
---------------------------------------------------
-
-queue.pending:
-
-CampaignJob status = pending
-
-queue.processing:
-
-CampaignJob status = processing
-
-leases.active:
-
-status = processing
-AND leaseToken not null
-AND leaseOwner not null
-AND leaseExpiresAt not null
-AND leaseExpiresAt > NOW
-
-Do not require leaseHeartbeatAt.
-
-leases.expired:
-
-status = processing
-AND leaseToken not null
-AND leaseOwner not null
-AND leaseExpiresAt not null
-AND leaseExpiresAt <= NOW
-
-expired > 0 => attention
-
-leases.missing:
-
-status = processing
-AND at least one is null:
-
-- leaseToken
-- leaseOwner
-- leaseExpiresAt
-
-Count each job once.
-
-missing > 0 => attention
-
-leases.residual:
-
-status != processing
-AND any field remains populated:
-
-- leaseToken
-- leaseOwner
-- leaseExpiresAt
-- leaseHeartbeatAt
-
-Count each job once.
-
-residual > 0 => attention
-
-reconciliation.jobs:
-
-CampaignJob status = reconcile_required
-
-reconciliation.parts:
-
-CampaignSendPart status = reconcile_required
-
-reconciliation.staleArmed:
-
-CampaignSendPart status = armed
-AND either:
-
-- armedAt IS NULL
-OR
-- armedAt <= NOW - 60 seconds
-
-Do not mutate/quarantine from monitoring endpoint.
-
-reconciliation.pausedCampaigns:
-
-Campaign status = paused_reconcile
-
-Any reconciliation anomaly > 0 => attention.
+CLEAR is permitted ONLY when required monitoring sources are
+positively available and there are no active WARNING/CRITICAL/UNKNOWN
+conditions.
 
 --------------------------------------------------
-FAILURE TRUTH
+MINIMUM INCIDENT RULES
 --------------------------------------------------
 
-All operational counts start as null.
+Use stable incident codes and deduplicate by code.
 
-Only expose numeric metrics after the complete monitoring query set
-succeeds.
+At minimum:
 
-If ANY required monitoring query fails:
+HEALTH_UNAVAILABLE
+severity: UNKNOWN
 
-- status = degraded
-- ALL queue/lease/reconciliation counts = null
+QUEUE_UNAVAILABLE
+severity: UNKNOWN
 
-No partial success metrics.
-No catch-and-return-zero.
-No `|| 0`.
+HEALTH_DEGRADED
+severity: CRITICAL
 
-Numeric zero is valid only after genuine successful queries.
+QUEUE_DEGRADED
+severity: CRITICAL
+
+OA_NOT_ACTIVE
+severity: WARNING
+
+OA_MISMATCH
+when health.oa.aligned === false
+severity: CRITICAL
+
+WORKER_STALE
+severity: WARNING
+
+WORKER_UNKNOWN
+severity: UNKNOWN
+
+EXPIRED_LEASE
+when leases.expired > 0
+severity: WARNING
+
+MISSING_LEASE
+when leases.missing > 0
+severity: WARNING
+
+RESIDUAL_LEASE
+when leases.residual > 0
+severity: WARNING
+
+RECONCILE_JOB
+when reconciliation.jobs > 0
+severity: CRITICAL
+
+RECONCILE_PART
+when reconciliation.parts > 0
+severity: CRITICAL
+
+STALE_ARMED
+when reconciliation.staleArmed > 0
+severity: CRITICAL
+
+PAUSED_RECONCILE
+when reconciliation.pausedCampaigns > 0
+severity: CRITICAL
+
+QUEUE_ACTIVITY
+when pending > 0 OR processing > 0 OR active leases > 0,
+with no implication of anomaly
+severity: INFO
+
+Positive pending/processing/active lease values alone MUST NOT
+become WARNING or CRITICAL.
 
 --------------------------------------------------
-STATUS
+FIRST SEEN / LAST SEEN
 --------------------------------------------------
 
-degraded if:
+Track active incident lifecycle in dashboard-session memory only.
 
-- active OA lookup fails
-OR
-- any required metric query fails
+For each stable incident code:
 
-attention if:
+- firstSeen is set when it first becomes active.
+- firstSeen remains unchanged while continuously active.
+- lastSeen updates whenever the incident is observed active.
+- resolved incidents disappear from the active incident list.
+- if the same incident later reappears after resolution,
+  it receives a new firstSeen.
 
-- no active OA
-OR expired > 0
-OR missing > 0
-OR residual > 0
-OR reconciliation.jobs > 0
-OR reconciliation.parts > 0
-OR staleArmed > 0
-OR pausedCampaigns > 0
+Do NOT persist incident history to database.
 
-otherwise:
+Do NOT use localStorage as authoritative operational history.
 
-healthy
+Page reload may reset First Seen / Last Seen.
 
-pending > 0 alone is NOT attention.
-
-processing > 0 alone is NOT attention.
-
-active leases > 0 alone are NOT attention.
+The UI/documentation must not imply durable incident history.
 
 --------------------------------------------------
-RESPONSE
+TRUTHFUL UI
 --------------------------------------------------
 
-Aggregate counts only.
+Show at least:
 
-Equivalent structure:
+- Overall severity
+- Active incident count
+- Incident title/message
+- Severity
+- Current value/count where relevant
+- First Seen
+- Last Seen
 
-{
-  success,
-  status,
-  oa: {
-    active
-  },
-  queue: {
-    pending,
-    processing
-  },
-  leases: {
-    active,
-    expired,
-    missing,
-    residual
-  },
-  reconciliation: {
-    jobs,
-    parts,
-    staleArmed,
-    pausedCampaigns
-  },
-  checkedAt
-}
-
-Do NOT expose:
+Do not expose:
 
 - botId
 - activeBotId
 - lineUserId
-- names
+- customer names
 - message content
 - campaign message/body
 - leaseToken
@@ -353,84 +259,116 @@ Do NOT expose:
 - Telegram data
 - credentials/secrets
 
---------------------------------------------------
-DASHBOARD
---------------------------------------------------
-
-Compact monitoring for:
-
-- Pending
-- Processing
-- Active Lease
-- Expired Lease
-- Missing Lease
-- Residual Lease
-- Reconcile Jobs
-- Reconcile Parts
-- Stale Armed
-- Paused Reconcile
-
-Rules:
-
-numeric zero => 0
-
-positive anomaly => visible warning
-
-null/unavailable => ? Unknown
-
-network/API failure => ? Unknown
-
-unknown must never render green
-
-pending/processing/active lease positive values are informational
-
-Polling: 6000ms consistent with MON-WP001.
-
-No write/retry/reset/reconcile controls.
+No operator-action buttons in MON-WP003 V1.
 
 --------------------------------------------------
-TESTS (317/317 PASS)
+VALIDATION
 --------------------------------------------------
 
-Covered:
+Because implementation is dashboard-only, do not introduce a new
+test framework or dependency.
 
-- loopback accepted
-- non-loopback forbidden
-- no active OA
-- no cross-OA aggregation
-- OA lookup failure
-- all-zero success = healthy
-- pending alone remains healthy
-- processing + active lease remains healthy
-- expired lease
-- missing lease
-- one job with multiple missing fields counted once
-- residual lease
-- reconcile job
-- reconcile part
-- stale armed >=60 seconds
-- recent armed <60 seconds not stale
-- null armedAt stale
-- paused_reconcile
-- any metric failure => all null/degraded
-- privacy/secret exclusion
-- no write/mutation
-- active OA scoping
-- no active OA does not run count queries
+Create a temporary LOCAL validation harness outside the repository
+or in the OS temporary directory.
 
-Local tests labeled:
+The harness must evaluate/test the ACTUAL incident derivation logic
+from index.html, not a separately rewritten copy of the rules.
+
+A recommended approach is to place clear sentinel comments around a
+pure incident-derivation function in index.html, extract that exact
+function into a temporary Node VM test harness, and run fixtures.
+
+Cover at minimum:
+
+1. all monitoring healthy => CLEAR
+2. health unavailable => UNKNOWN
+3. queue unavailable => UNKNOWN
+4. health degraded => CRITICAL
+5. queue degraded => CRITICAL
+6. OA mismatch => CRITICAL
+7. worker stale => WARNING
+8. worker unknown => UNKNOWN
+9. expired lease => WARNING
+10. missing lease => WARNING
+11. residual lease => WARNING
+12. reconcile job => CRITICAL
+13. reconcile part => CRITICAL
+14. stale armed => CRITICAL
+15. paused reconcile => CRITICAL
+16. queue activity alone => INFO, not WARNING
+17. severity precedence CRITICAL > WARNING > UNKNOWN > INFO
+18. continuously active incident keeps same firstSeen
+19. lastSeen advances
+20. resolved incident disappears
+21. reappearing resolved incident gets new firstSeen
+22. failed monitoring response cannot reuse stale known-good zero
+23. no secret/PII fields are rendered
+
+Also run:
+
+npm test -- --runInBand
+
+Expected existing suite baseline is 317 tests, but record the
+ACTUAL result rather than hard-coding success.
+
+All local validation must be labeled:
 LOCAL REPORTED evidence
 
-No GitHub CI/status/workflow evidence.
+Do not claim GitHub CI unless independently present.
+
+No Live LINE UAT.
 
 --------------------------------------------------
-CLOSURE STATUS
+AFTER IMPLEMENTATION
 --------------------------------------------------
 
-TASK_ID: MON-WP002-CLOSE
-STATUS: CLOSED_PASS
-ACCEPTED_REVIEW_HEAD: 5b34269397afbd9046610c366d9f0c27bf3d5532
-ACCEPTED_REVIEW_RESULT: PASS
+Set gate status:
 
-NEXT_TASK: NONE
-NEXT_TASK_STATUS: AWAITING_OWNER_DIRECTION
+READY_FOR_CHATGPT_REVIEW
+
+Supporting docs must show:
+
+ACTIVE_WORK_PACKAGE: MON-WP003
+MON-WP001: CLOSED / PASS
+MON-WP002: CLOSED / PASS
+MON-WP003: READY_FOR_CHATGPT_REVIEW
+PHASE_0: CLOSED / PASS
+PHASE_1: IN PROGRESS
+NEXT_CANDIDATE: NONE
+NEXT_CANDIDATE_STATUS: PENDING_REVIEW
+
+Record:
+
+- code baseline
+- exact changed files
+- dashboard-only implementation
+- Worker 28.16 unchanged
+- Required Worker 28.16 unchanged
+- Runtime Contract 2 unchanged
+- zero LINE activity
+- zero Telegram activity
+- local focused validation result
+- full test-suite actual result
+
+Commit implementation as:
+
+ops: add incident visibility dashboard
+
+Push origin main.
+
+Fetch origin.
+
+Prove:
+
+- HEAD
+- origin/main
+- HEAD == origin/main
+- clean working tree
+- exact changed files
+
+STOP.
+
+Do not close MON-WP003 yourself.
+Do not close Phase 1.
+Do not start Phase 2.
+Do not start another work package.

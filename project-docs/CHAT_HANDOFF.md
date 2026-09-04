@@ -22,14 +22,15 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **ACTIVE_WORK_PACKAGE**: `MON-WP003`
+* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
+* **MON-WP003 — Alerts / Incident Visibility**: `AUTHORIZED_FOR_EXECUTION`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -135,14 +136,24 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
   - Live LINE UAT: None required/performed (observability endpoints remain read-only)
   - Safety Invariant: Never automatically resend ambiguous physical sends
 
+## Authorized MON-WP003 Alerts / Incident Visibility Gate Summary
+
+- **Task**: MON-WP003 (Dashboard V1)
+- **Status**: AUTHORIZED_FOR_EXECUTION
+- **Implementation Scope**: `index.html` ONLY (Dashboard-only incident visibility consuming `/api/ops/health` and `/api/ops/queue`).
+- **Prohibited**: `src/**`, `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), LINE/Telegram send, DB mutation.
+- **Polling**: Reuses existing 6000ms monitoring poll; no duplicate loops.
+- **Incident Lifecycle**: In-memory `firstSeen`/`lastSeen` per dashboard session; no DB/localStorage persistence.
+
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **ACTIVE_WORK_PACKAGE**: `MON-WP003`
+* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
 * **MON-WP001**: `CLOSED / PASS`
 * **MON-WP001-R1**: `CLOSED / PASS`
 * **MON-WP002**: `CLOSED / PASS`
+* **MON-WP003**: `AUTHORIZED_FOR_EXECUTION`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
-Awaiting project owner direction for next work package. Do not start any task without explicit authorization.
+MON-WP003 execution gate installed. Awaiting fresh new run to begin implementation per control lifecycle.

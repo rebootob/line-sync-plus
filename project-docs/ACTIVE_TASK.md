@@ -1,19 +1,22 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: NONE
-STATUS: STANDBY
+ACTIVE_WORK_PACKAGE: MON-WP003
+STATUS: AUTHORIZED_FOR_EXECUTION
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_OWNER_DIRECTION
 PHASE_0: CLOSED / PASS
 PHASE_1: IN PROGRESS
+MON-WP001: CLOSED / PASS
+MON-WP002: CLOSED / PASS
+MON-WP003: AUTHORIZED_FOR_EXECUTION
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
+- **MON-WP003 — Alerts / Incident Visibility**: `AUTHORIZED_FOR_EXECUTION`
 - **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 - **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
   - **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
@@ -370,13 +373,28 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
+## 🚨 MON-WP003 — Alerts / Incident Visibility (STATUS: AUTHORIZED_FOR_EXECUTION)
+
+> [!IMPORTANT]
+> **Boundary & Invariants**:
+> - **Scope**: Dashboard-only incident visibility (V1). Read-only consumption of `/api/ops/health` and `/api/ops/queue`.
+> - **Zero Backend Changes**: No new endpoints, no modifications to `src/**`.
+> - **Worker**: `run/LineSyncApp.js` is UNTOUCHED. Worker remains v28.16, Required Worker remains 28.16, Runtime Contract remains 2.
+> - **Security & Privacy**: Zero token leakage (`leaseToken`, `dispatchToken`), zero Telegram secrets, zero cookie/PII/message content exposure.
+> - **No Polling Overhead**: Reuses existing 6000ms monitoring cycle; zero duplicated polling loops.
+> - **Incident Lifecycle**: Session-memory only (in-memory `firstSeen` and `lastSeen`); no DB or localStorage persistence.
+> - **Zero Side-Effects**: Read-only visualization; zero recovery, zero mutation, zero resend, zero auto-reconciliation, zero action buttons.
+
+---
+
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `NONE`
+- **Active Work Package**: `MON-WP003`
+- **Status**: `AUTHORIZED_FOR_EXECUTION`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `IN PROGRESS`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`
 - **MON-WP002 Status**: `CLOSED / PASS`
+- **MON-WP003 Status**: `AUTHORIZED_FOR_EXECUTION`
 - **Next Candidate**: `NONE`
-- **Next Candidate Status**: `AWAITING_OWNER_DIRECTION`
