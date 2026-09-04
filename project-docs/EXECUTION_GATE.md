@@ -1,18 +1,18 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 5
+CONTROL_VERSION: 6
 
 TASK_ID:
-P2-WP001-R1
+P2-WP001-CLOSE
 
 TITLE:
-Fail-Closed scheduledAt Type Validation
+Close P2-WP001 Campaign Authoring Contract
 
 STATUS:
-READY_FOR_CHATGPT_REVIEW
+CLOSED_PASS
 
-CODE_BASELINE_HEAD:
-f8b18700ac51120d42ac717514a659a2ccb97e09
+ACCEPTED_FINAL_HEAD:
+37b078de425e2fd3267652e142d76959f408c701
 
 AUTHORIZED_BY:
 Project Owner
@@ -31,187 +31,84 @@ PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: IN PROGRESS
 PHASE_2_TITLE: Campaign Builder v2
-P2-WP001: PENDING_CORRECTIVE_ACCEPTANCE
-ACTIVE_WORK_PACKAGE: P2-WP001-R1
-P2-WP001-R1: READY_FOR_CHATGPT_REVIEW
-NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: PENDING_CORRECTIVE_REVIEW
+P2_WP001_RESULT: CLOSED_PASS
+P2_WP001_R1_RESULT: CLOSED_PASS
+ACTIVE_WORK_PACKAGE: NONE
+NEXT_TASK: NONE
+NEXT_TASK_STATUS: AWAITING_OWNER_DIRECTION
 
 --------------------------------------------------
 OBJECTIVE
 --------------------------------------------------
 
-Harden POST /api/campaign/add scheduledAt type validation to fail closed
-when scheduledAt is present with a non-string value (such as number, boolean,
-object, array, or explicit null), preventing silent fallback to an immediate send.
+Formally close P2-WP001 — Campaign Authoring Contract & OA Isolation and corrective P2-WP001-R1 — Fail-Closed scheduledAt Type Validation following independent ChatGPT review PASS and explicit Project Owner approval.
 
 --------------------------------------------------
-AUTHORIZED IMPLEMENTATION FILES
+ACCEPTED IMPLEMENTATION SUMMARY
 --------------------------------------------------
 
-- src/app.controller.ts
-- src/app.controller.spec.ts
+P2-WP001 original implementation baseline f8b18700ac51120d42ac717514a659a2ccb97e09 provided:
+- Authoritative server-side messageType contract (text, text_link, image_only, image_link, link_only).
+- Protocol-restricted URL validation (HTTP/HTTPS only).
+- Prohibited content combinations fail closed (HTTP 400).
+- Active-OA isolated campaign reads (/campaigns, /campaigns/templates, /campaigns/scheduled, /campaigns/:id).
+- Active-OA isolated campaign mutations (/campaign/pause, /campaign/resume, /campaign/reschedule).
+- State-safe pause/resume/reschedule transitions.
+- Frontend payload hardening & ISO datetime normalization before submit.
 
-Supporting docs after implementation:
-
-- project-docs/EXECUTION_GATE.md
-- project-docs/ACTIVE_TASK.md
-- project-docs/CHAT_HANDOFF.md
-- project-docs/CURRENT_STATE.md
-- project-docs/PROJECT_STATUS_ROADMAP.md
-
-Explicitly DO NOT modify index.html.
-
---------------------------------------------------
-PROHIBITED
---------------------------------------------------
-
-- index.html
-- run/**
-- Worker changes
-- runtime-version.ts changes
-- entities/**
-- DB schema/migrations
-- campaign send-plan changes
-- ARM/CONFIRM changes
-- send ledger changes
-- lease/reconciliation behavior changes
-- LINE DOM/send behavior
-- Telegram behavior
-- any non-authorized file
-
-Worker remains:
-28.16
-
-Required Worker remains:
-28.16
-
-Runtime Contract remains:
-2
+Corrective P2-WP001-R1 baseline 37b078de425e2fd3267652e142d76959f408c701 additionally guarantees:
+- scheduledAt absent => immediate allowed.
+- blank/whitespace string => immediate allowed.
+- supplied number => reject (HTTP 400).
+- supplied boolean => reject (HTTP 400).
+- supplied object => reject (HTTP 400).
+- supplied array => reject (HTTP 400).
+- explicit null => reject (HTTP 400).
+- malformed non-empty datetime => reject (HTTP 400).
+- past/current datetime => reject (HTTP 400).
+- valid future datetime => status scheduled.
+- Never silently convert invalid supplied scheduledAt into an immediate campaign.
 
 --------------------------------------------------
-REQUIRED CORRECTIVE CONTRACT
+ACCEPTED VALIDATION EVIDENCE
 --------------------------------------------------
 
-For POST /api/campaign/add:
-
-A) scheduledAt PROPERTY ABSENT
-=> immediate/pending campaign allowed.
-
-B) scheduledAt == "" or whitespace-only STRING
-=> immediate/pending campaign allowed.
-
-C) scheduledAt PROPERTY PRESENT with NON-STRING value
-=> HTTP 400 / fail closed.
-Includes at minimum:
-- number
-- boolean
-- object
-- array
-- null
-
-D) scheduledAt is non-empty STRING but invalid datetime
-=> HTTP 400.
-
-E) scheduledAt is valid but <= current time
-=> HTTP 400.
-
-F) scheduledAt is valid future datetime
-=> campaign status scheduled.
-
-Do not stringify or coerce non-string values.
-Do not silently fall back to pending.
-Do not change frontend behavior.
+Final LOCAL REPORTED evidence:
+- npm test -- --runInBand: PASS (370 / 370 tests)
+- npm run build: PASS (nest build completed with 0 errors)
+- git diff --check: PASS (0 whitespace errors)
+- GitHub CI: NONE / no status checks independently observed
+- Live LINE UAT: NOT PERFORMED / NOT REQUIRED for P2-WP001 / R1
 
 --------------------------------------------------
-TESTS
+VERSION & SAFETY TRUTH
 --------------------------------------------------
 
-Add focused Jest coverage at minimum:
+- Worker Version: 28.16 (UNTOUCHED)
+- Required Worker Version: 28.16
+- Runtime Contract Version: 2
 
-1. scheduledAt property absent => pending accepted
-2. blank string => pending accepted
-3. whitespace string => pending accepted
-4. number => HTTP 400
-5. boolean => HTTP 400
-6. object => HTTP 400
-7. array => HTTP 400
-8. explicit null => HTTP 400
-9. malformed non-empty string => HTTP 400
-10. past/current valid datetime => HTTP 400
-11. future valid datetime => scheduled accepted
+Safety Invariants Maintained:
+- Wrong-recipient fencing
+- Recipient verification
+- Active OA isolation
+- Single-worker / multi-tab fencing
+- Account protection
+- Durable leases & active heartbeat loop
+- Pre-send lease renewal fencing
+- ARM / CONFIRM send-part ledger
+- Ambiguity quarantine
+- Reconciliation fencing
 
-Also preserve all existing P2-WP001 tests.
-
-Run:
-
-npm test -- --runInBand
-npm run build
-git diff --check
-
-Record ACTUAL results as LOCAL REPORTED evidence:
-
-- `npm test -- --runInBand`: PASS
-  - Test Suites: 1 passed, 1 total
-  - Tests: 370 passed, 370 total (359 existing + 11 new P2-WP001-R1 tests)
-  - Snapshots: 0 total
-  - Time: 2.85 s
-- `npm run build`: PASS (nest build completed with 0 errors)
-- `git diff --check`: PASS (0 whitespace errors)
+Permanent policy:
+- Never automatically resend an ambiguous physical send.
+- True exactly-once physical LINE delivery is not guaranteed.
 
 --------------------------------------------------
-UAT
+NEXT CANDIDATE
 --------------------------------------------------
 
-NO LIVE LINE SEND UAT required for P2-WP001-R1.
+NEXT_CANDIDATE: NONE
+NEXT_CANDIDATE_STATUS: AWAITING_OWNER_DIRECTION
 
---------------------------------------------------
-COMPLETION STATE
---------------------------------------------------
-
-After implementation:
-
-P2-WP001-R1:
-READY_FOR_CHATGPT_REVIEW
-
-P2-WP001:
-PENDING_CORRECTIVE_ACCEPTANCE
-
-PHASE_2:
-IN PROGRESS
-
-ACTIVE_WORK_PACKAGE:
-P2-WP001-R1
-
-NEXT_CANDIDATE:
-NONE
-
-Worker:
-28.16
-
-Required Worker:
-28.16
-
-Runtime Contract:
-2
-
-Commit implementation as:
-
-fix: fail closed on invalid scheduledAt types
-
-Push origin main.
-Fetch origin.
-
-Prove:
-
-- HEAD
-- origin/main
-- HEAD == origin/main
-- clean working tree
-- exact changed-file list
-
-STOP.
-
-Do not close P2-WP001 or P2-WP001-R1 yourself.
-Do not start P2-WP002.
-Do not perform Live LINE sends.
+Do NOT install or execute P2-WP002 until authorized by Project Owner / Control Plane.

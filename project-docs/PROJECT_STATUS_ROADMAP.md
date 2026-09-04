@@ -254,8 +254,8 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `MON-WP003 — Alerts / Incident Visibility`: **CLOSED / PASS**
   - *Backup / Recovery / Retention*: **DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE** (OPS-WP002 not authorized)
 - **Phase 2 — Campaign Builder v2**: **IN PROGRESS**
-  - `P2-WP001-R1 — Fail-Closed scheduledAt Type Validation Corrective`: **READY_FOR_CHATGPT_REVIEW**
-  - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **PENDING_CORRECTIVE_ACCEPTANCE**
+  - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **CLOSED / PASS**
+  - `P2-WP001-R1 — Fail-Closed scheduledAt Type Validation Corrective`: **CLOSED / PASS**
   - Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -275,10 +275,11 @@ Over the course of safety hardening, 26 work packages were identified, implement
 Phase 0 Foundation is **CLOSED / PASS**.
 Phase 1 (Operations & Monitoring) is **CLOSED / PASS**.
 Phase 2 (Campaign Builder v2) is **IN PROGRESS**.
-P2-WP001-R1 is **READY_FOR_CHATGPT_REVIEW** (Code Baseline HEAD: `f8b18700ac51120d42ac717514a659a2ccb97e09`).
-Active Work Package: **P2-WP001-R1**.
-Status: **READY_FOR_CHATGPT_REVIEW**.
-Next Candidate: **NONE** (Status: **PENDING_REVIEW**).
+P2-WP001 is **CLOSED / PASS** (Accepted Final HEAD: `37b078de425e2fd3267652e142d76959f408c701`).
+P2-WP001-R1 is **CLOSED / PASS**.
+Active Work Package: **NONE**.
+Status: **STANDBY**.
+Next Candidate: **NONE** (Status: **AWAITING_OWNER_DIRECTION**).
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-P2-WP001-R1 implementation complete and verified locally. Ready for independent ChatGPT review.
+P2-WP001 and corrective P2-WP001-R1 formally closed after independent ChatGPT review PASS. Awaiting Project Owner direction for next task.

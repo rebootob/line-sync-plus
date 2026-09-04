@@ -226,16 +226,14 @@
 
 ---
 
-## 🎯 Campaign Authoring Contract & OA Isolation Corrective (P2-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🎯 Campaign Authoring Contract & OA Isolation (P2-WP001 STATUS: CLOSED / PASS; P2-WP001-R1 STATUS: CLOSED / PASS)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts` - UNTOUCHED).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts` - UNTOUCHED).
-- **Scope**: Fail-Closed `scheduledAt` Type Validation. Reject non-string `scheduledAt` types with HTTP 400.
-- **Code Baseline HEAD**: `f8b18700ac51120d42ac717514a659a2ccb97e09`.
-- **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts`.
-- **Prohibited**: `index.html`, `run/**`, Worker version, `runtime-version.ts`, `entities/**`, database/schema, send plans, ledger/ARM/CONFIRM, LINE send logic, lease/reconciliation, Telegram.
-- **Testing & Safety**: 11 new focused P2-WP001-R1 Jest tests, full test suite 370/370 PASS (`npm test -- --runInBand`), `npm run build` PASS (0 errors), `git diff --check` PASS (0 errors). Zero Live LINE sends.
+- **Scope**: Phase 2 Campaign Builder v2. Server-side authoritative campaign authoring contract, active OA isolation, and fail-closed `scheduledAt` type validation.
+- **Accepted Review Baseline HEAD**: `37b078de425e2fd3267652e142d76959f408c701`.
+- **Testing & Safety**: 370 passing local unit tests (`npm test -- --runInBand`), `npm run build` PASS (0 errors), `git diff --check` PASS (0 errors). Zero Live LINE sends.
 
 ---
 
@@ -244,12 +242,12 @@
 - **Phase 0 Status**: `CLOSED / PASS`.
 - **Phase 1 Status**: `CLOSED / PASS`.
 - **Phase 2 Status**: `IN PROGRESS`.
-- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003` (`CLOSED / PASS`).
-- **Active Work Package**: `P2-WP001-R1`.
-- **Status**: `READY_FOR_CHATGPT_REVIEW`.
+- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003`, `P2-WP001`, `P2-WP001-R1` (`CLOSED / PASS`).
+- **Active Work Package**: `NONE`.
+- **Status**: `STANDBY`.
 - **Work Package Status**:
-  - `P2-WP001-R1`: `READY_FOR_CHATGPT_REVIEW`.
-  - `P2-WP001`: `PENDING_CORRECTIVE_ACCEPTANCE`.
+  - `P2-WP001`: `CLOSED / PASS`.
+  - `P2-WP001-R1`: `CLOSED / PASS`.
   - `MON-WP001`: `CLOSED / PASS`.
   - `MON-WP001-R1`: `CLOSED / PASS`.
   - `MON-WP002`: `CLOSED / PASS`.
@@ -263,4 +261,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `NONE` (Status: `PENDING_REVIEW`).
+- **Next Candidate**: `NONE` (Status: `AWAITING_OWNER_DIRECTION`).
