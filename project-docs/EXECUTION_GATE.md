@@ -1,24 +1,27 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 9
+CONTROL_VERSION: 10
 
 TASK_ID:
-P2-WP002-R1
+P2-WP002-R2
 
 TITLE:
-Stale Preview Race & OA Template Cache Fencing
+Non-Destructive Stale Response Discard
 
 STATUS:
-READY_FOR_CHATGPT_REVIEW
+CORRECTIVE_AUTHORIZED
 
 CODE_BASELINE_HEAD:
-8cbf7d64f9ca13bf73013aea38690541e721a6fb
+819dc422ef7e41d322eca93ff5a8daf3adf5ecab
 
 PARENT_TASK:
 P2-WP002
 
+PREVIOUS_CORRECTIVE:
+P2-WP002-R1
+
 PARENT_TASK_STATUS:
-PENDING_CORRECTIVE_ACCEPTANCE
+CORRECTIVE_REQUIRED
 
 AUTHORIZED_BY:
 Project Owner
@@ -39,24 +42,36 @@ PHASE_2: IN PROGRESS
 PHASE_2_TITLE: Campaign Builder v2
 P2-WP001: CLOSED / PASS
 P2-WP001-R1: CLOSED / PASS
-P2-WP002: PENDING_CORRECTIVE_ACCEPTANCE
-ACTIVE_WORK_PACKAGE: P2-WP002-R1
-P2-WP002-R1: READY_FOR_CHATGPT_REVIEW
+P2-WP002: CORRECTIVE_REQUIRED
+P2-WP002-R1: CORRECTIVE_REQUIRED / SUPERSEDED_BY_R2
+P2-WP002-R2: CORRECTIVE_AUTHORIZED
+ACTIVE_WORK_PACKAGE: P2-WP002-R2
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: PENDING_REVIEW
+NEXT_CANDIDATE_STATUS: PENDING_CORRECTIVE_REVIEW
 
 --------------------------------------------------
 OBJECTIVE
 --------------------------------------------------
 
-Corrective P2-WP002-R1 addresses frontend preview race conditions and OA template cache fencing identified during independent ChatGPT review of P2-WP002 implementation at HEAD 8cbf7d64f9ca13bf73013aea38690541e721a6fb.
+Corrective P2-WP002-R2 addresses two remaining frontend race/fencing defects identified during independent ChatGPT review of P2-WP002-R1 at HEAD 819dc422ef7e41d322eca93ff5a8daf3adf5ecab:
+1. Destructive stale preview response handling (stale preview response calling invalidateCampaignPreview() and destroying a newer active preview).
+2. Destructive stale template response/error handling (stale template request/error calling clearCampaignTemplateState() and erasing active templates).
 
-Review Results:
-- Backend preview contract: PASS
-- Safe template DTO: PASS
-- Scope / Worker safety: PASS
-- Frontend preview consistency: BLOCK
-- OA template cache isolation: BLOCK
+--------------------------------------------------
+ACCEPTED R1 WORK — DO NOT REOPEN
+--------------------------------------------------
+
+The following R1 changes are accepted and must remain:
+- requestSnapshot captured before preview fetch
+- previewRequestGeneration exists
+- templateRequestGeneration exists
+- successful preview stores requestSnapshot
+- OA identity comparison exists
+- clearCampaignTemplateState() exists
+- template UI uses safe DOM / textContent
+- OA switch clears template state
+- existing submit snapshot fence remains
+- backend P2-WP002 remains untouched
 
 --------------------------------------------------
 AUTHORIZED IMPLEMENTATION FILES
@@ -97,105 +112,72 @@ DO NOT modify:
 - P2-WP003
 - unrelated dashboard areas
 
-Do NOT change accepted preview payload semantics.
-Do NOT change message-type validation contract.
-
 --------------------------------------------------
-BLOCKER 1: STALE PREVIEW RESPONSE RACE
+BLOCKER 1: STALE PREVIEW RESPONSE MUST BE NON-DESTRUCTIVE
 --------------------------------------------------
 
-When generateCampaignPreview() begins:
-Capture an immutable request snapshot BEFORE fetch (`requestSnapshot = getAuthoringSnapshot()`).
-Use request sequencing / request identity (monotonic generation ID / nonce, e.g. `previewRequestGeneration += 1`).
+An async preview response that is stale (due to generation mismatch, OA change, or authoring snapshot mismatch) MUST return immediately with ZERO mutation of current preview state or UI.
+Specifically, it MUST NOT:
+- call invalidateCampaignPreview()
+- increment generation
+- clear currentPreviewSnapshot
+- disable a newer valid Confirm button
+- clear newer Preview UI
+- show an error alert belonging to an obsolete request
 
-On preview invalidation:
-Advance/cancel the current generation or otherwise ensure any outstanding response becomes stale.
+Only after proving that the response belongs to the CURRENT request may current-request API failure invalidate/report failure.
 
-After fetch returns successfully, BEFORE rendering or enabling Confirm:
-Verify ALL:
-1. response belongs to latest preview request generation
-2. current authoring snapshot === requestSnapshot
-3. active OA is still the OA captured in requestSnapshot/request context
-4. preview has not been invalidated since request started
-
-If ANY condition fails:
-- discard response
-- do not render response
-- do not enable Confirm
-- do not set currentPreviewSnapshot
-
-On accepted response:
-- currentPreviewSnapshot MUST be set to requestSnapshot (NOT getAuthoringSnapshot() evaluated after response).
-
-Multiple preview request race:
-Only the newest valid request may render preview, set successful preview snapshot, or enable Confirm Create. Response A returning after response B must NOT overwrite Preview B.
-
-OA change during preview:
-If active OA changes while preview request is outstanding, old OA response MUST be ignored.
+Preview Error Ordering:
+1. fetch response
+2. parse response safely
+3. determine whether this request is still current
+4. if stale -> return with ZERO UI/global-state mutation
+5. if current but API failed -> invalidate current preview + show error
+6. if current and success -> render and set requestSnapshot
 
 --------------------------------------------------
-BLOCKER 2: OA TEMPLATE CACHE / LATE RESPONSE FENCING
+BLOCKER 2: STALE TEMPLATE FAILURE MUST BE NON-DESTRUCTIVE
 --------------------------------------------------
 
-Create frontend helper `clearCampaignTemplateState()` to safely:
-- set `campaignTemplates = []`
-- clear templateReuseSelect options
-- restore safe default placeholder option
-- clear selected template
-- never retain previous OA campaign-controlled content
+After template fetch returns, BEFORE ANY UI/cache mutation caused by that response:
+verify:
+- reqBotId === currentActiveBotId
+- reqGen === templateRequestGeneration
 
-Use safe DOM APIs: replaceChildren(), createElement(), textContent. No campaign-controlled innerHTML.
+If not:
+RETURN with zero mutation.
 
-OA Change Requirement:
-On successful OA switch, BEFORE loading data/templates for new OA:
-- clear template cache
-- clear template selection/options
-- invalidate preview
-Then load new OA data.
+This guard applies to:
+- success responses
+- HTTP error responses
+- malformed response data
+- JSON parse errors where request identity can still be evaluated
+- catch/error handling
 
-Template Fetch Failure:
-At beginning of template load: capture requested OA identity.
-If request fails:
-- `campaignTemplates = []`
-- clear dropdown
-- show safe default/manual-create option
-- do NOT retain old OA templates
-- manual campaign authoring remains usable
-
-Late Template Response Race:
-Before applying returned templates verify:
-- requested OA still equals currentActiveBotId
-- request is still the latest template request
-Otherwise discard result.
-
-Template Selection:
-Template selection must copy only: messageType, message, imageUrl, linkUrl. Must still invalidate preview.
-
-Submit Fence:
-Preserve existing pre-submit fence: current authoring snapshot must equal successful-preview snapshot.
+Only the CURRENT template request may clear campaignTemplates, reset dropdown, display returned templates, replace options, or react to HTTP failure. A stale template request must never clear or alter currently displayed templates.
 
 --------------------------------------------------
-EXACT REQUIRED TEST SCENARIOS
+BEHAVIORAL TEST REQUIREMENTS
 --------------------------------------------------
 
-Add focused tests in src/app.controller.spec.ts:
-1. preview request captures snapshot BEFORE fetch response
-2. form edit during in-flight preview causes old response to be discarded
-3. stale response cannot re-enable Confirm
-4. two preview requests resolving out of order keep only newest result
-5. OA switch during in-flight preview discards previous-OA response
-6. OA switch clears campaignTemplates
-7. OA switch clears/reset template dropdown
-8. template fetch failure clears cache and stale options
-9. template fetch failure still leaves safe default/manual-create option
-10. old OA template response arriving after OA switch is discarded
-11. template response applies only when requested OA == currentActiveBotId
-12. template request generation prevents older response overwriting newer
-13. template DOM still uses textContent / safe DOM
-14. template selection still invalidates preview
-15. submit still blocks when current state != successful-preview snapshot
-
-Preserve all existing tests.
+Add focused control-flow tests in src/app.controller.spec.ts:
+1. stale Preview branch returns BEFORE invalidateCampaignPreview()
+2. stale Preview response cannot clear currentPreviewSnapshot
+3. stale Preview response cannot disable Confirm belonging to newer Preview
+4. A/B out-of-order Preview: B accepted, then A stale -> B state remains authoritative
+5. current Preview API failure still invalidates current Preview
+6. current Preview API failure still shows error
+7. Preview API failure logic is reachable after current-request validation
+8. stale template response checks generation/OA before !res.ok mutation
+9. stale template HTTP 500 cannot call clearCampaignTemplateState()
+10. OA-A stale failure cannot erase OA-B templates
+11. older same-OA request failure cannot erase newer same-OA success
+12. current template HTTP failure still clears current template state
+13. stale template catch/error branch performs zero mutation
+14. current template catch/error branch clears safely
+15. successful current template response still renders safe DOM
+16. existing submit snapshot fence remains
+17. existing template selection invalidation remains
 
 --------------------------------------------------
 VERIFICATION & UAT
@@ -212,4 +194,4 @@ Master Bot remains PAUSED. Zero physical LINE sends.
 Worker: 28.16 | Required Worker: 28.16 | Runtime Contract: 2
 
 Expected implementation commit:
-fix: fence stale campaign preview and template responses
+fix: discard stale campaign responses non-destructively
