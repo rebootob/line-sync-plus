@@ -1,6 +1,6 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-03 (Post REL-WP002 Implementation)
+**Last Updated**: 2026-09-04 (Post REL-WP003 Closure / Phase 0 Closure)
 
 ---
 
@@ -98,7 +98,7 @@
 - **SAFE-WP001 Accepted Live UAT**:
   - v28.11 send run
   - v28.12 telemetry heartbeat closure
-- Current Worker v28.15 preserves the accepted SAFE-WP001 protection contract (fail-closed storage, rate limits of 10s gap, 60/10m, 300/1h, exact timestamp reservation, and telemetry heartbeat).
+- Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract (fail-closed storage, rate limits of 10s gap, 60/10m, 300/1h, exact timestamp reservation, and telemetry heartbeat).
 
 ---
 
@@ -122,20 +122,26 @@
 
 ## ✅ What Currently Works (Confirmed Working & Tested)
 
-1. **Database & Entities (`PostgreSQL` / `TypeORM`)**: Composite primary key `(botId, lineUserId)` on `Customer`. Job lease schema on `CampaignJob`.
-2. **NestJS REST API (`src/app.controller.ts`)**: Atomic job claim, active job lease heartbeat, fenced finalization (`/campaign/success`, `/campaign/fail`, `/campaign/stop`).
-3. **Web Dashboard (`index.html`)**: Contract v2 badge, Required Worker v28.15.
-4. **Client Automation Userscript (`run/LineSyncApp.js` v28.15)**: Worker instance header `X-LineSync-Worker-Instance`, active job heartbeat timer, pre-send lease renewal fencing.
+1. **Database & Entities (`PostgreSQL` / `TypeORM`)**: Composite primary key `(botId, lineUserId)` on `Customer`. Job lease schema on `CampaignJob`. Send-part ledger entity `CampaignSendPart` with unique `(jobId, partKey)`.
+2. **NestJS REST API (`src/app.controller.ts`)**: Atomic job claim, active job lease heartbeat, fenced finalization (`/campaign/success`, `/campaign/fail`, `/campaign/stop`), queue safety pre-pass, send-part ARM+CONFIRM ledger, hard-fenced operator reconciliation.
+3. **Web Dashboard (`index.html`)**: Contract v2 badge, Required Worker v28.16, operator reconciliation view.
+4. **Client Automation Userscript (`run/LineSyncApp.js` v28.16)**: Worker instance header `X-LineSync-Worker-Instance`, active job heartbeat timer, pre-send lease renewal fencing, send-part ARM+CONFIRM ledger, zero network gap DOM dispatch.
 
 ---
 
 ## 🚀 Work Packages Overview
 
-- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002` (`CLOSED / PASS`).
+- **Phase 0 Status**: `CLOSED / PASS`.
+- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003` (`CLOSED / PASS`).
 - **Active Work Package**: `NONE`.
 - **Work Package Status**:
+  - `REL-WP003`: `CLOSED / PASS`.
+  - `REL-WP003-R1`: `CORRECTIVE REQUIRED / SUPERSEDED`.
+  - `REL-WP003-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
+  - `REL-WP003-R3A`: `CORRECTIVE REQUIRED / SUPERSEDED`.
+  - `REL-WP003-R3B`: `PASS / CLOSED`.
   - `REL-WP002`: `CLOSED / PASS`.
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `REL-WP003 — Idempotent Send Ledger / Multipart Crash Safety` (`READY / NOT STARTED / AUTHORIZATION REQUIRED`).
+- **Next Candidate**: `NONE` (Phase 1 planning only after owner authorization).

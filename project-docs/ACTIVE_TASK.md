@@ -216,17 +216,6 @@ was **NOT** performed against Live LINE OA.
 
 ---
 
-## 🛡️ REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety
-
-REL-WP003 solves the post-send crash window:
-- **`campaign_send_parts` Entity**: Durable ledger recording physical send of each message part (`partIndex: 0`, `partIndex: 1`, etc.) with composite uniqueness on `(jobId, partIndex)`.
-- **`POST /api/campaign/send-part`**: Worker-driven durable ledger recording with strict fencing (`X-LineSync-Worker-Version: 28.16`, OA context, valid worker instance, and active unexpired processing lease).
-- **`POST /api/campaign/reconcile`**: Crash reconciliation endpoint checking whether a job was already fully or partially sent.
-- **Multipart Skip & Fast Finalization**: In `executeChatBot`, already-sent parts are skipped per ledger. In `resumeSavedActiveJob`, fully-sent jobs finalize immediately without re-sending. In `getNextJob`, fully-sent expired jobs auto-reconcile to `success`.
-- **Validation**: 254/254 unit tests pass cleanly.
-
----
-
 ## 📜 Accepted Live UAT Evidence (SAFE-WP001)
 
 SAFE-WP001 accepted Live UAT:
@@ -239,5 +228,6 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ## 🚀 Next Candidate Work Package
 
-- **Candidate**: `NONE`
-- **Status**: `COMPLETE`
+- **Active Work Package**: `NONE`
+- **Phase 0 Status**: `CLOSED / PASS`
+- **Next Candidate**: `NONE` (Phase 1 planning only after owner authorization)
