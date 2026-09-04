@@ -2,7 +2,7 @@
 
 ```yaml
 ACTIVE_WORK_PACKAGE: P2-WP002
-STATUS: AUTHORIZED_FOR_EXECUTION
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: PENDING_REVIEW
@@ -12,14 +12,14 @@ PHASE_2: IN PROGRESS
 PHASE_2_TITLE: Campaign Builder v2
 P2-WP001: CLOSED / PASS
 P2-WP001-R1: CLOSED / PASS
-P2-WP002: AUTHORIZED_FOR_EXECUTION
+P2-WP002: READY_FOR_CHATGPT_REVIEW
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
-- **P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2**: `AUTHORIZED_FOR_EXECUTION`
+- **P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2**: `READY_FOR_CHATGPT_REVIEW`
 - **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `CLOSED / PASS`
 - **P2-WP001-R1 — Fail-Closed scheduledAt Type Validation**: `CLOSED / PASS`
 - **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`

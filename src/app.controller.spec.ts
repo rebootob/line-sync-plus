@@ -5088,7 +5088,6 @@ describe('AppController', () => {
       await appController.getCampaignTemplates(testBotId, mockRes);
       expect(mockCampaignRepo.find).toHaveBeenCalledWith(expect.objectContaining({
         where: { botId: testBotId },
-        take: 15,
       }));
     });
 
@@ -5410,6 +5409,520 @@ describe('AppController', () => {
 
       const workerScript = fs.readFileSync('run/LineSyncApp.js', 'utf8');
       expect(workerScript).toContain("const WORKER_VERSION = '28.16';");
+    });
+
+    // ==========================================
+    // P2-WP002 Authoritative Campaign Preview & Safe Template Reuse V2 Test Suite
+    // ==========================================
+    describe('P2-WP002 Authoritative Campaign Preview & Safe Template Reuse V2', () => {
+      const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+      const foreignBotId = 'U88888888888888888888888888888888';
+
+      const createMockRes = () => {
+        const res: any = {
+          statusCode: 200,
+          status: jest.fn().mockImplementation((code) => {
+            res.statusCode = code;
+            return res;
+          }),
+        };
+        return res;
+      };
+
+      it('1. preview missing/invalid botId => reject', async () => {
+        const mockRes1 = createMockRes();
+        const res1: any = await appController.previewCampaign({ botId: '' } as any, mockRes1);
+        expect(mockRes1.statusCode).toBe(400);
+        expect(res1.success).toBe(false);
+
+        const mockRes2 = createMockRes();
+        const res2: any = await appController.previewCampaign({ botId: 'invalid-bot-id' }, mockRes2);
+        expect(mockRes2.statusCode).toBe(400);
+        expect(res2.success).toBe(false);
+      });
+
+      it('2. preview active OA mismatch => reject', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({ botId: foreignBotId }, mockRes);
+        expect(mockRes.statusCode).toBe(409);
+        expect(res.success).toBe(false);
+      });
+
+      it('3. preview no active OA => reject', async () => {
+        mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce(null);
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({ botId: testBotId }, mockRes);
+        expect(mockRes.statusCode).toBe(409);
+        expect(res.success).toBe(false);
+      });
+
+      it('4. text exact preview', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: ' Hello World ',
+        }, mockRes);
+        expect(res.success).toBe(true);
+        expect(res.normalized.message).toBe('Hello World');
+        expect(res.parts).toEqual([
+          { partKey: 'text', partOrder: 0, type: 'text', content: 'Hello World' },
+        ]);
+      });
+
+      it('5. text_link exact text composition', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text_link',
+          message: 'Check out promo',
+          linkUrl: 'https://example.com/promo',
+        }, mockRes);
+        expect(res.success).toBe(true);
+        expect(res.parts[0].content).toBe('Check out promo\n\n🔗 ดูรายละเอียดเพิ่มเติม: https://example.com/promo');
+      });
+
+      it('6. image_only exact preview', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'image_only',
+          imageUrl: 'https://example.com/img.jpg',
+        }, mockRes);
+        expect(res.success).toBe(true);
+        expect(res.parts).toEqual([
+          { partKey: 'image', partOrder: 0, type: 'image', content: 'https://example.com/img.jpg' },
+        ]);
+      });
+
+      it('7. image_link exact part order', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'image_link',
+          imageUrl: 'https://example.com/img.jpg',
+          message: 'Special Deal',
+          linkUrl: 'https://example.com/deal',
+        }, mockRes);
+        expect(res.success).toBe(true);
+        expect(res.parts.length).toBe(2);
+        expect(res.parts[0].type).toBe('image');
+        expect(res.parts[0].partOrder).toBe(0);
+        expect(res.parts[1].type).toBe('text');
+        expect(res.parts[1].partOrder).toBe(1);
+      });
+
+      it('8. image_link exact text composition', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'image_link',
+          imageUrl: 'https://example.com/img.jpg',
+          message: 'Special Deal',
+          linkUrl: 'https://example.com/deal',
+        }, mockRes);
+        expect(res.parts[1].content).toBe('Special Deal\n\n🔗 ดูรายละเอียดเพิ่มเติม: https://example.com/deal');
+      });
+
+      it('9. link_only without message', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'link_only',
+          linkUrl: 'https://example.com/link',
+        }, mockRes);
+        expect(res.success).toBe(true);
+        expect(res.parts[0].content).toBe('https://example.com/link');
+      });
+
+      it('10. link_only with message', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'link_only',
+          message: 'Visit us at',
+          linkUrl: 'https://example.com/link',
+        }, mockRes);
+        expect(res.success).toBe(true);
+        expect(res.parts[0].content).toBe('Visit us at\n\n🔗 https://example.com/link');
+      });
+
+      it('11. invalid message type', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'unsupported_type',
+        }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('12. invalid content combinations', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Text only',
+          imageUrl: 'https://example.com/prohibited.jpg',
+        }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('13. malformed URL', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'link_only',
+          linkUrl: 'not-a-valid-url',
+        }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('14. unsupported URL protocol', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'link_only',
+          linkUrl: 'javascript:alert(1)',
+        }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('15. absent scheduledAt => pending', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Hello',
+        }, mockRes);
+        expect(res.success).toBe(true);
+        expect(res.normalized.scheduledAt).toBeNull();
+        expect(res.normalized.initialStatus).toBe('pending');
+        expect(res.immediate).toBe(true);
+      });
+
+      it('16. blank scheduledAt => pending', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Hello',
+          scheduledAt: '   ',
+        }, mockRes);
+        expect(res.success).toBe(true);
+        expect(res.normalized.scheduledAt).toBeNull();
+        expect(res.immediate).toBe(true);
+      });
+
+      it('17. non-string scheduledAt => reject', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Hello',
+          scheduledAt: 123456 as any,
+        }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+        expect(res.message).toContain('scheduledAt must be a string');
+      });
+
+      it('18. explicit null scheduledAt => reject', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Hello',
+          scheduledAt: null as any,
+        }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+        expect(res.message).toContain('scheduledAt must be a string');
+      });
+
+      it('19. malformed scheduledAt => reject', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Hello',
+          scheduledAt: '2026-99-99T99:99:99',
+        }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('20. past/current scheduledAt => reject', async () => {
+        const mockRes = createMockRes();
+        const pastDate = new Date(Date.now() - 3600000).toISOString();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Hello',
+          scheduledAt: pastDate,
+        }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('21. future scheduledAt => scheduled', async () => {
+        const mockRes = createMockRes();
+        const futureDate = new Date(Date.now() + 3600000).toISOString();
+        const res: any = await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Hello',
+          scheduledAt: futureDate,
+        }, mockRes);
+        expect(res.success).toBe(true);
+        expect(res.normalized.initialStatus).toBe('scheduled');
+        expect(res.immediate).toBe(false);
+      });
+
+      it('22. preview performs zero Campaign writes', async () => {
+        mockCampaignRepo.save.mockClear();
+        mockCampaignRepo.create.mockClear();
+        const mockRes = createMockRes();
+        await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Read-only check',
+        }, mockRes);
+        expect(mockCampaignRepo.save).not.toHaveBeenCalled();
+        expect(mockCampaignRepo.create).not.toHaveBeenCalled();
+      });
+
+      it('23. preview performs zero Job writes', async () => {
+        mockCampaignJobRepo.save.mockClear();
+        mockCampaignJobRepo.create.mockClear();
+        const mockRes = createMockRes();
+        await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Read-only check',
+        }, mockRes);
+        expect(mockCampaignJobRepo.save).not.toHaveBeenCalled();
+        expect(mockCampaignJobRepo.create).not.toHaveBeenCalled();
+      });
+
+      it('24. preview performs zero SendPart writes', async () => {
+        mockCampaignSendPartRepo.save.mockClear();
+        mockCampaignSendPartRepo.create.mockClear();
+        const mockRes = createMockRes();
+        await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Read-only check',
+        }, mockRes);
+        expect(mockCampaignSendPartRepo.save).not.toHaveBeenCalled();
+        expect(mockCampaignSendPartRepo.create).not.toHaveBeenCalled();
+      });
+
+      it('25. preview performs zero Telegram sends', async () => {
+        mockTelegramService.sendCampaignReport.mockClear();
+        const mockRes = createMockRes();
+        await appController.previewCampaign({
+          botId: testBotId,
+          messageType: 'text',
+          message: 'Read-only check',
+        }, mockRes);
+        expect(mockTelegramService.sendCampaignReport).not.toHaveBeenCalled();
+      });
+
+      it('26. template request OA mismatch => reject', async () => {
+        const mockRes = createMockRes();
+        const res: any = await appController.getCampaignTemplates(foreignBotId, mockRes);
+        expect(mockRes.statusCode).toBe(409);
+        expect(res.success).toBe(false);
+      });
+
+      it('27. template repository scope is botId-specific', async () => {
+        mockCampaignRepo.find.mockClear();
+        const mockRes = createMockRes();
+        await appController.getCampaignTemplates(testBotId, mockRes);
+        expect(mockCampaignRepo.find).toHaveBeenCalledWith(expect.objectContaining({
+          where: { botId: testBotId },
+        }));
+      });
+
+      it('28. template response contains safe DTO only', async () => {
+        mockCampaignRepo.find.mockResolvedValueOnce([
+          {
+            id: 'c1',
+            botId: testBotId,
+            name: 'Safe Template',
+            messageType: 'text',
+            message: 'Hello template',
+            imageUrl: null,
+            linkUrl: null,
+            totalTargets: 10,
+            successCount: 5,
+            failedCount: 0,
+            status: 'completed',
+            createdAt: new Date('2026-09-01T10:00:00Z'),
+          },
+        ]);
+        const mockRes = createMockRes();
+        const templates: any = await appController.getCampaignTemplates(testBotId, mockRes);
+        expect(Array.isArray(templates)).toBe(true);
+        expect(templates[0]).toEqual({
+          id: 'c1',
+          name: 'Safe Template',
+          messageType: 'text',
+          message: 'Hello template',
+          imageUrl: null,
+          linkUrl: null,
+          createdAt: expect.any(Date),
+        });
+        expect(templates[0].botId).toBeUndefined();
+        expect(templates[0].totalTargets).toBeUndefined();
+        expect(templates[0].status).toBeUndefined();
+      });
+
+      it('29. invalid legacy content excluded', async () => {
+        mockCampaignRepo.find.mockResolvedValueOnce([
+          {
+            id: 'c_valid',
+            botId: testBotId,
+            name: 'Valid Camp',
+            messageType: 'text',
+            message: 'Valid Text',
+            imageUrl: null,
+            linkUrl: null,
+            createdAt: new Date(),
+          },
+          {
+            id: 'c_invalid_legacy',
+            botId: testBotId,
+            name: 'Legacy Invalid',
+            messageType: 'text',
+            message: '',
+            imageUrl: null,
+            linkUrl: null,
+            createdAt: new Date(),
+          },
+        ]);
+        const mockRes = createMockRes();
+        const templates: any = await appController.getCampaignTemplates(testBotId, mockRes);
+        expect(templates.length).toBe(1);
+        expect(templates[0].id).toBe('c_valid');
+      });
+
+      it('30. maximum 15 valid templates / newest-first', async () => {
+        const dummyCampaigns = Array.from({ length: 20 }, (_, i) => ({
+          id: `c_${i}`,
+          botId: testBotId,
+          name: `Camp ${i}`,
+          messageType: 'text',
+          message: `Msg ${i}`,
+          imageUrl: null,
+          linkUrl: null,
+          createdAt: new Date(Date.now() - i * 1000),
+        }));
+        mockCampaignRepo.find.mockResolvedValueOnce(dummyCampaigns);
+        const mockRes = createMockRes();
+        const templates: any = await appController.getCampaignTemplates(testBotId, mockRes);
+        expect(templates.length).toBe(15);
+        expect(templates[0].id).toBe('c_0');
+        expect(templates[14].id).toBe('c_14');
+      });
+
+      it('31. template options are not created from untrusted innerHTML', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain("document.createElement('option')");
+        expect(indexHtml).toContain("opt.textContent = `[${labelType}] ${nameOrMsg}`;");
+        expect(indexHtml).not.toContain("select.innerHTML = '<option value=\"\">-- พิมพ์สร้างใหม่ หรือ เลือกแคมเปญเดิมที่เคยส่ง --</option>' +");
+      });
+
+      it('32. reuse copies only authoring content fields', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain("document.getElementById('messageTypeSelect').value = template.messageType;");
+        expect(indexHtml).toContain("document.getElementById('campaignMessageInput').value = template.message");
+        expect(indexHtml).toContain("document.getElementById('campaignImageUrlInput').value = template.imageUrl");
+        expect(indexHtml).toContain("document.getElementById('campaignLinkUrlInput').value = template.linkUrl");
+      });
+
+      it('33. reuse does not copy schedule', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const applyFnCode = indexHtml.split('function applyTemplatePreset()')[1].split('}')[0];
+        expect(applyFnCode).not.toContain('campaignScheduledAtInput');
+        expect(applyFnCode).not.toContain('enableScheduleCheckbox');
+      });
+
+      it('34. successful preview enables confirm', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('currentPreviewSnapshot = getAuthoringSnapshot();');
+        expect(indexHtml).toContain("const submitBtn = document.getElementById('btnSubmitCampaign');");
+        expect(indexHtml).toContain('if (submitBtn) submitBtn.disabled = false;');
+      });
+
+      it('35. preview failure keeps confirm disabled', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('invalidateCampaignPreview();');
+        expect(indexHtml).toContain('if (submitBtn) submitBtn.disabled = true;');
+      });
+
+      it('36. editing message invalidates preview', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain("'campaignMessageInput'");
+        expect(indexHtml).toContain("addEventListener('input', invalidateCampaignPreview)");
+      });
+
+      it('37. editing URL/image/type invalidates preview', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain("'campaignImageUrlInput'");
+        expect(indexHtml).toContain("'campaignLinkUrlInput'");
+        expect(indexHtml).toContain("'messageTypeSelect'");
+      });
+
+      it('38. schedule change invalidates preview', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain("'enableScheduleCheckbox'");
+        expect(indexHtml).toContain("'campaignScheduledAtInput'");
+      });
+
+      it('39. OA change invalidates preview', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('selectedUsers.clear();');
+        expect(indexHtml).toContain('invalidateCampaignPreview();');
+      });
+
+      it('40. template selection invalidates previous preview', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const applyFnCode = indexHtml.split('function applyTemplatePreset()')[1].split('}')[0];
+        expect(applyFnCode).toContain('invalidateCampaignPreview();');
+      });
+
+      it('41. stale snapshot blocks campaign creation', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('const currentSnap = getAuthoringSnapshot();');
+        expect(indexHtml).toContain('if (!currentPreviewSnapshot || currentSnap !== currentPreviewSnapshot)');
+        expect(indexHtml).toContain('alert(\'⚠️ ข้อมูลแคมเปญมีการเปลี่ยนแปลง กรุณากด "แสดงตัวอย่าง (Preview)" อีกครั้งก่อนเริ่มส่ง\');');
+      });
+
+      it('42. preview parts render with safe text DOM handling', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain("const textPre = document.createElement('pre');");
+        expect(indexHtml).toContain('textPre.textContent = p.content;');
+      });
+
+      it('43. immediate warning exists', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('⚠️ เมื่อสร้างแล้ว Campaign จะเข้า Pending Queue ทันที และถ้า Master Bot กำลังทำงาน อาจเริ่มประมวลผลได้ทันที');
+      });
+
+      it('44. scheduled preview shows schedule', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('⏰ ตั้งเวลาส่งล่วงหน้า:');
+      });
+
+      it('45. existing /campaign/add call remains final creation action', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain("fetch(`${API_BASE}/campaign/add`,");
+      });
     });
   });
 });

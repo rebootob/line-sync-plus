@@ -641,6 +641,208 @@ export class AppController {
     }
   }
 
+  // Helper สำหรับการตรวจสอบและจัดระเบียบข้อมูลแคมเปญก่อนสร้างหรือพรีวิว (P2-WP002 Shared Contract)
+  private validateAndNormalizeCampaignContent(body: any): {
+    error?: string;
+    statusCode?: number;
+    normalized?: {
+      name: string;
+      messageType: string;
+      message: string | null;
+      imageUrl: string | null;
+      linkUrl: string | null;
+      scheduledAt: string | null;
+      initialStatus: 'pending' | 'scheduled';
+    };
+    parts?: Array<{
+      partKey: string;
+      partOrder: number;
+      type: 'text' | 'image';
+      content: string;
+    }>;
+  } {
+    if (!body) {
+      return { error: 'Request body is required', statusCode: 400 };
+    }
+
+    const rawType = body.messageType !== undefined ? (typeof body.messageType === 'string' ? body.messageType.trim() : '') : 'text';
+    const allowedTypes = ['text', 'text_link', 'image_only', 'image_link', 'link_only'];
+    if (!allowedTypes.includes(rawType)) {
+      return { error: `Invalid or unsupported messageType: ${rawType}`, statusCode: 400 };
+    }
+    const messageType = rawType;
+
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const rawMsg = typeof body.message === 'string' ? body.message.trim() : '';
+    const rawImg = typeof body.imageUrl === 'string' ? body.imageUrl.trim() : '';
+    const rawLink = typeof body.linkUrl === 'string' ? body.linkUrl.trim() : '';
+
+    let message: string | null = null;
+    let imageUrl: string | null = null;
+    let linkUrl: string | null = null;
+    const parts: Array<{ partKey: string; partOrder: number; type: 'text' | 'image'; content: string }> = [];
+
+    if (messageType === 'text') {
+      if (!rawMsg) {
+        return { error: 'Message is required for text messageType', statusCode: 400 };
+      }
+      if (rawImg !== '') {
+        return { error: 'imageUrl is prohibited for text messageType', statusCode: 400 };
+      }
+      if (rawLink !== '') {
+        return { error: 'linkUrl is prohibited for text messageType', statusCode: 400 };
+      }
+      message = rawMsg;
+      parts.push({ partKey: 'text', partOrder: 0, type: 'text', content: rawMsg });
+    } else if (messageType === 'text_link') {
+      if (!rawMsg) {
+        return { error: 'Message is required for text_link messageType', statusCode: 400 };
+      }
+      if (!rawLink) {
+        return { error: 'linkUrl is required for text_link messageType', statusCode: 400 };
+      }
+      if (!this.isValidHttpUrl(rawLink)) {
+        return { error: 'Invalid linkUrl protocol or format', statusCode: 400 };
+      }
+      if (rawImg !== '') {
+        return { error: 'imageUrl is prohibited for text_link messageType', statusCode: 400 };
+      }
+      message = rawMsg;
+      linkUrl = rawLink;
+      const textContent = `${rawMsg}\n\n🔗 ดูรายละเอียดเพิ่มเติม: ${rawLink}`;
+      parts.push({ partKey: 'text', partOrder: 0, type: 'text', content: textContent });
+    } else if (messageType === 'image_only') {
+      if (!rawImg) {
+        return { error: 'imageUrl is required for image_only messageType', statusCode: 400 };
+      }
+      if (!this.isValidHttpUrl(rawImg)) {
+        return { error: 'Invalid imageUrl protocol or format', statusCode: 400 };
+      }
+      if (rawLink !== '') {
+        return { error: 'linkUrl is prohibited for image_only messageType', statusCode: 400 };
+      }
+      imageUrl = rawImg;
+      if (rawMsg) message = rawMsg;
+      parts.push({ partKey: 'image', partOrder: 0, type: 'image', content: rawImg });
+    } else if (messageType === 'image_link') {
+      if (!rawImg) {
+        return { error: 'imageUrl is required for image_link messageType', statusCode: 400 };
+      }
+      if (!this.isValidHttpUrl(rawImg)) {
+        return { error: 'Invalid imageUrl protocol or format', statusCode: 400 };
+      }
+      if (!rawMsg) {
+        return { error: 'Message is required for image_link messageType', statusCode: 400 };
+      }
+      if (!rawLink) {
+        return { error: 'linkUrl is required for image_link messageType', statusCode: 400 };
+      }
+      if (!this.isValidHttpUrl(rawLink)) {
+        return { error: 'Invalid linkUrl protocol or format', statusCode: 400 };
+      }
+      imageUrl = rawImg;
+      message = rawMsg;
+      linkUrl = rawLink;
+      const textContent = `${rawMsg}\n\n🔗 ดูรายละเอียดเพิ่มเติม: ${rawLink}`;
+      parts.push({ partKey: 'image', partOrder: 0, type: 'image', content: rawImg });
+      parts.push({ partKey: 'text', partOrder: 1, type: 'text', content: textContent });
+    } else if (messageType === 'link_only') {
+      if (!rawLink) {
+        return { error: 'linkUrl is required for link_only messageType', statusCode: 400 };
+      }
+      if (!this.isValidHttpUrl(rawLink)) {
+        return { error: 'Invalid linkUrl protocol or format', statusCode: 400 };
+      }
+      if (rawImg !== '') {
+        return { error: 'imageUrl is prohibited for link_only messageType', statusCode: 400 };
+      }
+      linkUrl = rawLink;
+      if (rawMsg) message = rawMsg;
+
+      const textContent = rawMsg ? `${rawMsg}\n\n🔗 ${rawLink}` : rawLink;
+      parts.push({ partKey: 'text', partOrder: 0, type: 'text', content: textContent });
+    }
+
+    // 2. Schedule Contract
+    let scheduledAtIso: string | null = null;
+    let initialStatus: 'pending' | 'scheduled' = 'pending';
+
+    if ('scheduledAt' in body && body.scheduledAt !== undefined) {
+      if (typeof body.scheduledAt !== 'string') {
+        return { error: 'scheduledAt must be a string', statusCode: 400 };
+      }
+      const schedTrim = body.scheduledAt.trim();
+      if (schedTrim !== '') {
+        const parsedDate = new Date(schedTrim);
+        if (isNaN(parsedDate.getTime())) {
+          return { error: 'Invalid scheduledAt datetime', statusCode: 400 };
+        }
+        if (parsedDate.getTime() <= Date.now()) {
+          return { error: 'scheduledAt must represent a future time', statusCode: 400 };
+        }
+        scheduledAtIso = parsedDate.toISOString();
+        initialStatus = 'scheduled';
+      }
+    }
+
+    return {
+      normalized: {
+        name,
+        messageType,
+        message,
+        imageUrl,
+        linkUrl,
+        scheduledAt: scheduledAtIso,
+        initialStatus,
+      },
+      parts,
+    };
+  }
+
+  // 📌 POST /api/campaign/preview — Backend-Authoritative Outbound Payload Preview (Read-Only)
+  @Post('campaign/preview')
+  async previewCampaign(
+    @Body()
+    body: {
+      botId?: string;
+      name?: string;
+      messageType?: string;
+      message?: string;
+      imageUrl?: string;
+      linkUrl?: string;
+      scheduledAt?: string;
+    },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!body || !body.botId || typeof body.botId !== 'string' || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId parameter' };
+    }
+
+    const cleanBotId = body.botId.trim();
+
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+    }
+
+    const valResult = this.validateAndNormalizeCampaignContent(body);
+    if (valResult.error || !valResult.normalized) {
+      res.status(valResult.statusCode || HttpStatus.BAD_REQUEST);
+      return { success: false, message: valResult.error || 'Invalid campaign content' };
+    }
+
+    const { normalized, parts } = valResult;
+
+    return {
+      success: true,
+      normalized,
+      parts,
+      immediate: normalized.initialStatus === 'pending',
+    };
+  }
+
   // สร้างแคมเปญและสร้างคิวงานในฐานข้อมูล (รองรับ Scheduled Time & Multi-type & OA Ownership)
   @Post('campaign/add')
   async addCampaign(
@@ -657,7 +859,7 @@ export class AppController {
     },
     @Res({ passthrough: true }) res: Response,
   ) {
-    if (!body || !body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+    if (!body || !body.botId || typeof body.botId !== 'string' || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
       res.status(HttpStatus.BAD_REQUEST);
       return { success: false, message: 'Missing or invalid botId parameter' };
     }
@@ -671,122 +873,19 @@ export class AppController {
       return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
     }
 
-    // 1. Authoritative Message Type Contract
-    const rawType = body.messageType !== undefined ? (typeof body.messageType === 'string' ? body.messageType.trim() : '') : 'text';
-    const allowedTypes = ['text', 'text_link', 'image_only', 'image_link', 'link_only'];
-    if (!allowedTypes.includes(rawType)) {
-      res.status(HttpStatus.BAD_REQUEST);
-      return { success: false, message: `Invalid or unsupported messageType: ${rawType}` };
-    }
-    const messageType = rawType;
-
-    const rawMsg = typeof body.message === 'string' ? body.message.trim() : '';
-    const rawImg = typeof body.imageUrl === 'string' ? body.imageUrl.trim() : '';
-    const rawLink = typeof body.linkUrl === 'string' ? body.linkUrl.trim() : '';
-
-    if (messageType === 'text') {
-      if (!rawMsg) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'Message is required for text messageType' };
-      }
-      if (rawImg !== '') {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'imageUrl is prohibited for text messageType' };
-      }
-      if (rawLink !== '') {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'linkUrl is prohibited for text messageType' };
-      }
-    } else if (messageType === 'text_link') {
-      if (!rawMsg) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'Message is required for text_link messageType' };
-      }
-      if (!rawLink) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'linkUrl is required for text_link messageType' };
-      }
-      if (!this.isValidHttpUrl(rawLink)) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'Invalid linkUrl protocol or format' };
-      }
-      if (rawImg !== '') {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'imageUrl is prohibited for text_link messageType' };
-      }
-    } else if (messageType === 'image_only') {
-      if (!rawImg) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'imageUrl is required for image_only messageType' };
-      }
-      if (!this.isValidHttpUrl(rawImg)) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'Invalid imageUrl protocol or format' };
-      }
-      if (rawLink !== '') {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'linkUrl is prohibited for image_only messageType' };
-      }
-    } else if (messageType === 'image_link') {
-      if (!rawImg) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'imageUrl is required for image_link messageType' };
-      }
-      if (!this.isValidHttpUrl(rawImg)) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'Invalid imageUrl protocol or format' };
-      }
-      if (!rawMsg) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'Message is required for image_link messageType' };
-      }
-      if (!rawLink) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'linkUrl is required for image_link messageType' };
-      }
-      if (!this.isValidHttpUrl(rawLink)) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'Invalid linkUrl protocol or format' };
-      }
-    } else if (messageType === 'link_only') {
-      if (!rawLink) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'linkUrl is required for link_only messageType' };
-      }
-      if (!this.isValidHttpUrl(rawLink)) {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'Invalid linkUrl protocol or format' };
-      }
-      if (rawImg !== '') {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'imageUrl is prohibited for link_only messageType' };
-      }
+    const valResult = this.validateAndNormalizeCampaignContent(body);
+    if (valResult.error || !valResult.normalized) {
+      res.status(valResult.statusCode || HttpStatus.BAD_REQUEST);
+      return { success: false, message: valResult.error || 'Invalid campaign content' };
     }
 
-    // 2. Schedule Contract
-    let scheduledDate: Date | null = null;
-    let initialStatus = 'pending';
-
-    if ('scheduledAt' in body && body.scheduledAt !== undefined) {
-      if (typeof body.scheduledAt !== 'string') {
-        res.status(HttpStatus.BAD_REQUEST);
-        return { success: false, message: 'scheduledAt must be a string' };
-      }
-      const schedTrim = body.scheduledAt.trim();
-      if (schedTrim !== '') {
-        const parsedDate = new Date(schedTrim);
-        if (isNaN(parsedDate.getTime())) {
-          res.status(HttpStatus.BAD_REQUEST);
-          return { success: false, message: 'Invalid scheduledAt datetime' };
-        }
-        if (parsedDate.getTime() <= Date.now()) {
-          res.status(HttpStatus.BAD_REQUEST);
-          return { success: false, message: 'scheduledAt must represent a future time' };
-        }
-        scheduledDate = parsedDate;
-        initialStatus = 'scheduled';
-      }
-    }
+    const { normalized } = valResult;
+    const messageType = normalized.messageType;
+    const rawMsg = normalized.message || '';
+    const rawImg = normalized.imageUrl;
+    const rawLink = normalized.linkUrl;
+    const initialStatus = normalized.initialStatus;
+    const scheduledDate = normalized.scheduledAt ? new Date(normalized.scheduledAt) : null;
 
     if (!body.targetIds || body.targetIds.length === 0) {
       res.status(HttpStatus.BAD_REQUEST);
@@ -2735,7 +2834,7 @@ export class AppController {
     @Query('botId') botId: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    if (!botId || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
+    if (!botId || typeof botId !== 'string' || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
       res.status(HttpStatus.BAD_REQUEST);
       return { success: false, message: 'Missing or invalid botId parameter' };
     }
@@ -2747,11 +2846,47 @@ export class AppController {
       return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
     }
 
-    return this.campaignRepository.find({
+    const candidateCampaigns = await this.campaignRepository.find({
       where: { botId: cleanBotId },
       order: { createdAt: 'DESC' },
-      take: 15,
+      take: 100,
     });
+
+    const validTemplates: Array<{
+      id: string;
+      name: string;
+      messageType: string;
+      message: string | null;
+      imageUrl: string | null;
+      linkUrl: string | null;
+      createdAt: Date;
+    }> = [];
+    for (const camp of candidateCampaigns) {
+      const valResult = this.validateAndNormalizeCampaignContent({
+        name: camp.name || '',
+        messageType: camp.messageType,
+        message: camp.message || '',
+        imageUrl: camp.imageUrl || '',
+        linkUrl: camp.linkUrl || '',
+      });
+
+      if (!valResult.error && valResult.normalized) {
+        validTemplates.push({
+          id: camp.id,
+          name: camp.name || '',
+          messageType: valResult.normalized.messageType,
+          message: valResult.normalized.message,
+          imageUrl: valResult.normalized.imageUrl,
+          linkUrl: valResult.normalized.linkUrl,
+          createdAt: camp.createdAt,
+        });
+        if (validTemplates.length >= 15) {
+          break;
+        }
+      }
+    }
+
+    return validTemplates;
   }
 
   // ดึงรายละเอียดแคมเปญและรายการคิวงานรายบุคคล

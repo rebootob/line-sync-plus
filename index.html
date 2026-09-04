@@ -419,11 +419,16 @@
                 </div>
             </div>
 
+            <!-- 👁️ Container พรีวิวเนื้อหา outbound payload -->
+            <div id="campaignPreviewContainer" style="display:none; margin-top:12px; padding:12px; background:#f1f5f9; border-radius:6px; border:1px solid #cbd5e1;">
+            </div>
+
             <div style="display:flex; justify-content: space-between; align-items:center; margin-top:20px;">
                 <span id="modalTargetCount" style="font-weight:bold; color:var(--primary);">เป้าหมาย: 0 คน</span>
-                <div>
+                <div style="display:flex; gap:8px;">
                     <button class="action-btn-outline" onclick="closeModal('campaignModal')">ยกเลิก</button>
-                    <button class="action-btn" id="btnSubmitCampaign" onclick="submitCampaign()">🚀 เริ่มส่งแคมเปญ</button>
+                    <button class="action-btn-secondary" id="btnPreviewCampaign" onclick="generateCampaignPreview()">👁️ แสดงตัวอย่าง (Preview)</button>
+                    <button class="action-btn" id="btnSubmitCampaign" onclick="submitCampaign()" disabled>🚀 เริ่มส่งแคมเปญ</button>
                 </div>
             </div>
         </div>
@@ -1483,6 +1488,7 @@
                 if (data.success) {
                     alert(`✅ สลับไปยัง LINE OA Context [ ${targetBotId.substring(0, 10)}... ] เรียบร้อยแล้ว!`);
                     selectedUsers.clear();
+                    invalidateCampaignPreview();
                     await loadData();
                 } else {
                     alert(`❌ ไม่สามารถสลับ LINE OA ได้: ${data.message || 'เกิดข้อผิดพลาด'}`);
@@ -1793,8 +1799,38 @@
             }
         }
 
+        let currentPreviewSnapshot = null;
+
+        function getAuthoringSnapshot() {
+            const isSched = document.getElementById('enableScheduleCheckbox') ? document.getElementById('enableScheduleCheckbox').checked : false;
+            const schedVal = (isSched && document.getElementById('campaignScheduledAtInput')) ? document.getElementById('campaignScheduledAtInput').value.trim() : '';
+            return JSON.stringify({
+                botId: currentActiveBotId || '',
+                name: (document.getElementById('campaignNameInput')?.value || '').trim(),
+                messageType: document.getElementById('messageTypeSelect')?.value || '',
+                message: (document.getElementById('campaignMessageInput')?.value || '').trim(),
+                imageUrl: (document.getElementById('campaignImageUrlInput')?.value || '').trim(),
+                linkUrl: (document.getElementById('campaignLinkUrlInput')?.value || '').trim(),
+                scheduledAt: schedVal,
+                targetCount: typeof selectedUsers !== 'undefined' ? selectedUsers.size : 0,
+            });
+        }
+
+        function invalidateCampaignPreview() {
+            currentPreviewSnapshot = null;
+            const submitBtn = document.getElementById('btnSubmitCampaign');
+            if (submitBtn) submitBtn.disabled = true;
+            const container = document.getElementById('campaignPreviewContainer');
+            if (container) {
+                container.replaceChildren();
+                container.style.display = 'none';
+            }
+        }
+
         // 5. ระบบ Modal สร้างแคมเปญ Multi-type & Templates Reuse
         async function openCampaignModal(reuseData = null) {
+            invalidateCampaignPreview();
+
             if (reuseData && reuseData.targetIds && reuseData.targetIds.length > 0) {
                 selectedUsers.clear();
                 reuseData.targetIds.forEach(id => selectedUsers.add(id));
@@ -1828,6 +1864,23 @@
 
             toggleMessageTypeFields();
             updateImagePreview();
+
+            // ผูก Event Listener เพื่อยกเลิก preview เมื่อมีการแก้ไขฟิลด์ข้อมูล
+            ['campaignNameInput', 'campaignMessageInput', 'campaignImageUrlInput', 'campaignLinkUrlInput', 'campaignScheduledAtInput'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.removeEventListener('input', invalidateCampaignPreview);
+                    el.addEventListener('input', invalidateCampaignPreview);
+                }
+            });
+            ['messageTypeSelect', 'enableScheduleCheckbox'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.removeEventListener('change', invalidateCampaignPreview);
+                    el.addEventListener('change', invalidateCampaignPreview);
+                }
+            });
+
             openModal('campaignModal');
         }
 
@@ -1855,6 +1908,7 @@
                         document.getElementById('imagePreviewImg').src = data.url;
                         statusEl.innerText = `✅ โหลดรูปภาพจากเครื่องสำเร็จ: ${file.name}`;
                         statusEl.style.color = '#16a34a';
+                        invalidateCampaignPreview();
                     } else {
                         statusEl.innerText = '❌ อัปโหลดรูปภาพไม่สำเร็จ';
                         statusEl.style.color = '#dc2626';
@@ -1900,8 +1954,24 @@
                 const res = await fetch(`${API_BASE}/campaigns/templates?botId=${encodeURIComponent(currentActiveBotId)}`);
                 campaignTemplates = await res.json();
                 const select = document.getElementById('templateReuseSelect');
-                select.innerHTML = '<option value="">-- พิมพ์สร้างใหม่ หรือ เลือกแคมเปญเดิมที่เคยส่ง --</option>' +
-                    campaignTemplates.map(t => `<option value="${t.id}">[${getThaiMessageTypeLabel(t.messageType)}] ${t.name || (t.message ? t.message.substring(0, 30) : '')}...</option>`).join('');
+                if (!select) return;
+
+                select.replaceChildren();
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = '-- พิมพ์สร้างใหม่ หรือ เลือกแคมเปญเดิมที่เคยส่ง --';
+                select.appendChild(defaultOpt);
+
+                if (Array.isArray(campaignTemplates)) {
+                    campaignTemplates.forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t.id;
+                        const labelType = getThaiMessageTypeLabel(t.messageType);
+                        const nameOrMsg = t.name || (t.message ? (t.message.length > 30 ? t.message.substring(0, 30) + '...' : t.message) : 'ไม่มีชื่อ');
+                        opt.textContent = `[${labelType}] ${nameOrMsg}`;
+                        select.appendChild(opt);
+                    });
+                }
             } catch (e) {
                 console.error(e);
             }
@@ -1914,11 +1984,170 @@
             const template = campaignTemplates.find(t => t.id === templateId);
             if (template) {
                 document.getElementById('messageTypeSelect').value = template.messageType;
-                document.getElementById('campaignMessageInput').value = template.message;
+                document.getElementById('campaignMessageInput').value = template.message || '';
                 document.getElementById('campaignImageUrlInput').value = template.imageUrl || '';
                 document.getElementById('campaignLinkUrlInput').value = template.linkUrl || '';
                 toggleMessageTypeFields();
                 updateImagePreview();
+                invalidateCampaignPreview();
+            }
+        }
+
+        async function generateCampaignPreview() {
+            const botId = currentActiveBotId;
+            if (!botId) {
+                alert('กรุณาเลือก LINE OA ก่อนดำเนินการ');
+                return;
+            }
+            const name = document.getElementById('campaignNameInput').value.trim();
+            const messageType = document.getElementById('messageTypeSelect').value;
+            const message = document.getElementById('campaignMessageInput').value;
+            const imageUrl = document.getElementById('campaignImageUrlInput').value;
+            const linkUrl = document.getElementById('campaignLinkUrlInput').value;
+
+            let scheduledAt = undefined;
+            if (document.getElementById('enableScheduleCheckbox').checked) {
+                const schedVal = document.getElementById('campaignScheduledAtInput').value;
+                if (schedVal) {
+                    const parsed = new Date(schedVal);
+                    if (isNaN(parsed.getTime())) {
+                        alert('รูปแบบวันเวลาที่ตั้งเวลาส่งล่วงหน้าไม่ถูกต้อง');
+                        return;
+                    }
+                    if (parsed.getTime() <= Date.now()) {
+                        alert('วันเวลาที่ตั้งเวลาส่งล่วงหน้าต้องเป็นเวลาในอนาคต');
+                        return;
+                    }
+                    scheduledAt = parsed.toISOString();
+                } else {
+                    alert('กรุณาระบุวันและเวลาที่ต้องการตั้งเวลาส่งล่วงหน้า');
+                    return;
+                }
+            }
+
+            const payload = {
+                botId,
+                name,
+                messageType,
+                message,
+                imageUrl,
+                linkUrl,
+            };
+            if (scheduledAt) {
+                payload.scheduledAt = scheduledAt;
+            }
+
+            const container = document.getElementById('campaignPreviewContainer');
+            try {
+                const res = await fetch(`${API_BASE}/campaign/preview`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    invalidateCampaignPreview();
+                    alert(`❌ ไม่สามารถแสดงพรีวิวได้: ${data.message || 'ข้อมูลไม่ถูกต้อง'}`);
+                    return;
+                }
+
+                currentPreviewSnapshot = getAuthoringSnapshot();
+                const submitBtn = document.getElementById('btnSubmitCampaign');
+                if (submitBtn) submitBtn.disabled = false;
+
+                container.replaceChildren();
+                container.style.display = 'block';
+
+                const header = document.createElement('div');
+                header.style.fontWeight = 'bold';
+                header.style.color = '#1e293b';
+                header.style.marginBottom = '8px';
+                header.textContent = '👁️ ตัวอย่างเนื้อหาที่ระบบจะส่ง (Outbound Payload Preview)';
+                container.appendChild(header);
+
+                const infoList = document.createElement('div');
+                infoList.style.fontSize = '13px';
+                infoList.style.color = '#475569';
+                infoList.style.marginBottom = '8px';
+
+                const targetInfo = document.createElement('div');
+                targetInfo.textContent = `• จำนวนเป้าหมาย: ${selectedUsers.size} คน`;
+                infoList.appendChild(targetInfo);
+
+                const typeInfo = document.createElement('div');
+                typeInfo.textContent = `• รูปแบบข้อความ: ${getThaiMessageTypeLabel(data.normalized.messageType)}`;
+                infoList.appendChild(typeInfo);
+
+                if (data.immediate) {
+                    const warnBox = document.createElement('div');
+                    warnBox.style.marginTop = '6px';
+                    warnBox.style.padding = '6px 10px';
+                    warnBox.style.background = '#fef3c7';
+                    warnBox.style.border = '1px solid #f59e0b';
+                    warnBox.style.borderRadius = '4px';
+                    warnBox.style.color = '#92400e';
+                    warnBox.style.fontSize = '12px';
+                    warnBox.textContent = '⚠️ เมื่อสร้างแล้ว Campaign จะเข้า Pending Queue ทันที และถ้า Master Bot กำลังทำงาน อาจเริ่มประมวลผลได้ทันที';
+                    infoList.appendChild(warnBox);
+                } else {
+                    const schedInfo = document.createElement('div');
+                    schedInfo.style.marginTop = '4px';
+                    schedInfo.style.color = '#2563eb';
+                    schedInfo.style.fontWeight = '600';
+                    const sDt = new Date(data.normalized.scheduledAt).toLocaleString('th-TH');
+                    schedInfo.textContent = `⏰ ตั้งเวลาส่งล่วงหน้า: ${sDt}`;
+                    infoList.appendChild(schedInfo);
+                }
+                container.appendChild(infoList);
+
+                const partsHeader = document.createElement('div');
+                partsHeader.style.fontSize = '12px';
+                partsHeader.style.fontWeight = 'bold';
+                partsHeader.style.color = '#334155';
+                partsHeader.style.marginBottom = '4px';
+                partsHeader.textContent = 'รายการข้อความส่งออกตามลำดับ (Outbound Parts Order):';
+                container.appendChild(partsHeader);
+
+                if (Array.isArray(data.parts)) {
+                    data.parts.forEach((p, idx) => {
+                        const partCard = document.createElement('div');
+                        partCard.style.background = '#ffffff';
+                        partCard.style.border = '1px solid #e2e8f0';
+                        partCard.style.borderRadius = '4px';
+                        partCard.style.padding = '8px';
+                        partCard.style.marginBottom = '6px';
+
+                        const partTitle = document.createElement('div');
+                        partTitle.style.fontSize = '11px';
+                        partTitle.style.color = '#64748b';
+                        partTitle.style.marginBottom = '4px';
+                        partTitle.textContent = `ส่วนที่ ${idx + 1} (${(p.type || '').toUpperCase()})`;
+                        partCard.appendChild(partTitle);
+
+                        if (p.type === 'image') {
+                            const img = document.createElement('img');
+                            img.src = p.content;
+                            img.style.maxHeight = '120px';
+                            img.style.borderRadius = '4px';
+                            img.style.display = 'block';
+                            partCard.appendChild(img);
+                        } else {
+                            const textPre = document.createElement('pre');
+                            textPre.style.whiteSpace = 'pre-wrap';
+                            textPre.style.wordBreak = 'break-word';
+                            textPre.style.margin = '0';
+                            textPre.style.fontFamily = 'inherit';
+                            textPre.style.fontSize = '13px';
+                            textPre.style.color = '#0f172a';
+                            textPre.textContent = p.content;
+                            partCard.appendChild(textPre);
+                        }
+                        container.appendChild(partCard);
+                    });
+                }
+            } catch (e) {
+                invalidateCampaignPreview();
+                alert('❌ เกิดข้อผิดพลาดในการดึงพรีวิว');
             }
         }
 
@@ -2473,6 +2702,13 @@
         }
 
         async function submitCampaign() {
+            const currentSnap = getAuthoringSnapshot();
+            if (!currentPreviewSnapshot || currentSnap !== currentPreviewSnapshot) {
+                invalidateCampaignPreview();
+                alert('⚠️ ข้อมูลแคมเปญมีการเปลี่ยนแปลง กรุณากด "แสดงตัวอย่าง (Preview)" อีกครั้งก่อนเริ่มส่ง');
+                return;
+            }
+
             const targetIds = Array.from(selectedUsers);
             if (targetIds.length === 0) {
                 alert('กรุณาเลือกลูกค้าเป้าหมายอย่างน้อย 1 คน');

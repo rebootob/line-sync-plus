@@ -256,7 +256,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
 - **Phase 2 — Campaign Builder v2**: **IN PROGRESS**
   - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **CLOSED / PASS**
   - `P2-WP001-R1 — Fail-Closed scheduledAt Type Validation Corrective`: **CLOSED / PASS**
-  - `P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2`: **AUTHORIZED_FOR_EXECUTION**
+  - `P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2`: **READY_FOR_CHATGPT_REVIEW**
   - Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -267,7 +267,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
 ## 11. Technical Evolution
 
 - **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003 CLOSED / PASS).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), dashboard-only Incident Visibility card (`index.html`) with in-memory session lifecycle, authoritative campaign authoring contract (message type enforcement, protocol-restricted URL validation, future-only scheduling, active-OA read/mutation isolation, state-safe mutation transitions, fail-closed scheduledAt type validation), and 370 passing local unit tests (local reported evidence only; no GitHub CI status checks existed).
+- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), dashboard-only Incident Visibility card (`index.html`) with in-memory session lifecycle, authoritative campaign authoring contract (message type enforcement, protocol-restricted URL validation, future-only scheduling, active-OA read/mutation isolation, state-safe mutation transitions, fail-closed scheduledAt type validation), and 415 passing local unit tests.
 
 ---
 
@@ -278,10 +278,10 @@ Phase 1 (Operations & Monitoring) is **CLOSED / PASS**.
 Phase 2 (Campaign Builder v2) is **IN PROGRESS**.
 P2-WP001 is **CLOSED / PASS** (Accepted Final HEAD: `37b078de425e2fd3267652e142d76959f408c701`).
 P2-WP001-R1 is **CLOSED / PASS**.
-P2-WP002 is **AUTHORIZED_FOR_EXECUTION** (Code Baseline HEAD: `aebd092ddd1d4802000a58be331de58707a5bcdb`).
+P2-WP002 is **READY_FOR_CHATGPT_REVIEW** (Code Baseline HEAD: `aebd092ddd1d4802000a58be331de58707a5bcdb`).
 Active Work Package: **P2-WP002**.
-Status: **AUTHORIZED_FOR_EXECUTION**.
+Status: **READY_FOR_CHATGPT_REVIEW**.
 Next Candidate: **NONE** (Status: **PENDING_REVIEW**).
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-P2-WP002 authorized for implementation (Authoritative Campaign Preview & Safe Template Reuse V2).
+P2-WP002 implementation complete & ready for review (Authoritative Campaign Preview & Safe Template Reuse V2).
