@@ -16,15 +16,16 @@ causing a previously completed task to run again.
 
 For execution authority:
 
-1. Current Project Owner STOP / ABORT instruction
-2. `origin/main:project-docs/EXECUTION_GATE.md`
-3. `project-docs/AGENT_START_HERE.md`
-4. Supporting repository documents:
+1. Current Project Owner STOP / ABORT
+2. Current explicit Project Owner CONTROL_UPDATE_AUTHORIZED instruction
+3. `origin/main:project-docs/EXECUTION_GATE.md`
+4. `project-docs/AGENT_START_HERE.md`
+5. Supporting repository docs:
    - ACTIVE_TASK.md
    - CHAT_HANDOFF.md
    - CURRENT_STATE.md
    - PROJECT_STATUS_ROADMAP.md
-5. Previous Antigravity chat/conversation context
+6. Previous Antigravity conversation context
 
 Previous Antigravity conversation context is NON-AUTHORITATIVE.
 
@@ -33,6 +34,95 @@ the repository gate wins.
 
 Never repeat or resurrect an old completed task merely because it
 appears earlier in the chat.
+
+## Control Update Lifecycle
+
+CONTROL_UPDATE_AUTHORIZED is valid ONLY when explicitly present
+in the CURRENT user request.
+
+Never reuse an old control-update instruction from previous chat.
+
+A valid CONTROL_UPDATE_AUTHORIZED request must include:
+
+- EXPECTED_ORIGIN_HEAD
+- NEW_TASK_ID
+- exact control-document scope
+
+Before control update:
+
+- `git status --short` must be clean
+- `git fetch origin`
+- HEAD == origin/main
+- origin/main == EXPECTED_ORIGIN_HEAD
+
+If any fail:
+STOP.
+
+CONTROL UPDATE mode permits control-document changes only.
+
+No implementation.
+No source changes.
+No Worker changes.
+No LINE activity.
+
+After control update:
+- commit
+- push origin main
+- fetch origin
+- prove HEAD == origin/main
+- prove working tree clean
+- STOP.
+
+Do NOT execute the newly installed implementation gate in the same run.
+
+Lifecycle must be:
+
+CONTROL UPDATE
+→ STOP
+→ fresh new run
+→ EXECUTION GATE
+→ implementation
+→ READY_FOR_CHATGPT_REVIEW
+→ STOP
+
+## Code Baseline Drift Guard
+
+Before implementation Antigravity must read CODE_BASELINE_HEAD
+from EXECUTION_GATE.md.
+
+Rules:
+
+- CODE_BASELINE_HEAD is mandatory.
+- Documentation-only commits under project-docs/ after that baseline
+  are allowed.
+- Compare CODE_BASELINE_HEAD against current HEAD.
+- If ANY non-project-docs file changed between CODE_BASELINE_HEAD
+  and current HEAD before implementation begins:
+  STOP with CODE_BASELINE_DRIFT.
+- Do not silently adapt.
+- Do not rebase/reset/merge around the drift.
+- Require a new Control Plane / Owner gate.
+
+For current MON-WP002 preserve:
+
+CODE_BASELINE_HEAD:
+74359ed58c3a02dd574a78dce7f2330632e28c5b
+
+The CTRL-WP001 documentation commits above that baseline are allowed.
+
+## Supporting Doc Precedence
+
+ACTIVE_TASK.md, CHAT_HANDOFF.md, CURRENT_STATE.md and
+PROJECT_STATUS_ROADMAP.md may temporarily lag during authorization
+transitions.
+
+For EXECUTION AUTHORITY:
+EXECUTION_GATE.md wins.
+
+Do not infer executable authority from stale supporting docs.
+
+Supporting docs must be synchronized during/after implementation
+when EXECUTION_GATE permits them.
 
 ## Mandatory Startup — Every Run
 
@@ -69,6 +159,12 @@ before implementation begins.
 - project-docs/ACTIVE_TASK.md
 - project-docs/CHAT_HANDOFF.md
 - only directly relevant files named by EXECUTION_GATE.md
+
+7. Verify Code Baseline Drift Guard:
+Compare CODE_BASELINE_HEAD against current HEAD.
+If ANY non-project-docs file changed between CODE_BASELINE_HEAD
+and current HEAD before implementation begins:
+STOP with CODE_BASELINE_DRIFT.
 
 Do not execute an old prompt before completing this startup.
 

@@ -25,13 +25,25 @@ main
 CODE_BASELINE_HEAD:
 74359ed58c3a02dd574a78dce7f2330632e28c5b
 
+BASELINE_POLICY:
+NON_DOCUMENT_CODE_MUST_MATCH_CODE_BASELINE
+
+If non-project-docs code changed after CODE_BASELINE_HEAD before
+MON-WP002 starts:
+
+STOP_REASON:
+CODE_BASELINE_DRIFT
+
+CONTROL_UPDATE_POLICY:
+CURRENT_EXPLICIT_OWNER_CONTROL_UPDATE_ONLY
+
 IMPORTANT:
 
 This gate authorizes MON-WP002 implementation in a FUTURE execution run.
 
-DO NOT execute MON-WP002 during the CTRL-WP001 bootstrap run.
+DO NOT execute MON-WP002 during this control update run.
 
-After creating and pushing this control bootstrap:
+After creating and pushing this control update:
 STOP.
 
 --------------------------------------------------
