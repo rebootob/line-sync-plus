@@ -4,9 +4,8 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* Working Tree: Clean (Phase 0 CLOSED / PASS, MON-WP001 CLOSED / PASS)
-* Implementation Baseline: 6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38
-* Closure-Doc Baseline: 443dfa96c8580fd55b6dcd0cde34dba4b968eb57
+* Working Tree: Clean
+* Implementation Baseline: f8b18700ac51120d42ac717514a659a2ccb97e09
 
 ## Project Purpose
 
@@ -22,34 +21,25 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `P2-WP001`
-* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
+* **ACTIVE_WORK_PACKAGE**: `P2-WP001-R1`
+* **STATUS**: `CORRECTIVE_AUTHORIZED`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
 * **PHASE_2_TITLE**: `Campaign Builder v2`
-* **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `READY_FOR_CHATGPT_REVIEW`
+* **P2-WP001**: `CORRECTIVE_REQUIRED`
+* **P2-WP001-R1**: `CORRECTIVE_AUTHORIZED`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
+* **NEXT_CANDIDATE_STATUS**: `PENDING_CORRECTIVE_REVIEW`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 * **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
-  - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
-  - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
-  - **REL-WP003-R3A — Backend Final Fencing Only**: `CORRECTIVE REQUIRED / SUPERSEDED`
-  - **REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration**: `PASS / CLOSED`
 * **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
-* **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
-* **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
-* **REL-WP002-R3 — Complete R2 Corrective Exactly**: `CLOSED / PASS`
 * **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `CLOSED / PASS`
-  - **SAFE-WP001-R1**: `CLOSED / PASS`
-  - **SAFE-WP001-R2**: `CLOSED / PASS`
-  - **SAFE-WP001-R3**: `CLOSED / PASS`
 * **SYNC-WP001 — LINE OA Customer Directory Sync to DB**: `CLOSED / PASS`
-* **OA-WP001**: `CLOSED / PASS` (Accepted on Worker v28.5)
+* **OA-WP001**: `CLOSED / PASS`
 * **REL-WP001**: `CLOSED / PASS`
 * **Version Contracts**:
   - Worker Version: `28.16`
@@ -86,19 +76,6 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
   - `armSendPart` uses same `armRequestId` across transient retries; `confirmSendPart` enforces idempotency matching `armRequestId`.
   - Static Review: REL-WP003-R3B review PASS. All 271 executable unit tests passing. No GitHub CI status checks.
 
-## Accepted Live / Controlled UAT Evidence (REL-WP003)
-
-1. **Backend Migration Startup**: `Database schema verified/initialized successfully` on startup.
-2. **Normal Text Send**: target: 1, success: 1, fail: 0, physical duplicate: 0.
-3. **Durable Ledger Verification**: `job_status = success`, `partKey = text`, `part_status = dispatched`, `armedAt` and `dispatchedAt` present, `reconcileReason = null`.
-4. **Clean Ambiguity Baseline**: verified zero `armed` or `reconcile_required` rows before test.
-5. **Controlled DB-Only Ambiguity Fixture**: job `processing`, part `armed`, zero physical LINE send.
-6. **Send-Plan Ambiguity Detection**: `POST /api/campaign/send-plan` returned `success = true`, `isFullyDispatched = false`, `hasQuarantine = true`.
-7. **Post-Quarantine DB State**: `job = reconcile_required`, `part = reconcile_required`, `reconcileReason = 'quarantined_on_reload_ambiguity'`, `campaign = paused_reconcile`, `leaseToken`/`leaseOwner`/`leaseExpiresAt` cleared.
-8. **Operator Reconciliation GET**: synthetic campaign/job/ambiguous part visible while Master Bot PAUSED.
-9. **Operator Resolution**: `confirmed_not_sent_retry` returned `success = true`, zero physical LINE sends.
-10. **Cleanup Verification**: DB inspection verified `CAMPAIGN FOUND = 0`, `JOB FOUND = 0`, `PARTS FOUND = 0`. Clean baseline restored.
-
 ## Implemented MON-WP001 / MON-WP001-R1 Operational Health Summary
 
 - **Endpoint**: `GET /api/ops/health` (loopback only: `127.0.0.1`, `::1`, `::ffff:127.0.0.1`).
@@ -112,10 +89,6 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Dashboard UI**: Compact responsive card in `index.html` polling every 6 seconds, displaying `? Unknown` for null/unavailable metrics, displaying numeric 0 only on genuine success, and falling back gracefully on network errors.
 - **Worker Script**: `run/LineSyncApp.js` UNTOUCHED (v28.16).
 - **Unit Tests**: 23 tests in `src/app.controller.spec.ts` under MON-WP001, full test suite: 294/294 passing cleanly (LOCAL REPORTED evidence only; no GitHub CI/check runs existed).
-- **Accepted Independent Review Baseline**:
-  - Review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`
-  - Review Result: `PASS`
-  - Status: `CLOSED / PASS`
 
 ## Implemented MON-WP002 Operational Queue / Lease / Reconciliation Monitoring Summary
 
@@ -129,16 +102,6 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Dashboard UI**: Compact responsive card in `index.html` polling every 6 seconds, displaying `? Unknown` for null/unavailable metrics, displaying numeric 0 only on genuine success, displaying warnings for positive anomalies, and falling back gracefully on network errors.
 - **Worker Script**: `run/LineSyncApp.js` UNTOUCHED (v28.16).
 - **Unit Tests**: 23 tests in `src/app.controller.spec.ts` under MON-WP002, full test suite: 317/317 passing cleanly (LOCAL REPORTED evidence only; no GitHub CI/check runs existed).
-- **Current Acceptance Evidence**:
-  - Accepted Review HEAD: `5b34269397afbd9046610c366d9f0c27bf3d5532`
-  - Accepted Review Result: `PASS`
-  - Work Package Status: `CLOSED / PASS`
-  - Worker Version: `28.16` (unchanged)
-  - Required Worker Version: `28.16` (unchanged)
-  - Runtime Contract: `2` (unchanged)
-  - Evidence Classification: LOCAL REPORTED evidence (317/317 PASS, 23/23 focused PASS, no GitHub CI)
-  - Live LINE UAT: None required/performed (observability endpoints remain read-only)
-  - Safety Invariant: Never automatically resend ambiguous physical sends
 
 ## Implemented MON-WP003 Alerts / Incident Visibility Summary
 
@@ -148,59 +111,25 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Accepted Review Result**: `PASS`
 - **Implementation Scope**: `index.html` ONLY (Dashboard-only incident visibility consuming `/api/ops/health` and `/api/ops/queue`).
 - **Prohibited Files**: `src/**`, `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), LINE/Telegram send, DB mutation all untouched.
-- **Polling**: Reuses existing 6000ms monitoring poll; zero duplicate loops.
-- **Incident Lifecycle**: In-memory `firstSeen`/`lastSeen` per dashboard session; no DB/localStorage persistence.
-- **Validation**:
-  - Local focused harness: 23/23 tests PASS (extracted directly from `index.html` via Node VM).
-  - Full test suite: 317/317 PASS (LOCAL REPORTED evidence; no GitHub CI status checks).
-  - Zero LINE/Telegram activity.
 
-## Phase 1 — Operations & Monitoring Closure Summary
+## Authorized P2-WP001-R1 Fail-Closed scheduledAt Type Validation Summary
 
-- **Phase Title**: Phase 1 — Operations & Monitoring
-- **Closure Decision**: CLOSED / PASS (Approved by Project Owner)
-- **Closure Baseline HEAD**: `ac1ded4728df14f741104073618dd3623b6d1c25`
-- **Accepted Work Packages**:
-  - `MON-WP001 — Operational Health & Readiness`: CLOSED / PASS (Accepted Review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`)
-  - `MON-WP001-R1 — Truthful Health State Corrective`: CLOSED / PASS (Accepted Review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`)
-  - `MON-WP002 — Queue / Lease / Reconciliation Monitoring`: CLOSED / PASS (Accepted Review HEAD: `5b34269397afbd9046610c366d9f0c27bf3d5532`)
-  - `MON-WP003 — Alerts / Incident Visibility`: CLOSED / PASS (Accepted Review HEAD: `acb1185e1a5ff21c2c346d326669392cacdfa639`)
-- **Scope & Closure Decisions**:
-  - Project Owner explicitly chose not to make Backup / Recovery / Retention work a Phase 1 closure requirement.
-  - Backup / Recovery / Retention status: `DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE` (not implemented; OPS-WP002 is neither created nor authorized).
-  - Phase 2 is now authorized under P2-WP001.
-
-## Implemented P2-WP001 Campaign Authoring Contract & OA Isolation Summary
-
-- **Task**: P2-WP001 (Campaign Authoring Contract & OA Isolation)
-- **Status**: READY_FOR_CHATGPT_REVIEW
-- **Code Baseline HEAD**: `7204f6b1c08ffa4f4ab6b7b071f3d34d1900bf7b`
-- **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts`, `index.html`
-- **Prohibited Files**: `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), entities, DB schema/migrations, send plan/ledger/ARM/CONFIRM, LINE DOM/send behavior, Telegram.
-- **Implemented Contracts**:
-  - Authoritative message type contract: `text`, `text_link`, `image_only`, `image_link`, `link_only` (fail-closed HTTP 400 for unknown).
-  - Strict URL validation: HTTP/HTTPS only; reject javascript/data/file/ftp. Local uploads remain valid.
-  - Future-only schedule validation; reject invalid/past/current datetimes without silent fallback.
-  - Active OA scoped reads: `/campaigns`, `/campaigns/templates`, `/campaigns/scheduled`, `/campaigns/:id`. Cross-OA campaign detail behaves as not found (404).
-  - Active OA scoped mutations: `/campaign/pause`, `/campaign/resume`, `/campaign/reschedule`. Fenced by botId == activeBotId.
-  - State-safe mutation transitions (pause from pending/scheduled/processing; resume from paused; reschedule from scheduled/paused).
-  - Frontend payload hardening: sends only relevant fields per chosen message type; normalizes datetime to ISO string.
-- **Validation Evidence**:
-  - 42 focused Jest tests covering all required authoring, schedule, OA isolation, state safety, and frontend contracts.
-  - Full test suite: **359/359 PASS** (0 failures, `npm test -- --runInBand`).
-  - Build: **PASS** (`npm run build`, 0 errors).
-  - Whitespace check: **PASS** (`git diff --check`, 0 errors).
-  - Evidence Classification: **LOCAL REPORTED evidence** (no GitHub CI status checks).
-  - Zero Live LINE send UAT performed (authoring and OA isolation contracts only; Master Bot remained PAUSED).
+- **Task**: P2-WP001-R1 (Fail-Closed scheduledAt Type Validation)
+- **Status**: CORRECTIVE_AUTHORIZED
+- **Code Baseline HEAD**: `f8b18700ac51120d42ac717514a659a2ccb97e09`
+- **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts` ONLY. Explicitly DO NOT modify `index.html`.
+- **Prohibited Files**: `index.html`, `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), entities, DB schema/migrations, send plan/ledger/ARM/CONFIRM, LINE DOM/send behavior, Telegram.
+- **Objective**: Fail closed with HTTP 400 when `scheduledAt` is present with a non-string value (number, boolean, object, array, explicit null). Immediate/pending campaign allowed only when `scheduledAt` is absent, `""`, or whitespace-only string.
+- **Validation Scope**: 11 focused Jest tests + preserve existing P2-WP001 tests, `npm test -- --runInBand`, `npm run build`. Zero Live LINE sends.
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `P2-WP001`
-* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
+* **ACTIVE_WORK_PACKAGE**: `P2-WP001-R1`
+* **STATUS**: `CORRECTIVE_AUTHORIZED`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
-* **P2-WP001**: `READY_FOR_CHATGPT_REVIEW`
+* **P2-WP001-R1**: `CORRECTIVE_AUTHORIZED`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
-P2-WP001 implementation complete and fully tested locally. Awaiting independent ChatGPT review. Do not start next task without explicit authorization.
+* **NEXT_CANDIDATE_STATUS**: `PENDING_CORRECTIVE_REVIEW`
+Control plane authorization complete for P2-WP001-R1. In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP001-R1 within authorized scope. Do not start next task without explicit authorization.

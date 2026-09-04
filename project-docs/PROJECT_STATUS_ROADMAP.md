@@ -254,7 +254,8 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `MON-WP003 — Alerts / Incident Visibility`: **CLOSED / PASS**
   - *Backup / Recovery / Retention*: **DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE** (OPS-WP002 not authorized)
 - **Phase 2 — Campaign Builder v2**: **IN PROGRESS**
-  - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **READY_FOR_CHATGPT_REVIEW**
+  - `P2-WP001-R1 — Fail-Closed scheduledAt Type Validation Corrective`: **CORRECTIVE_AUTHORIZED**
+  - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **CORRECTIVE_REQUIRED**
   - Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -274,10 +275,10 @@ Over the course of safety hardening, 26 work packages were identified, implement
 Phase 0 Foundation is **CLOSED / PASS**.
 Phase 1 (Operations & Monitoring) is **CLOSED / PASS**.
 Phase 2 (Campaign Builder v2) is **IN PROGRESS**.
-P2-WP001 is **READY_FOR_CHATGPT_REVIEW** (Code Baseline HEAD: `7204f6b1c08ffa4f4ab6b7b071f3d34d1900bf7b`).
-Active Work Package: **P2-WP001**.
-Status: **READY_FOR_CHATGPT_REVIEW**.
+P2-WP001-R1 is **CORRECTIVE_AUTHORIZED** (Code Baseline HEAD: `f8b18700ac51120d42ac717514a659a2ccb97e09`).
+Active Work Package: **P2-WP001-R1**.
+Status: **CORRECTIVE_AUTHORIZED**.
 Next Candidate: **NONE** (Status: **PENDING_REVIEW**).
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-P2-WP001 implementation complete and verified locally. Ready for independent ChatGPT review.
+P2-WP001-R1 authorized for implementation. Fail-closed scheduledAt type validation corrective.

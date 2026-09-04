@@ -1,23 +1,25 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: P2-WP001
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: P2-WP001-R1
+STATUS: CORRECTIVE_AUTHORIZED
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: PENDING_REVIEW
+NEXT_CANDIDATE_STATUS: PENDING_CORRECTIVE_REVIEW
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: IN PROGRESS
 PHASE_2_TITLE: Campaign Builder v2
-P2-WP001: READY_FOR_CHATGPT_REVIEW
+P2-WP001: CORRECTIVE_REQUIRED
+P2-WP001-R1: CORRECTIVE_AUTHORIZED
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
-- **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `READY_FOR_CHATGPT_REVIEW`
+- **P2-WP001-R1 — Fail-Closed scheduledAt Type Validation**: `CORRECTIVE_AUTHORIZED`
+- **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `CORRECTIVE_REQUIRED`
 - **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`
 - **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 - **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
@@ -28,9 +30,9 @@ P2-WP001: READY_FOR_CHATGPT_REVIEW
   - **REL-WP003-R3A — Backend Final Fencing Only**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration**: `PASS / CLOSED`
 - **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
-- **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
-- **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
-- **REL-WP002-R3 — Complete R2 Corrective Exactly**: `CLOSED / PASS`
+  - **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
+  - **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
+  - **REL-WP002-R3 — Complete R2 Corrective Exactly**: `CLOSED / PASS`
 - **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `CLOSED / PASS`
   - **SAFE-WP001-R1**: `CLOSED / PASS`
   - **SAFE-WP001-R2**: `CLOSED / PASS`
@@ -436,67 +438,42 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
-## 🎯 P2-WP001 — Campaign Authoring Contract & OA Isolation (STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🛠️ P2-WP001-R1 — Fail-Closed scheduledAt Type Validation (STATUS: CORRECTIVE_AUTHORIZED)
 
 > [!IMPORTANT]
 > **Boundary & Invariants**:
-> - **Code Baseline HEAD**: `7204f6b1c08ffa4f4ab6b7b071f3d34d1900bf7b`
-> - **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts`, `index.html`
-> - **Prohibited**: `run/**`, Worker version changes, `runtime-version.ts` changes, `entities/**`, DB schema/migrations, campaign send-plan changes, ARM/CONFIRM changes, send ledger changes, lease/reconciliation behavior changes, LINE DOM/send behavior, Telegram behavior, analytics redesign, UI redesign outside compatibility changes.
+> - **Code Baseline HEAD**: `f8b18700ac51120d42ac717514a659a2ccb97e09`
+> - **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts` ONLY. Explicitly DO NOT modify `index.html`.
+> - **Prohibited**: `index.html`, `run/**`, Worker version changes, `runtime-version.ts` changes, `entities/**`, DB schema/migrations, ARM/CONFIRM, send ledger, lease/reconciliation, LINE DOM/send, Telegram.
 > - **Worker Version**: `28.16` (UNTOUCHED) | **Required Worker**: `28.16` (UNTOUCHED) | **Runtime Contract**: `2` (UNTOUCHED)
-> - **Permanent Policy**: Never automatically resend an ambiguous physical send. True exactly-once physical LINE delivery is not guaranteed.
 
-### Objective
-Make campaign creation, campaign reads, template reuse, scheduled-campaign reads, pause, resume and reschedule operations fail-closed, active-OA isolated and governed by an authoritative server-side campaign authoring contract. Do this BEFORE Campaign Preview / Template Reuse V2 UI work.
+### Defect Root Cause
+`POST /api/campaign/add` currently treats non-string `scheduledAt` values (e.g. `number`, `boolean`, `object`, `array`, `null`) as blank, silently converting invalid supplied schedule requests into immediate/pending campaigns.
 
-### Implementation Summary
-1. **Authoritative Message Type Contract (`src/app.controller.ts`)**:
-   - Enforced allowed types: `text`, `text_link`, `image_only`, `image_link`, `link_only`. Any other or unknown string strictly rejected with HTTP 400.
-   - Text inputs trimmed before validation/persistence.
-   - Prohibited fields per message type validated and rejected with HTTP 400.
-2. **URL Validation (`src/app.controller.ts`)**:
-   - `isValidHttpUrl` validates `http:` or `https:` protocol. Rejects `javascript:`, `data:`, `file:`, `ftp:`, and malformed strings. Local uploads (`/api/uploads/...`) remain supported.
-3. **Schedule Contract (`src/app.controller.ts` & `index.html`)**:
-   - Absent/empty `scheduledAt` defaults to immediate (`status: 'pending'`, `scheduledAt: null`).
-   - Invalid or past datetimes rejected with HTTP 400 (never silently converted to immediate).
-   - Future ISO dates set initial status to `scheduled`.
-   - Frontend normalizes `scheduledAt` to ISO string before submission.
-4. **Active OA Isolation — Reads (`src/app.controller.ts` & `index.html`)**:
-   - Scoped with `botId` query parameter matching `activeBotId`: `/api/campaigns`, `/api/campaigns/templates`, `/api/campaigns/scheduled`, `/api/campaigns/:id`.
-   - Mismatch returns HTTP 409 Conflict. Cross-OA campaign detail returns HTTP 404.
-   - `index.html` passes `currentActiveBotId` across all campaign reads.
-5. **Active OA Isolation — Mutations (`src/app.controller.ts` & `index.html`)**:
-   - Fencing applied with `botId` in request body matching `activeBotId`: `/api/campaign/pause`, `/api/campaign/resume`, `/api/campaign/reschedule`.
-   - Campaign must exist and belong to the specified `botId`. Mismatched OA or foreign campaign rejected.
-6. **State-Safe Mutations (`src/app.controller.ts`)**:
-   - Pause allowed only from `pending`, `scheduled`, `processing`. Rejects terminal, paused, and `paused_reconcile` states.
-   - Resume allowed ONLY from `paused`. Rejects `paused_reconcile`. Transitions to `scheduled` if schedule in future, else `pending`.
-   - Reschedule allowed ONLY from `scheduled` or `paused` with future date. Retains status. Rejects `processing`, terminal, and `paused_reconcile` states.
-7. **Frontend Compatibility (`index.html`)**:
-   - `submitCampaign` constructs payload sending only relevant fields per chosen `messageType`.
-   - Normalizes datetime input to ISO timestamp.
-   - Passes `currentActiveBotId` across all read and mutation endpoints.
-8. **Validation Evidence**:
-   - 42 dedicated unit tests added under `describe('P2-WP001 — Campaign Authoring Contract & OA Isolation Tests')`.
-   - Full test suite: **359/359 PASS** (0 failures, `npm test -- --runInBand`).
-   - Build: **PASS** (`npm run build`, 0 errors).
-   - Whitespace check: **PASS** (`git diff --check`, 0 errors).
-   - Evidence Classification: **LOCAL REPORTED evidence** (no GitHub CI status checks).
-   - Zero Live LINE send UAT performed (authoring and OA isolation contracts only; Master Bot remained PAUSED).
+### Corrective Requirements
+- `scheduledAt` property absent => immediate/pending campaign allowed.
+- `scheduledAt == ""` or whitespace-only string => immediate/pending campaign allowed.
+- `scheduledAt` property present with NON-STRING value (number, boolean, object, array, null) => HTTP 400 / fail closed.
+- `scheduledAt` non-empty string but invalid datetime => HTTP 400.
+- `scheduledAt` valid datetime <= current time => HTTP 400.
+- `scheduledAt` valid future datetime => campaign status `scheduled`.
+- Do not stringify or coerce non-string values.
+- Do not change frontend behavior (`index.html`).
 
 ---
 
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `P2-WP001`
-- **Status**: `READY_FOR_CHATGPT_REVIEW`
+- **Active Work Package**: `P2-WP001-R1`
+- **Status**: `CORRECTIVE_AUTHORIZED`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `CLOSED / PASS`
 - **Phase 2 Status**: `IN PROGRESS`
-- **P2-WP001 Status**: `READY_FOR_CHATGPT_REVIEW`
+- **P2-WP001 Status**: `CORRECTIVE_REQUIRED`
+- **P2-WP001-R1 Status**: `CORRECTIVE_AUTHORIZED`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`
 - **MON-WP002 Status**: `CLOSED / PASS`
 - **MON-WP003 Status**: `CLOSED / PASS`
 - **Next Candidate**: `NONE`
-- **Next Candidate Status**: `PENDING_REVIEW`
+- **Next Candidate Status**: `PENDING_CORRECTIVE_REVIEW`

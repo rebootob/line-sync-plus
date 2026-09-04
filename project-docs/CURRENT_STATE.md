@@ -226,24 +226,15 @@
 
 ---
 
-## 🎯 Campaign Authoring Contract & OA Isolation (P2-WP001 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🎯 Campaign Authoring Contract & OA Isolation Corrective (P2-WP001-R1 STATUS: CORRECTIVE_AUTHORIZED)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts` - UNTOUCHED).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts` - UNTOUCHED).
-- **Scope**: Phase 2 Campaign Builder v2. Server-side authoritative authoring contract and active OA isolation before UI preview/reuse work.
-- **Code Baseline HEAD**: `7204f6b1c08ffa4f4ab6b7b071f3d34d1900bf7b`.
-- **Authorized Files**: `src/app.controller.ts`, `src/app.controller.spec.ts`, `index.html`.
-- **Prohibited**: `run/**`, Worker version, `runtime-version.ts`, `entities/**`, database/schema, send plans, ledger/ARM/CONFIRM, LINE DOM/send behavior, Telegram.
-- **Contract Highlights**:
-  - Authoritative message type contract: `text`, `text_link`, `image_only`, `image_link`, `link_only` (fail-closed HTTP 400 for unknown).
-  - Strict URL validation: HTTP/HTTPS only; reject javascript/data/file/ftp. Local uploads remain valid.
-  - Future-only schedule validation; reject invalid/past/current datetimes without silent fallback.
-  - Active OA scoped reads: `/campaigns`, `/campaigns/templates`, `/campaigns/scheduled`, `/campaigns/:id`. Cross-OA campaign detail behaves as not found (404).
-  - Active OA scoped mutations: `/campaign/pause`, `/campaign/resume`, `/campaign/reschedule`. Fenced by botId == activeBotId.
-  - State-safe mutation transitions (pause from pending/scheduled/processing; resume from paused; reschedule from scheduled/paused).
-  - Frontend payload hardening: sends only relevant fields per chosen message type; normalizes datetime to ISO string.
-- **Testing & Safety**: 42 focused Jest tests, full test suite 359/359 PASS (`npm test -- --runInBand`), `npm run build` PASS (0 errors), `git diff --check` PASS. Zero Live LINE sends (Master Bot remained PAUSED).
+- **Scope**: Fail-Closed `scheduledAt` Type Validation. Reject non-string `scheduledAt` types with HTTP 400.
+- **Code Baseline HEAD**: `f8b18700ac51120d42ac717514a659a2ccb97e09`.
+- **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts`.
+- **Prohibited**: `index.html`, `run/**`, Worker version, `runtime-version.ts`, `entities/**`, database/schema, send plans, ledger/ARM/CONFIRM, LINE send logic, lease/reconciliation, Telegram.
 
 ---
 
@@ -253,10 +244,11 @@
 - **Phase 1 Status**: `CLOSED / PASS`.
 - **Phase 2 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003` (`CLOSED / PASS`).
-- **Active Work Package**: `P2-WP001`.
-- **Status**: `READY_FOR_CHATGPT_REVIEW`.
+- **Active Work Package**: `P2-WP001-R1`.
+- **Status**: `CORRECTIVE_AUTHORIZED`.
 - **Work Package Status**:
-  - `P2-WP001`: `READY_FOR_CHATGPT_REVIEW`.
+  - `P2-WP001-R1`: `CORRECTIVE_AUTHORIZED`.
+  - `P2-WP001`: `CORRECTIVE_REQUIRED`.
   - `MON-WP001`: `CLOSED / PASS`.
   - `MON-WP001-R1`: `CLOSED / PASS`.
   - `MON-WP002`: `CLOSED / PASS`.
