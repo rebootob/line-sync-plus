@@ -6028,5 +6028,138 @@ describe('AppController', () => {
         expect(indexHtml).toContain('if (!currentPreviewSnapshot || currentSnap !== currentPreviewSnapshot)');
       });
     });
+
+    describe('P2-WP002-R2 Non-Destructive Stale Response Discard Tests', () => {
+      it('1. stale Preview branch returns BEFORE invalidateCampaignPreview()', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const previewFn = indexHtml.split('async function generateCampaignPreview()')[1].split('currentPreviewSnapshot = requestSnapshot;')[0];
+        const staleReturnPos = previewFn.indexOf('return;');
+        const invalidatePos = previewFn.indexOf('invalidateCampaignPreview();');
+        expect(staleReturnPos).toBeGreaterThan(-1);
+        expect(invalidatePos).toBeGreaterThan(-1);
+        expect(staleReturnPos).toBeLessThan(invalidatePos);
+      });
+
+      it('2. stale Preview response cannot clear currentPreviewSnapshot', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const previewFn = indexHtml.split('async function generateCampaignPreview()')[1].split('currentPreviewSnapshot = requestSnapshot;')[0];
+        const staleBlock = previewFn.substring(previewFn.indexOf('reqGen !== previewRequestGeneration'), previewFn.indexOf('!res.ok'));
+        expect(staleBlock).toContain('return;');
+        expect(staleBlock).not.toContain('currentPreviewSnapshot = null');
+        expect(staleBlock).not.toContain('invalidateCampaignPreview()');
+      });
+
+      it('3. stale Preview response cannot disable Confirm belonging to newer Preview', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const previewFn = indexHtml.split('async function generateCampaignPreview()')[1].split('currentPreviewSnapshot = requestSnapshot;')[0];
+        const staleBlock = previewFn.substring(previewFn.indexOf('reqGen !== previewRequestGeneration'), previewFn.indexOf('!res.ok'));
+        expect(staleBlock).not.toContain('disabled = true');
+        expect(staleBlock).not.toContain('invalidateCampaignPreview()');
+      });
+
+      it('4. A/B out-of-order Preview: B accepted, then A stale -> B state remains authoritative', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const previewFn = indexHtml.split('async function generateCampaignPreview()')[1];
+        expect(previewFn).toContain('reqGen !== previewRequestGeneration');
+        expect(previewFn).toContain('currentActiveBotId !== botId');
+        expect(previewFn).toContain('getAuthoringSnapshot() !== requestSnapshot');
+      });
+
+      it('5. current Preview API failure still invalidates current Preview', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const previewFn = indexHtml.split('async function generateCampaignPreview()')[1].split('currentPreviewSnapshot = requestSnapshot;')[0];
+        const failBlock = previewFn.substring(previewFn.indexOf('!res.ok || !data.success'));
+        expect(failBlock).toContain('invalidateCampaignPreview();');
+      });
+
+      it('6. current Preview API failure still shows error', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const previewFn = indexHtml.split('async function generateCampaignPreview()')[1].split('currentPreviewSnapshot = requestSnapshot;')[0];
+        const failBlock = previewFn.substring(previewFn.indexOf('!res.ok || !data.success'));
+        expect(failBlock).toContain('alert(');
+      });
+
+      it('7. Preview API failure logic is reachable after current-request validation', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const previewFn = indexHtml.split('async function generateCampaignPreview()')[1];
+        const staleCheckPos = previewFn.indexOf('reqGen !== previewRequestGeneration');
+        const apiCheckPos = previewFn.indexOf('!res.ok || !data.success');
+        expect(staleCheckPos).toBeGreaterThan(-1);
+        expect(apiCheckPos).toBeGreaterThan(-1);
+        expect(staleCheckPos).toBeLessThan(apiCheckPos);
+      });
+
+      it('8. stale template response checks generation/OA before !res.ok mutation', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1].split('function applyTemplatePreset()')[0];
+        const currencyCheckPos = templateFn.indexOf('reqBotId !== currentActiveBotId || reqGen !== templateRequestGeneration');
+        const resOkPos = templateFn.indexOf('if (!res.ok)');
+        expect(currencyCheckPos).toBeGreaterThan(-1);
+        expect(resOkPos).toBeGreaterThan(-1);
+        expect(currencyCheckPos).toBeLessThan(resOkPos);
+      });
+
+      it('9. stale template HTTP 500 cannot call clearCampaignTemplateState()', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1].split('function applyTemplatePreset()')[0];
+        const staleGuardPos = templateFn.indexOf('if (reqBotId !== currentActiveBotId || reqGen !== templateRequestGeneration)');
+        const resOkPos = templateFn.indexOf('if (!res.ok)');
+        expect(staleGuardPos).toBeGreaterThan(-1);
+        expect(resOkPos).toBeGreaterThan(-1);
+        expect(staleGuardPos).toBeLessThan(resOkPos);
+      });
+
+      it('10. OA-A stale failure cannot erase OA-B templates', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1].split('if (!res.ok)')[0];
+        expect(templateFn).toContain('reqBotId !== currentActiveBotId');
+      });
+
+      it('11. older same-OA request failure cannot erase newer same-OA success', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1].split('if (!res.ok)')[0];
+        expect(templateFn).toContain('reqGen !== templateRequestGeneration');
+      });
+
+      it('12. current template HTTP failure still clears current template state', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1].split('function applyTemplatePreset()')[0];
+        const resOkBlock = templateFn.substring(templateFn.indexOf('if (!res.ok)'), templateFn.indexOf('const data = await res.json()'));
+        expect(resOkBlock).toContain('clearCampaignTemplateState();');
+      });
+
+      it('13. stale template catch/error branch performs zero mutation', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1].split('function applyTemplatePreset()')[0];
+        const catchBlock = templateFn.substring(templateFn.indexOf('catch (e)'));
+        expect(catchBlock).toContain('if (reqBotId === currentActiveBotId && reqGen === templateRequestGeneration)');
+      });
+
+      it('14. current template catch/error branch clears safely', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1].split('function applyTemplatePreset()')[0];
+        const catchBlock = templateFn.substring(templateFn.indexOf('catch (e)'));
+        expect(catchBlock).toContain('clearCampaignTemplateState();');
+      });
+
+      it('15. successful current template response still renders safe DOM', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const templateFn = indexHtml.split('async function loadTemplatePresetDropdown()')[1].split('function applyTemplatePreset()')[0];
+        expect(templateFn).toContain('select.replaceChildren();');
+        expect(templateFn).toContain("opt.textContent = `[${labelType}] ${nameOrMsg}`;");
+      });
+
+      it('16. existing submit snapshot fence remains', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('const currentSnap = getAuthoringSnapshot();');
+        expect(indexHtml).toContain('if (!currentPreviewSnapshot || currentSnap !== currentPreviewSnapshot)');
+      });
+
+      it('17. existing template selection invalidates preview', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const applyFn = indexHtml.split('function applyTemplatePreset()')[1].split('async function generateCampaignPreview()')[0];
+        expect(applyFn).toContain('invalidateCampaignPreview();');
+      });
+    });
   });
 });

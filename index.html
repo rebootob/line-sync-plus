@@ -1976,10 +1976,16 @@
                     return;
                 }
                 const res = await fetch(`${API_BASE}/campaigns/templates?botId=${encodeURIComponent(reqBotId)}`);
+
+                if (reqBotId !== currentActiveBotId || reqGen !== templateRequestGeneration) {
+                    return;
+                }
+
                 if (!res.ok) {
                     clearCampaignTemplateState();
                     return;
                 }
+
                 const data = await res.json();
 
                 if (reqBotId !== currentActiveBotId || reqGen !== templateRequestGeneration) {
@@ -2091,17 +2097,15 @@
 
                 if (
                     reqGen !== previewRequestGeneration ||
-                    getAuthoringSnapshot() !== requestSnapshot ||
                     currentActiveBotId !== botId ||
-                    !res.ok ||
-                    !data.success
+                    getAuthoringSnapshot() !== requestSnapshot
                 ) {
+                    return;
+                }
+
+                if (!res.ok || !data.success) {
                     invalidateCampaignPreview();
-                    if (!res.ok || !data.success) {
-                        if (reqGen === previewRequestGeneration && getAuthoringSnapshot() === requestSnapshot && currentActiveBotId === botId) {
-                            alert(`❌ ไม่สามารถแสดงพรีวิวได้: ${data.message || 'ข้อมูลไม่ถูกต้อง'}`);
-                        }
-                    }
+                    alert(`❌ ไม่สามารถแสดงพรีวิวได้: ${data.message || 'ข้อมูลไม่ถูกต้อง'}`);
                     return;
                 }
 
@@ -2200,8 +2204,15 @@
                     });
                 }
             } catch (e) {
-                invalidateCampaignPreview();
-                alert('❌ เกิดข้อผิดพลาดในการดึงพรีวิว');
+                console.error(e);
+                if (
+                    reqGen === previewRequestGeneration &&
+                    currentActiveBotId === botId &&
+                    getAuthoringSnapshot() === requestSnapshot
+                ) {
+                    invalidateCampaignPreview();
+                    alert('❌ เกิดข้อผิดพลาดในการดึงพรีวิว');
+                }
             }
         }
 
