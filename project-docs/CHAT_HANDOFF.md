@@ -21,19 +21,21 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `P2-WP002-CLOSE`
-* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **STATUS**: `STANDBY`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
 * **PHASE_2_TITLE**: `Campaign Builder v2`
 * **P2-WP001**: `CLOSED / PASS`
 * **P2-WP001-R1**: `CLOSED / PASS`
-* **P2-WP002**: `PENDING_CLOSURE_VERIFICATION`
+* **P2-WP002**: `CLOSED / PASS`
 * **P2-WP002-R1**: `SUPERSEDED_BY_R2`
-* **P2-WP002-R2**: `IMPLEMENTATION_PASS / PENDING_CLOSURE`
+* **P2-WP002-R2**: `CLOSED / PASS`
+* **P2-WP002-CLOSE**: `CLOSED_PASS`
+* **ACCEPTED_FINAL_CODE_HEAD**: `b6103e9c322ff257dcfda475217186e740e4893a`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `PENDING_CLOSURE`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
@@ -115,25 +117,28 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Implementation Scope**: `index.html` ONLY (Dashboard-only incident visibility consuming `/api/ops/health` and `/api/ops/queue`).
 - **Prohibited Files**: `src/**`, `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), LINE/Telegram send, DB mutation all untouched.
 
-## Implemented P2-WP001 & P2-WP001-R1 Campaign Authoring Contract Summary
+## Implemented P2-WP002 / P2-WP002-R2 Authoritative Campaign Preview & Safe Template Reuse Summary
 
-- **Task**: P2-WP001 (Campaign Authoring Contract & OA Isolation) & P2-WP001-R1 (Fail-Closed scheduledAt Type Validation)
+- **Task**: P2-WP002, P2-WP002-R1, P2-WP002-R2, P2-WP002-CLOSE
 - **Status**: CLOSED / PASS
-- **Accepted Final HEAD**: `37b078de425e2fd3267652e142d76959f408c701`
-- **Implemented Scope**: Server-side messageType contract (`text`, `text_link`, `image_only`, `image_link`, `link_only`), HTTP/HTTPS URL validation, prohibited content fail-closed, active-OA isolated campaign reads & mutations, state-safe mutation transitions, frontend payload hardening, and fail-closed `scheduledAt` type validation (rejecting numbers, booleans, objects, arrays, explicit nulls, and past/invalid datetimes with HTTP 400).
-- **Validation Evidence**: 370 / 370 unit tests PASS (`npm test -- --runInBand`), `npm run build` PASS (0 errors), `git diff --check` PASS (0 errors). Zero Live LINE sends.
+- **Accepted Final HEAD**: `b6103e9c322ff257dcfda475217186e740e4893a`
+- **Implemented Scope**: Authoritative backend campaign preview API (`POST /api/campaign/preview`), safe template reuse DTO and content-only copy, non-destructive stale preview discard, and OA template cache fencing.
+- **Validation Evidence**: 447 / 447 unit tests PASS (`npm test -- --runInBand`), `npm run build` PASS (0 errors), `git diff --check` PASS (0 errors). Zero Live LINE sends.
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `P2-WP002`
-* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **STATUS**: `STANDBY`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
 * **P2-WP001**: `CLOSED / PASS`
 * **P2-WP001-R1**: `CLOSED / PASS`
-* **P2-WP002**: `AUTHORIZED_FOR_EXECUTION`
+* **P2-WP002**: `CLOSED / PASS`
+* **P2-WP002-R1**: `SUPERSEDED_BY_R2`
+* **P2-WP002-R2**: `CLOSED / PASS`
+* **P2-WP002-CLOSE**: `CLOSED_PASS`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
 
-Control plane authorization complete for P2-WP002 (Authoritative Campaign Preview & Safe Template Reuse V2). In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP002 within authorized scope. Do not start next task without explicit authorization.
+P2-WP002 is fully CLOSED / PASS. Standby for explicit Project Owner direction. Do not start next work package without explicit authorization.

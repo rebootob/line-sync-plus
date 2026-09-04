@@ -226,14 +226,14 @@
 
 ---
 
-## 🎯 Campaign Authoring Contract & OA Isolation (P2-WP001 STATUS: CLOSED / PASS; P2-WP001-R1 STATUS: CLOSED / PASS)
+## 🎨 Authoritative Campaign Preview & Safe Template Reuse V2 (P2-WP002 / P2-WP002-R2 STATUS: CLOSED / PASS)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts` - UNTOUCHED).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts` - UNTOUCHED).
-- **Scope**: Phase 2 Campaign Builder v2. Server-side authoritative campaign authoring contract, active OA isolation, and fail-closed `scheduledAt` type validation.
-- **Accepted Review Baseline HEAD**: `37b078de425e2fd3267652e142d76959f408c701`.
-- **Testing & Safety**: 370 passing local unit tests (`npm test -- --runInBand`), `npm run build` PASS (0 errors), `git diff --check` PASS (0 errors). Zero Live LINE sends.
+- **Scope**: Phase 2 Campaign Builder v2. Authoritative backend campaign preview API (`POST /api/campaign/preview`), safe template reuse DTO and content-only copy, non-destructive stale preview discard, and OA template cache fencing.
+- **Accepted Final Code HEAD**: `b6103e9c322ff257dcfda475217186e740e4893a`.
+- **Testing & Safety**: 447 passing local unit tests (`npm test -- --runInBand`, 0 failures, LOCAL REPORTED evidence), `npm run build` PASS (0 errors), `git diff --check` PASS (0 errors). Zero Live LINE sends.
 
 ---
 
@@ -242,14 +242,14 @@
 - **Phase 0 Status**: `CLOSED / PASS`.
 - **Phase 1 Status**: `CLOSED / PASS`.
 - **Phase 2 Status**: `IN PROGRESS`.
-- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003`, `P2-WP001`, `P2-WP001-R1` (`CLOSED / PASS`).
-- **Active Work Package**: `P2-WP002-CLOSE`.
-- **Status**: `AUTHORIZED_FOR_EXECUTION`.
+- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003`, `P2-WP001`, `P2-WP001-R1`, `P2-WP002`, `P2-WP002-R2`, `P2-WP002-CLOSE` (`CLOSED / PASS`).
+- **Active Work Package**: `NONE`.
+- **Status**: `STANDBY`.
 - **Work Package Status**:
-  - `P2-WP002-CLOSE`: `AUTHORIZED_FOR_EXECUTION`.
-  - `P2-WP002-R2`: `IMPLEMENTATION_PASS / PENDING_CLOSURE`.
+  - `P2-WP002-CLOSE`: `CLOSED_PASS`.
+  - `P2-WP002-R2`: `CLOSED / PASS`.
   - `P2-WP002-R1`: `SUPERSEDED_BY_R2`.
-  - `P2-WP002`: `PENDING_CLOSURE_VERIFICATION`.
+  - `P2-WP002`: `CLOSED / PASS`.
   - `P2-WP001`: `CLOSED / PASS`.
   - `P2-WP001-R1`: `CLOSED / PASS`.
   - `MON-WP001`: `CLOSED / PASS`.
@@ -265,4 +265,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `NONE` (Status: `PENDING_CLOSURE`).
+- **Next Candidate**: `NONE` (Status: `AWAITING_OWNER_DIRECTION`).

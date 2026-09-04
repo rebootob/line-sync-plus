@@ -1,30 +1,32 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: P2-WP002-CLOSE
-STATUS: AUTHORIZED_FOR_EXECUTION
+ACTIVE_WORK_PACKAGE: NONE
+STATUS: STANDBY
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: PENDING_CLOSURE
+NEXT_CANDIDATE_STATUS: AWAITING_OWNER_DIRECTION
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: IN PROGRESS
 PHASE_2_TITLE: Campaign Builder v2
 P2-WP001: CLOSED / PASS
 P2-WP001-R1: CLOSED / PASS
-P2-WP002: PENDING_CLOSURE_VERIFICATION
+P2-WP002: CLOSED / PASS
 P2-WP002-R1: SUPERSEDED_BY_R2
-P2-WP002-R2: IMPLEMENTATION_PASS / PENDING_CLOSURE
+P2-WP002-R2: CLOSED / PASS
+P2-WP002-CLOSE: CLOSED_PASS
+ACCEPTED_FINAL_CODE_HEAD: b6103e9c322ff257dcfda475217186e740e4893a
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
-- **P2-WP002-CLOSE — P2-WP002 Final Acceptance & Evidence Sync**: `AUTHORIZED_FOR_EXECUTION`
-- **P2-WP002-R2 — Non-Destructive Stale Response Discard**: `IMPLEMENTATION_PASS / PENDING_CLOSURE`
+- **P2-WP002-CLOSE — P2-WP002 Final Acceptance & Evidence Sync**: `CLOSED_PASS`
+- **P2-WP002-R2 — Non-Destructive Stale Response Discard**: `CLOSED / PASS`
 - **P2-WP002-R1 — Stale Preview Race & OA Template Cache Fencing**: `SUPERSEDED_BY_R2`
-- **P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2**: `PENDING_CLOSURE_VERIFICATION`
+- **P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2**: `CLOSED / PASS`
 - **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `CLOSED / PASS`
 - **P2-WP001-R1 — Fail-Closed scheduledAt Type Validation**: `CLOSED / PASS`
 - **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`
@@ -445,42 +447,44 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
-## 🛠️ P2-WP001-R1 — Fail-Closed scheduledAt Type Validation (STATUS: CORRECTIVE_AUTHORIZED)
+## 🎨 P2-WP002 / P2-WP002-R2 — Authoritative Campaign Preview & Safe Template Reuse V2 (STATUS: CLOSED / PASS)
 
 > [!IMPORTANT]
 > **Boundary & Invariants**:
-> - **Code Baseline HEAD**: `f8b18700ac51120d42ac717514a659a2ccb97e09`
-> - **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts` ONLY. Explicitly DO NOT modify `index.html`.
-> - **Prohibited**: `index.html`, `run/**`, Worker version changes, `runtime-version.ts` changes, `entities/**`, DB schema/migrations, ARM/CONFIRM, send ledger, lease/reconciliation, LINE DOM/send, Telegram.
+> - **Accepted Final Code HEAD**: `b6103e9c322ff257dcfda475217186e740e4893a`
 > - **Worker Version**: `28.16` (UNTOUCHED) | **Required Worker**: `28.16` (UNTOUCHED) | **Runtime Contract**: `2` (UNTOUCHED)
+> - **Testing & Verification**:
+>   - Full local automated test suite: `447/447 PASS` (0 failures)
+>   - Evidence: `LOCAL REPORTED`
+>   - GitHub CI: `no independent check/workflow evidence observed`
+>   - Build Verification: `npm run build` PASS
+>   - Diff Verification: `git diff --check` PASS
 
-### Defect Root Cause
-`POST /api/campaign/add` currently treats non-string `scheduledAt` values (e.g. `number`, `boolean`, `object`, `array`, `null`) as blank, silently converting invalid supplied schedule requests into immediate/pending campaigns.
-
-### Corrective Requirements
-- `scheduledAt` property absent => immediate/pending campaign allowed.
-- `scheduledAt == ""` or whitespace-only string => immediate/pending campaign allowed.
-- `scheduledAt` property present with NON-STRING value (number, boolean, object, array, null) => HTTP 400 / fail closed.
-- `scheduledAt` non-empty string but invalid datetime => HTTP 400.
-- `scheduledAt` valid datetime <= current time => HTTP 400.
-- `scheduledAt` valid future datetime => campaign status `scheduled`.
-- Do not stringify or coerce non-string values.
-- Do not change frontend behavior (`index.html`).
+### Implementation Summary
+- Authoritative backend Preview API (`POST /api/campaign/preview`).
+- Safe template reuse DTO and content-only copy.
+- Non-destructive stale Preview discard & OA template cache fencing (P2-WP002-R2).
+- Zero Live LINE sends executed.
 
 ---
 
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `P2-WP001-R1`
-- **Status**: `CORRECTIVE_AUTHORIZED`
+- **Active Work Package**: `NONE`
+- **Status**: `STANDBY`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `CLOSED / PASS`
 - **Phase 2 Status**: `IN PROGRESS`
-- **P2-WP001 Status**: `CORRECTIVE_REQUIRED`
-- **P2-WP001-R1 Status**: `CORRECTIVE_AUTHORIZED`
+- **P2-WP001 Status**: `CLOSED / PASS`
+- **P2-WP001-R1 Status**: `CLOSED / PASS`
+- **P2-WP002 Status**: `CLOSED / PASS`
+- **P2-WP002-R1 Status**: `SUPERSEDED_BY_R2`
+- **P2-WP002-R2 Status**: `CLOSED / PASS`
+- **P2-WP002-CLOSE Status**: `CLOSED_PASS`
+- **ACCEPTED_FINAL_CODE_HEAD**: `b6103e9c322ff257dcfda475217186e740e4893a`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`
 - **MON-WP002 Status**: `CLOSED / PASS`
 - **MON-WP003 Status**: `CLOSED / PASS`
 - **Next Candidate**: `NONE`
-- **Next Candidate Status**: `PENDING_CORRECTIVE_REVIEW`
+- **Next Candidate Status**: `AWAITING_OWNER_DIRECTION`

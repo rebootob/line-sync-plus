@@ -1,6 +1,6 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 11
+CONTROL_VERSION: 12
 
 TASK_ID:
 P2-WP002-CLOSE
@@ -9,12 +9,12 @@ TITLE:
 P2-WP002 Final Acceptance & Evidence Sync
 
 STATUS:
-AUTHORIZED_FOR_EXECUTION
+CLOSED_PASS
 
 CODE_BASELINE_HEAD:
 b6103e9c322ff257dcfda475217186e740e4893a
 
-ACCEPTED_CODE_HEAD:
+ACCEPTED_FINAL_CODE_HEAD:
 b6103e9c322ff257dcfda475217186e740e4893a
 
 PARENT_TASK:
@@ -39,18 +39,20 @@ PHASE_2: IN PROGRESS
 PHASE_2_TITLE: Campaign Builder v2
 P2-WP001: CLOSED / PASS
 P2-WP001-R1: CLOSED / PASS
-P2-WP002: PENDING_CLOSURE_VERIFICATION
+P2-WP002: CLOSED / PASS
 P2-WP002-R1: SUPERSEDED_BY_R2
-P2-WP002-R2: IMPLEMENTATION_PASS / PENDING_CLOSURE
-ACTIVE_WORK_PACKAGE: P2-WP002-CLOSE
+P2-WP002-R2: CLOSED / PASS
+P2-WP002-CLOSE: CLOSED_PASS
+ACTIVE_WORK_PACKAGE: NONE
+STATUS: STANDBY
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: PENDING_CLOSURE
+NEXT_CANDIDATE_STATUS: AWAITING_OWNER_DIRECTION
 
 --------------------------------------------------
 OBJECTIVE
 --------------------------------------------------
 
-Authorize final acceptance, verification evidence sync, and docs-only closure of P2-WP002 following independent ChatGPT review PASS of P2-WP002-R2 source implementation at HEAD b6103e9c322ff257dcfda475217186e740e4893a.
+Final acceptance, verification evidence sync, and docs-only closure of P2-WP002 following independent ChatGPT review PASS of P2-WP002-R2 source implementation at HEAD b6103e9c322ff257dcfda475217186e740e4893a and full local automated verification.
 
 ChatGPT Review Results:
 - P2-WP002-R2 source implementation: PASS
@@ -67,6 +69,25 @@ ChatGPT Review Results:
 - Backend preview contract: PASS
 - Active-OA isolation: PASS
 - Worker safety: PASS
+
+--------------------------------------------------
+VERIFICATION EVIDENCE
+--------------------------------------------------
+
+Full local automated test suite:
+447/447 PASS
+0 failures
+Evidence: LOCAL REPORTED
+GitHub CI: no independent check/workflow evidence observed
+
+Build Verification:
+npm run build PASS
+
+Diff Verification:
+git diff --check PASS
+
+ACCEPTED_FINAL_CODE_HEAD:
+b6103e9c322ff257dcfda475217186e740e4893a
 
 --------------------------------------------------
 AUTHORIZED IMPLEMENTATION FILES
@@ -94,22 +115,6 @@ DO NOT modify:
 - DB schema / migrations
 - package*.json
 - any non-project-docs file
-
---------------------------------------------------
-CLOSURE EXECUTION STEPS (NEXT RUN)
---------------------------------------------------
-
-In the NEXT execution run:
-1. Run verification commands:
-   - npm test -- --runInBand
-   - npm run build
-   - git diff --check
-2. Capture ACTUAL test count from command output (LOCAL REPORTED).
-3. If all verification steps pass:
-   - Update control docs to mark P2-WP002 CLOSED / PASS, P2-WP002-R2 CLOSED / PASS, P2-WP002-CLOSE CLOSED_PASS, ACTIVE_WORK_PACKAGE NONE, STATUS STANDBY, NEXT_CANDIDATE NONE, NEXT_CANDIDATE_STATUS AWAITING_OWNER_DIRECTION.
-   - Commit: docs: close P2-WP002 campaign preview and template reuse
-   - Push origin main
-   - Fetch origin & prove HEAD == origin/main and clean working tree.
 
 --------------------------------------------------
 VERIFICATION & SAFETY
