@@ -243,10 +243,11 @@
 - **Phase 1 Status**: `CLOSED / PASS`.
 - **Phase 2 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003`, `P2-WP001`, `P2-WP001-R1` (`CLOSED / PASS`).
-- **Active Work Package**: `P2-WP002`.
-- **Status**: `READY_FOR_CHATGPT_REVIEW`.
+- **Active Work Package**: `P2-WP002-R1`.
+- **Status**: `CORRECTIVE_AUTHORIZED`.
 - **Work Package Status**:
-  - `P2-WP002`: `READY_FOR_CHATGPT_REVIEW`.
+  - `P2-WP002-R1`: `CORRECTIVE_AUTHORIZED`.
+  - `P2-WP002`: `CORRECTIVE_REQUIRED`.
   - `P2-WP001`: `CLOSED / PASS`.
   - `P2-WP001-R1`: `CLOSED / PASS`.
   - `MON-WP001`: `CLOSED / PASS`.
@@ -262,4 +263,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `NONE` (Status: `PENDING_REVIEW`).
+- **Next Candidate**: `NONE` (Status: `PENDING_CORRECTIVE_REVIEW`).
