@@ -48,6 +48,25 @@
   - Truthful Worker Freshness: Analyzes static in-memory `AppController.workerSeenAt` without mutating observation timestamps or generating side effects. Classified as `'online'` (<=30s), `'stale'` (>30s), or `'unknown'` (null/missing).
   - OA Context Alignment: Checks whether `workerBotId === activeBotId`. Returns `aligned: true | false | "unknown"`.
   - Scoped Metrics: Reports queue counts (`pending`, `processing`, `reconcileRequired`) and campaign states (`pausedReconcile`, `stoppedError`) scoped strictly by `activeBotId`. When no active OA is selected, global cross-OA counts are NOT queried; metric counts are returned as `null`, and overall status is `attention`.
+
+---
+
+## 📊 Queue / Lease / Reconciliation Monitoring (MON-WP002 STATUS: READY_FOR_CHATGPT_REVIEW)
+
+- **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
+- **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
+- **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
+- **Scope**: Phase 1 Observability & Monitoring. Read-only diagnostic endpoint and UI card.
+- **Implemented Capabilities**:
+  - `GET /api/ops/queue`: Loopback-only endpoint (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`). Returns 403 Forbidden for external IPs. Socket remote address enforced.
+  - Truthful Status Enum: `healthy | degraded | attention`
+    - `healthy`: Active OA selected, queries succeed, zero anomalies.
+    - `attention`: No active OA selected, or positive anomaly present (`expired > 0`, `missing > 0`, `residual > 0`, `recJobs > 0`, `recParts > 0`, `staleArmed > 0`, `pausedCampaigns > 0`).
+    - `degraded`: OA lookup failure or metric query failure (all counts returned as `null`).
+  - Scoped Metrics: Strictly scoped by `activeBotId`. When no active OA is selected, global cross-OA counts are NOT queried; metric counts are returned as `null`, and overall status is `attention`.
+  - Metrics tracked: `queue.pending`, `queue.processing`, `leases.active`, `leases.expired`, `leases.missing`, `leases.residual`, `reconciliation.jobs`, `reconciliation.parts`, `reconciliation.staleArmed`, `reconciliation.pausedCampaigns`.
+  - Dashboard: Real-time Queue, Lease & Reconciliation card in `index.html` polling every 6 seconds, rendering `? Unknown` for unavailable/failed metrics and visible warning for anomalies.
+- **Automated Validation**: 317/317 unit tests PASS (23 dedicated to MON-WP002, 0 failures, LOCAL REPORTED evidence only; no GitHub CI status checks).
   - Zero Secret Exposure: Excludes `leaseToken`, `dispatchToken`, Telegram credentials, cookies, customer PII, and message payloads.
   - Dashboard UI: Added top-level responsive Operational Health card in `index.html` polling `GET /api/ops/health` every 6 seconds. Renders `? Unknown` for null/unavailable metrics, zero only when positively returned as numeric 0, and never renders unknown states as green.
   - Automated Unit Tests: 23 dedicated unit tests in `src/app.controller.spec.ts` bringing total test suite to 294/294 passing.
@@ -149,8 +168,8 @@
 ## ✅ What Currently Works (Confirmed Working & Tested)
 
 1. **Database & Entities (`PostgreSQL` / `TypeORM`)**: Composite primary key `(botId, lineUserId)` on `Customer`. Job lease schema on `CampaignJob`. Send-part ledger entity `CampaignSendPart` with unique `(jobId, partKey)`.
-2. **NestJS REST API (`src/app.controller.ts`)**: Atomic job claim, active job lease heartbeat, fenced finalization (`/campaign/success`, `/campaign/fail`, `/campaign/stop`), queue safety pre-pass, send-part ARM+CONFIRM ledger, hard-fenced operator reconciliation, loopback-only Operational Health & Readiness monitoring (`GET /api/ops/health`).
-3. **Web Dashboard (`index.html`)**: Contract v2 badge, Required Worker v28.16, operator reconciliation view, real-time Operational Health card with 6s polling.
+2. **NestJS REST API (`src/app.controller.ts`)**: Atomic job claim, active job lease heartbeat, fenced finalization (`/campaign/success`, `/campaign/fail`, `/campaign/stop`), queue safety pre-pass, send-part ARM+CONFIRM ledger, hard-fenced operator reconciliation, loopback-only Operational Health & Readiness monitoring (`GET /api/ops/health`), and loopback-only Queue / Lease / Reconciliation Monitoring (`GET /api/ops/queue`).
+3. **Web Dashboard (`index.html`)**: Contract v2 badge, Required Worker v28.16, operator reconciliation view, real-time Operational Health card with 6s polling, real-time Queue, Lease & Reconciliation card with 6s polling.
 4. **Client Automation Userscript (`run/LineSyncApp.js` v28.16)**: Worker instance header `X-LineSync-Worker-Instance`, active job heartbeat timer, pre-send lease renewal fencing, send-part ARM+CONFIRM ledger, zero network gap DOM dispatch.
 
 ---
@@ -160,10 +179,11 @@
 - **Phase 0 Status**: `CLOSED / PASS`.
 - **Phase 1 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003` (`CLOSED / PASS`).
-- **Active Work Package**: `NONE`.
+- **Active Work Package**: `MON-WP002`.
 - **Work Package Status**:
   - `MON-WP001`: `CLOSED / PASS`.
   - `MON-WP001-R1`: `CLOSED / PASS`.
+  - `MON-WP002`: `READY_FOR_CHATGPT_REVIEW`.
   - `REL-WP003`: `CLOSED / PASS`.
   - `REL-WP003-R1`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP003-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
@@ -173,4 +193,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `MON-WP002` (Status: `AWAITING_OWNER_DIRECTION`).
+- **Next Candidate**: `NONE` (Status: `PENDING_REVIEW`).

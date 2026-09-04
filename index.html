@@ -185,6 +185,59 @@
             </div>
         </div>
 
+        <!-- 📊 MON-WP002 Queue / Lease / Reconciliation Monitoring Section -->
+        <div id="opsQueueSection" style="margin-bottom: 15px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <strong style="font-size: 13px; color: #1e293b;">📊 Queue, Lease &amp; Reconciliation Monitoring</strong>
+                    <span id="opsQueueOverallStatus" class="badge" style="background:#f1f5f9; color:#64748b; font-size:11px;">? Unknown</span>
+                </div>
+                <span id="opsQueueCheckedAt" style="font-size: 11px; color: #94a3b8;">Checked: -</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; font-size: 12px;">
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Pending</div>
+                    <div id="opsMonPending" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Processing</div>
+                    <div id="opsMonProcessing" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Active Lease</div>
+                    <div id="opsMonActiveLease" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Expired Lease</div>
+                    <div id="opsMonExpiredLease" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Missing Lease</div>
+                    <div id="opsMonMissingLease" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Residual Lease</div>
+                    <div id="opsMonResidualLease" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Reconcile Jobs</div>
+                    <div id="opsMonReconcileJobs" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Reconcile Parts</div>
+                    <div id="opsMonReconcileParts" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Stale Armed</div>
+                    <div id="opsMonStaleArmed" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Paused Reconcile</div>
+                    <div id="opsMonPausedCampaigns" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+            </div>
+        </div>
+
         <div class="toolbar" style="flex-wrap: wrap; gap: 10px;">
             <div class="toolbar-group" style="flex: 1; flex-wrap: wrap; gap: 8px;">
                 <input type="text" id="searchInput" class="search-box" placeholder="🔍 ค้นหาชื่อ หรือ รหัส Line ID..." oninput="handleFilters()" style="min-width: 200px;">
@@ -819,6 +872,108 @@
 
         setInterval(updateOpsHealthUI, 6000);
 
+        // 📊 MON-WP002 Queue / Lease / Reconciliation Monitoring UI
+        async function updateOpsQueueUI() {
+            const overallEl = document.getElementById('opsQueueOverallStatus');
+            const checkedEl = document.getElementById('opsQueueCheckedAt');
+            const pendingEl = document.getElementById('opsMonPending');
+            const procEl = document.getElementById('opsMonProcessing');
+            const activeLeaseEl = document.getElementById('opsMonActiveLease');
+            const expiredLeaseEl = document.getElementById('opsMonExpiredLease');
+            const missingLeaseEl = document.getElementById('opsMonMissingLease');
+            const residualLeaseEl = document.getElementById('opsMonResidualLease');
+            const recJobsEl = document.getElementById('opsMonReconcileJobs');
+            const recPartsEl = document.getElementById('opsMonReconcileParts');
+            const staleArmedEl = document.getElementById('opsMonStaleArmed');
+            const pausedCampEl = document.getElementById('opsMonPausedCampaigns');
+
+            function setQueueUnknown() {
+                if (overallEl) { overallEl.textContent = '? Unknown'; overallEl.style.background = '#f1f5f9'; overallEl.style.color = '#64748b'; }
+                if (checkedEl) checkedEl.textContent = 'Checked: error';
+                const els = [pendingEl, procEl, activeLeaseEl, expiredLeaseEl, missingLeaseEl, residualLeaseEl, recJobsEl, recPartsEl, staleArmedEl, pausedCampEl];
+                els.forEach(el => {
+                    if (el) el.innerHTML = '<span style="color:#64748b;">? Unknown</span>';
+                });
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/ops/queue`);
+                if (!res.ok) {
+                    setQueueUnknown();
+                    return;
+                }
+                const data = await res.json();
+                if (!data || !data.success) {
+                    setQueueUnknown();
+                    return;
+                }
+
+                if (checkedEl && data.checkedAt) {
+                    const d = new Date(data.checkedAt);
+                    checkedEl.textContent = `Checked: ${d.toLocaleTimeString()}`;
+                }
+
+                if (overallEl) {
+                    if (data.status === 'healthy') {
+                        overallEl.textContent = '✅ Normal';
+                        overallEl.style.background = '#dcfce7';
+                        overallEl.style.color = '#15803d';
+                    } else if (data.status === 'attention') {
+                        overallEl.textContent = '⚠️ Attention';
+                        overallEl.style.background = '#fef3c7';
+                        overallEl.style.color = '#b45309';
+                    } else if (data.status === 'degraded') {
+                        overallEl.textContent = '❌ Error';
+                        overallEl.style.background = '#fee2e2';
+                        overallEl.style.color = '#b91c1c';
+                    } else {
+                        overallEl.textContent = '? Unknown';
+                        overallEl.style.background = '#f1f5f9';
+                        overallEl.style.color = '#64748b';
+                    }
+                }
+
+                function renderInfo(el, val) {
+                    if (!el) return;
+                    if (typeof val === 'number') {
+                        el.innerHTML = `<span style="color:#334155;">${val}</span>`;
+                    } else {
+                        el.innerHTML = `<span style="color:#64748b;">? Unknown</span>`;
+                    }
+                }
+
+                function renderAnomaly(el, val) {
+                    if (!el) return;
+                    if (typeof val === 'number') {
+                        if (val > 0) {
+                            el.innerHTML = `<span style="color:#b45309; font-weight:bold;">⚠️ ${val}</span>`;
+                        } else {
+                            el.innerHTML = `<span style="color:#15803d;">0</span>`;
+                        }
+                    } else {
+                        el.innerHTML = `<span style="color:#64748b;">? Unknown</span>`;
+                    }
+                }
+
+                renderInfo(pendingEl, data.queue ? data.queue.pending : null);
+                renderInfo(procEl, data.queue ? data.queue.processing : null);
+                renderInfo(activeLeaseEl, data.leases ? data.leases.active : null);
+
+                renderAnomaly(expiredLeaseEl, data.leases ? data.leases.expired : null);
+                renderAnomaly(missingLeaseEl, data.leases ? data.leases.missing : null);
+                renderAnomaly(residualLeaseEl, data.leases ? data.leases.residual : null);
+                renderAnomaly(recJobsEl, data.reconciliation ? data.reconciliation.jobs : null);
+                renderAnomaly(recPartsEl, data.reconciliation ? data.reconciliation.parts : null);
+                renderAnomaly(staleArmedEl, data.reconciliation ? data.reconciliation.staleArmed : null);
+                renderAnomaly(pausedCampEl, data.reconciliation ? data.reconciliation.pausedCampaigns : null);
+
+            } catch (e) {
+                setQueueUnknown();
+            }
+        }
+
+        setInterval(updateOpsQueueUI, 6000);
+
         let currentActiveBotId = null;
 
         async function loadOaContextsUI() {
@@ -939,6 +1094,7 @@
                 await loadOaContextsUI();
                 fetchQuarantinedReconciliation();
                 updateOpsHealthUI();
+                updateOpsQueueUI();
 
                 if (!currentActiveBotId) {
                     allCustomers = [];

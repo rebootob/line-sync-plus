@@ -85,6 +85,7 @@ describe('AppController', () => {
     findOne: jest.fn().mockResolvedValue(null),
     create: jest.fn().mockImplementation(dto => dto),
     save: jest.fn().mockImplementation(dto => Promise.resolve({ id: 'sp1', ...dto })),
+    count: jest.fn().mockResolvedValue(0),
   };
 
   const mockCampaignJobRepo = {
@@ -4116,6 +4117,395 @@ describe('AppController', () => {
       expect(res.campaigns.pausedReconcile).toBe(0);
       expect(res.campaigns.stoppedError).toBe(0);
       expect(res.status).toBe('healthy');
+    });
+  });
+
+  describe('MON-WP002 — Queue / Lease / Reconciliation Monitoring Tests', () => {
+    let mockRes: any;
+    const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+
+    beforeEach(() => {
+      mockRes = {
+        status: jest.fn().mockImplementation((code) => {
+          mockRes.statusCode = code;
+          return mockRes;
+        }),
+        statusCode: 200,
+      };
+      mockCampaignJobRepo.count.mockReset();
+      mockCampaignRepo.count.mockReset();
+      mockCampaignSendPartRepo.count.mockReset();
+      mockCampaignJobRepo.count.mockResolvedValue(0);
+      mockCampaignRepo.count.mockResolvedValue(0);
+      mockCampaignSendPartRepo.count.mockResolvedValue(0);
+      mockOaRuntimeStateRepo.findOne.mockResolvedValue({ id: 'global', activeBotId: testBotId });
+    });
+
+    it('1. loopback accepted', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' }, ip: '127.0.0.1' };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+      expect(res.success).toBe(true);
+      expect(mockRes.statusCode).toBe(200);
+      expect(res.status).toBe('healthy');
+    });
+
+    it('2. non-loopback forbidden', async () => {
+      const mockReq: any = { socket: { remoteAddress: '192.168.1.50' }, ip: '192.168.1.50' };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+      expect(res.success).toBe(false);
+      expect(mockRes.statusCode).toBe(403);
+      expect(res.message).toContain('Forbidden');
+    });
+
+    it('3. no active OA', async () => {
+      mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ id: 'global', activeBotId: null });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.status).toBe('attention');
+      expect(res.oa.active).toBe(false);
+      expect(res.queue.pending).toBeNull();
+      expect(res.queue.processing).toBeNull();
+      expect(res.leases.active).toBeNull();
+      expect(res.leases.expired).toBeNull();
+      expect(res.leases.missing).toBeNull();
+      expect(res.leases.residual).toBeNull();
+      expect(res.reconciliation.jobs).toBeNull();
+      expect(res.reconciliation.parts).toBeNull();
+      expect(res.reconciliation.staleArmed).toBeNull();
+      expect(res.reconciliation.pausedCampaigns).toBeNull();
+    });
+
+    it('4. no cross-OA aggregation', async () => {
+      mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ id: 'global', activeBotId: null });
+      const jobSpy = jest.spyOn(mockCampaignJobRepo, 'count');
+      const partSpy = jest.spyOn(mockCampaignSendPartRepo, 'count');
+      const campSpy = jest.spyOn(mockCampaignRepo, 'count');
+
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(jobSpy).not.toHaveBeenCalled();
+      expect(partSpy).not.toHaveBeenCalled();
+      expect(campSpy).not.toHaveBeenCalled();
+    });
+
+    it('5. OA lookup failure', async () => {
+      mockOaRuntimeStateRepo.findOne.mockRejectedValueOnce(new Error('State DB failure'));
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.status).toBe('degraded');
+      expect(res.oa.active).toBeNull();
+      expect(res.queue.pending).toBeNull();
+      expect(res.queue.processing).toBeNull();
+      expect(res.leases.active).toBeNull();
+      expect(res.leases.expired).toBeNull();
+      expect(res.leases.missing).toBeNull();
+      expect(res.leases.residual).toBeNull();
+      expect(res.reconciliation.jobs).toBeNull();
+      expect(res.reconciliation.parts).toBeNull();
+      expect(res.reconciliation.staleArmed).toBeNull();
+      expect(res.reconciliation.pausedCampaigns).toBeNull();
+    });
+
+    it('6. all-zero success = healthy', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.status).toBe('healthy');
+      expect(res.oa.active).toBe(true);
+      expect(res.queue.pending).toBe(0);
+      expect(res.queue.processing).toBe(0);
+      expect(res.leases.active).toBe(0);
+      expect(res.leases.expired).toBe(0);
+      expect(res.leases.missing).toBe(0);
+      expect(res.leases.residual).toBe(0);
+      expect(res.reconciliation.jobs).toBe(0);
+      expect(res.reconciliation.parts).toBe(0);
+      expect(res.reconciliation.staleArmed).toBe(0);
+      expect(res.reconciliation.pausedCampaigns).toBe(0);
+    });
+
+    it('7. pending alone remains healthy', async () => {
+      mockCampaignJobRepo.count.mockImplementation((opts: any) => {
+        if (opts.where && opts.where.status === 'pending') return Promise.resolve(10);
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.queue.pending).toBe(10);
+      expect(res.status).toBe('healthy');
+    });
+
+    it('8. processing + active lease remains healthy', async () => {
+      mockCampaignJobRepo.count.mockImplementation((opts: any) => {
+        if (opts.where && opts.where.status === 'processing') {
+          if (opts.where.leaseExpiresAt?._type === 'moreThan') return Promise.resolve(3);
+          if (!opts.where.leaseExpiresAt && !Array.isArray(opts.where)) return Promise.resolve(3);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.queue.processing).toBe(3);
+      expect(res.leases.active).toBe(3);
+      expect(res.leases.expired).toBe(0);
+      expect(res.status).toBe('healthy');
+    });
+
+    it('9. expired lease', async () => {
+      mockCampaignJobRepo.count.mockImplementation((opts: any) => {
+        if (opts.where && opts.where.status === 'processing' && opts.where.leaseExpiresAt?._type === 'lessThanOrEqual') {
+          return Promise.resolve(2);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.leases.expired).toBe(2);
+      expect(res.status).toBe('attention');
+    });
+
+    it('10. missing lease', async () => {
+      mockCampaignJobRepo.count.mockImplementation((opts: any) => {
+        if (Array.isArray(opts.where) && opts.where.some((w: any) => w.status === 'processing' && 'leaseToken' in w)) {
+          return Promise.resolve(1);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.leases.missing).toBe(1);
+      expect(res.status).toBe('attention');
+    });
+
+    it('11. one job with multiple missing fields counted once', async () => {
+      let missingWhereQuery: any = null;
+      mockCampaignJobRepo.count.mockImplementation((opts: any) => {
+        if (Array.isArray(opts.where) && opts.where.some((w: any) => w.status === 'processing' && 'leaseToken' in w)) {
+          missingWhereQuery = opts.where;
+          return Promise.resolve(1);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.leases.missing).toBe(1);
+      expect(Array.isArray(missingWhereQuery)).toBe(true);
+      expect(missingWhereQuery.length).toBe(3);
+    });
+
+    it('12. residual lease', async () => {
+      mockCampaignJobRepo.count.mockImplementation((opts: any) => {
+        if (Array.isArray(opts.where) && opts.where.some((w: any) => 'leaseHeartbeatAt' in w)) {
+          return Promise.resolve(2);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.leases.residual).toBe(2);
+      expect(res.status).toBe('attention');
+    });
+
+    it('13. reconcile job', async () => {
+      mockCampaignJobRepo.count.mockImplementation((opts: any) => {
+        if (opts.where && opts.where.status === 'reconcile_required') {
+          return Promise.resolve(1);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.reconciliation.jobs).toBe(1);
+      expect(res.status).toBe('attention');
+    });
+
+    it('14. reconcile part', async () => {
+      mockCampaignSendPartRepo.count.mockImplementation((opts: any) => {
+        if (opts.where && opts.where.status === 'reconcile_required') {
+          return Promise.resolve(2);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.reconciliation.parts).toBe(2);
+      expect(res.status).toBe('attention');
+    });
+
+    it('15. stale armed >=60 seconds', async () => {
+      mockCampaignSendPartRepo.count.mockImplementation((opts: any) => {
+        if (Array.isArray(opts.where) && opts.where.some((w: any) => w.status === 'armed')) {
+          return Promise.resolve(1);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.reconciliation.staleArmed).toBe(1);
+      expect(res.status).toBe('attention');
+    });
+
+    it('16. recent armed <60 seconds not stale', async () => {
+      let armedWhere: any = null;
+      mockCampaignSendPartRepo.count.mockImplementation((opts: any) => {
+        if (Array.isArray(opts.where) && opts.where.some((w: any) => w.status === 'armed')) {
+          armedWhere = opts.where;
+          return Promise.resolve(0);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.reconciliation.staleArmed).toBe(0);
+      expect(res.status).toBe('healthy');
+      expect(armedWhere).not.toBeNull();
+    });
+
+    it('17. null armedAt stale', async () => {
+      let armedWhere: any = null;
+      mockCampaignSendPartRepo.count.mockImplementation((opts: any) => {
+        if (Array.isArray(opts.where) && opts.where.some((w: any) => w.status === 'armed')) {
+          armedWhere = opts.where;
+          return Promise.resolve(1);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.reconciliation.staleArmed).toBe(1);
+      expect(armedWhere.some((w: any) => 'armedAt' in w)).toBe(true);
+    });
+
+    it('18. paused_reconcile', async () => {
+      mockCampaignRepo.count.mockImplementation((opts: any) => {
+        if (opts.where && opts.where.status === 'paused_reconcile') {
+          return Promise.resolve(1);
+        }
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.reconciliation.pausedCampaigns).toBe(1);
+      expect(res.status).toBe('attention');
+    });
+
+    it('19. any metric failure => all null/degraded', async () => {
+      mockCampaignSendPartRepo.count.mockRejectedValueOnce(new Error('Part count timeout'));
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(res.status).toBe('degraded');
+      expect(res.oa.active).toBe(true);
+      expect(res.queue.pending).toBeNull();
+      expect(res.queue.processing).toBeNull();
+      expect(res.leases.active).toBeNull();
+      expect(res.leases.expired).toBeNull();
+      expect(res.leases.missing).toBeNull();
+      expect(res.leases.residual).toBeNull();
+      expect(res.reconciliation.jobs).toBeNull();
+      expect(res.reconciliation.parts).toBeNull();
+      expect(res.reconciliation.staleArmed).toBeNull();
+      expect(res.reconciliation.pausedCampaigns).toBeNull();
+    });
+
+    it('20. privacy/secret exclusion', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+      const jsonStr = JSON.stringify(res);
+
+      expect(jsonStr).not.toContain(testBotId);
+      expect(jsonStr).not.toContain('botId');
+      expect(jsonStr).not.toContain('activeBotId');
+      expect(jsonStr).not.toContain('lineUserId');
+      expect(jsonStr).not.toContain('leaseToken');
+      expect(jsonStr).not.toContain('leaseOwner');
+      expect(jsonStr).not.toContain('dispatchToken');
+      expect(jsonStr).not.toContain('dispatchOwner');
+      expect(jsonStr).not.toContain('armRequestId');
+      expect(jsonStr).not.toContain('reconcileReason');
+      expect(jsonStr).not.toContain('cookies');
+      expect(jsonStr).not.toContain('message');
+    });
+
+    it('21. no write/mutation', async () => {
+      mockCampaignJobRepo.save.mockClear();
+      mockCampaignJobRepo.update.mockClear();
+      mockOaRuntimeStateRepo.save.mockClear();
+      const jobSaveSpy = jest.spyOn(mockCampaignJobRepo, 'save');
+      const jobUpdateSpy = jest.spyOn(mockCampaignJobRepo, 'update');
+      const oaSaveSpy = jest.spyOn(mockOaRuntimeStateRepo, 'save');
+      const originalSeenAt = (AppController as any).workerSeenAt;
+
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(jobSaveSpy).not.toHaveBeenCalled();
+      expect(jobUpdateSpy).not.toHaveBeenCalled();
+      expect(oaSaveSpy).not.toHaveBeenCalled();
+      expect((AppController as any).workerSeenAt).toBe(originalSeenAt);
+    });
+
+    it('22. active OA scoping', async () => {
+      const checkedScopes: string[] = [];
+      mockCampaignJobRepo.count.mockImplementation((opts: any) => {
+        if (opts.where && !Array.isArray(opts.where)) {
+          checkedScopes.push(opts.where.botId);
+        } else if (Array.isArray(opts.where)) {
+          opts.where.forEach((w: any) => checkedScopes.push(w.botId));
+        }
+        return Promise.resolve(0);
+      });
+      mockCampaignSendPartRepo.count.mockImplementation((opts: any) => {
+        if (opts.where && !Array.isArray(opts.where)) {
+          checkedScopes.push(opts.where.botId);
+        } else if (Array.isArray(opts.where)) {
+          opts.where.forEach((w: any) => checkedScopes.push(w.botId));
+        }
+        return Promise.resolve(0);
+      });
+      mockCampaignRepo.count.mockImplementation((opts: any) => {
+        if (opts.where && !Array.isArray(opts.where)) {
+          checkedScopes.push(opts.where.botId);
+        }
+        return Promise.resolve(0);
+      });
+
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(checkedScopes.length).toBeGreaterThan(0);
+      expect(checkedScopes.every(id => id === testBotId)).toBe(true);
+    });
+
+    it('23. no active OA does not run count queries', async () => {
+      mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ id: 'global', activeBotId: null });
+      const jobCountSpy = jest.spyOn(mockCampaignJobRepo, 'count');
+      const partCountSpy = jest.spyOn(mockCampaignSendPartRepo, 'count');
+      const campCountSpy = jest.spyOn(mockCampaignRepo, 'count');
+
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsQueue(mockReq, mockRes);
+
+      expect(jobCountSpy).not.toHaveBeenCalled();
+      expect(partCountSpy).not.toHaveBeenCalled();
+      expect(campCountSpy).not.toHaveBeenCalled();
+      expect(res.status).toBe('attention');
+      expect(res.oa.active).toBe(false);
     });
   });
 });

@@ -1,11 +1,11 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: NONE
-STATUS: STANDBY
+ACTIVE_WORK_PACKAGE: MON-WP002
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
-NEXT_CANDIDATE: MON-WP002
-NEXT_CANDIDATE_STATUS: AWAITING_OWNER_DIRECTION
+NEXT_CANDIDATE: NONE
+NEXT_CANDIDATE_STATUS: PENDING_REVIEW
 PHASE_0: CLOSED / PASS
 PHASE_1: IN PROGRESS
 ```
@@ -14,6 +14,7 @@ PHASE_1: IN PROGRESS
 
 ## 📋 Work Package Status Summary
 
+- **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `READY_FOR_CHATGPT_REVIEW`
 - **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
   - **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 - **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
@@ -319,12 +320,52 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
+## 📊 MON-WP002 — Queue / Lease / Reconciliation Monitoring (STATUS: READY_FOR_CHATGPT_REVIEW)
+
+> [!IMPORTANT]
+> **Boundary & Invariants**:
+> - **Scope**: Observability only. Read-only diagnostic endpoint and UI card. Zero mutation, zero reclaim, zero resend, zero auto-reconciliation.
+> - **Worker**: `run/LineSyncApp.js` is UNTOUCHED. Worker remains v28.16, Required Worker remains 28.16, Runtime Contract remains 2.
+> - **Security & Privacy**: Zero token leakage (`leaseToken`, `dispatchToken`), zero Telegram secrets, zero cookie/PII/message content exposure. Loopback-only (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`).
+> - **Zero Side-Effects**: Read-only query; does not mutate worker observation timestamps or affect worker heartbeats.
+
+### Backend Implementation (`src/app.controller.ts`)
+- **Endpoint**: `GET /api/ops/queue`
+- **Security Check**: Enforces loopback client IP (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`) from socket remote address. Returns HTTP 403 Forbidden for non-loopback requests.
+- **Truthful Status Truth**:
+  - `healthy`: Positively known ready state (`activeBotId` present, metric queries succeed, and 0 anomaly items).
+  - `attention`: Operational readiness issue (no active OA, `expired > 0`, `missing > 0`, `residual > 0`, `reconciliation.jobs > 0`, `reconciliation.parts > 0`, `staleArmed > 0`, or `pausedCampaigns > 0`).
+  - `degraded`: OA lookup failure or metric query failure (all counts returned as `null`).
+- **Truthful Active OA Scoping**:
+  - Metrics are strictly scoped to `activeBotId`. When no active OA is selected, global cross-OA counts are NOT queried; metric counts are returned as `null` / unavailable, and overall status is `attention`.
+  - When OA lookup fails, all counts are `null`, `oa.active: null`, status is `degraded`.
+- **Truthful Metric Query Failure Handling**: Metric count query exceptions do NOT become 0; all metrics are returned as `null` and status becomes `degraded`.
+
+### Dashboard Implementation (`index.html`)
+- **UI Component**: Responsive `Queue, Lease & Reconciliation Monitoring` card placed in the dashboard.
+- **Truthful Rendering**:
+  - Null/unavailable metrics render as `? Unknown` (never converted to 0 via `|| 0`).
+  - Zero is displayed only when the backend positively returned numeric `0`.
+  - Positive anomalies render visible warnings (`⚠️ N`).
+  - Informational fields (`pending`, `processing`, `active`) render clean informational numbers.
+  - Unknown/unready states never render green.
+  - Network/API errors render all fields gracefully as `? Unknown`.
+- **Truthful Polling**: Refreshes every 6 seconds via `GET /api/ops/queue`.
+
+### Automated Unit Testing (`src/app.controller.spec.ts`)
+- 23 dedicated unit tests under `describe('MON-WP002 — Queue / Lease / Reconciliation Monitoring Tests')`:
+  - 23/23 tests pass cleanly.
+- **Total Test Suite**: 317/317 unit tests PASS (0 failures, LOCAL REPORTED evidence only; no GitHub CI status checks).
+
+---
+
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `NONE`
+- **Active Work Package**: `MON-WP002`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `IN PROGRESS`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`
-- **Next Candidate**: `MON-WP002`
-- **Next Candidate Status**: `AWAITING_OWNER_DIRECTION`
+- **MON-WP002 Status**: `READY_FOR_CHATGPT_REVIEW`
+- **Next Candidate**: `NONE`
+- **Next Candidate Status**: `PENDING_REVIEW`

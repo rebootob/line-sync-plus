@@ -22,13 +22,14 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **ACTIVE_WORK_PACKAGE**: `MON-WP002`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
-* **NEXT_CANDIDATE**: `MON-WP002`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
+* **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `READY_FOR_CHATGPT_REVIEW`
+* **NEXT_CANDIDATE**: `NONE`
+* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -111,13 +112,33 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
   - Review Result: `PASS`
   - Status: `CLOSED / PASS`
 
+## Implemented MON-WP002 Operational Queue / Lease / Reconciliation Monitoring Summary
+
+- **Endpoint**: `GET /api/ops/queue` (loopback only: `127.0.0.1`, `::1`, `::ffff:127.0.0.1`).
+- **Data Returned**: Truthful status enum (`healthy | degraded | attention`), active OA (`true | false | null`), queue counts (`pending`, `processing` as `number | null`), lease counts (`active`, `expired`, `missing`, `residual` as `number | null`), reconciliation counts (`jobs`, `parts`, `staleArmed`, `pausedCampaigns` as `number | null`).
+- **Truthful Failure & Absent Scoping**:
+  - Failed metric query returns `null` for all metrics (never masked as 0) with `degraded` status.
+  - No active OA returns `null` metrics (does NOT query global counts across all OAs) with `oa.active: false` and `attention` status.
+  - OA runtime lookup error returns `null` metrics with `oa.active: null` and `degraded` status.
+- **Security & Privacy**: Zero tokens, zero credentials, zero PII, zero LINE chat data exposed. Read-only operation with zero side-effects.
+- **Dashboard UI**: Compact responsive card in `index.html` polling every 6 seconds, displaying `? Unknown` for null/unavailable metrics, displaying numeric 0 only on genuine success, displaying warnings for positive anomalies, and falling back gracefully on network errors.
+- **Worker Script**: `run/LineSyncApp.js` UNTOUCHED (v28.16).
+- **Unit Tests**: 23 tests in `src/app.controller.spec.ts` under MON-WP002, full test suite: 317/317 passing cleanly (LOCAL REPORTED evidence only; no GitHub CI/check runs existed).
+- **Current Review Baseline**:
+  - Code Baseline: `74359ed58c3a02dd574a78dce7f2330632e28c5b`
+  - Worker Version: `28.16` (unchanged)
+  - Runtime Contract: `2` (unchanged)
+  - Live LINE UAT: None (Read-only observability)
+  - Status: `READY_FOR_CHATGPT_REVIEW`
+
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **ACTIVE_WORK_PACKAGE**: `MON-WP002`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
 * **MON-WP001**: `CLOSED / PASS`
 * **MON-WP001-R1**: `CLOSED / PASS`
-* **NEXT_CANDIDATE**: `MON-WP002`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
-Awaiting project owner authorization and direction before starting candidate MON-WP002. Do not start MON-WP002 without explicit project owner authorization.
+* **MON-WP002**: `READY_FOR_CHATGPT_REVIEW`
+* **NEXT_CANDIDATE**: `NONE`
+* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
+Awaiting independent ChatGPT review of MON-WP002. Do not start next work package.

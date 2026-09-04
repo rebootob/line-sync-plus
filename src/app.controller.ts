@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, NotFoundException, Res, Req, Headers, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, In, IsNull } from 'typeorm';
+import { Repository, LessThan, In, IsNull, Not, MoreThan, LessThanOrEqual } from 'typeorm';
 import type { Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
@@ -2758,6 +2758,252 @@ export class AppController {
       },
       checkedAt: new Date().toISOString(),
     };
+  }
+
+  // 🛡️ MON-WP002 QUEUE / LEASE / RECONCILIATION MONITORING ENDPOINT
+  @Get('ops/queue')
+  async getOpsQueue(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const ip = req.socket?.remoteAddress || '';
+    const isLoopback = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    if (!isLoopback) {
+      if (res) res.status(HttpStatus.FORBIDDEN);
+      return { success: false, message: 'Forbidden: Request must originate from local loopback' };
+    }
+
+    // 1. Resolve Active OA
+    let activeBotId: string | null = null;
+    let oaActive: boolean | null = null;
+    let oaLookupFailed = false;
+
+    try {
+      const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+      activeBotId = state?.activeBotId ? state.activeBotId.trim() : null;
+      oaActive = !!activeBotId;
+    } catch {
+      oaLookupFailed = true;
+      oaActive = null;
+    }
+
+    // OA lookup failure: all counts = null, oa.active = null, status = degraded
+    if (oaLookupFailed) {
+      return {
+        success: true,
+        status: 'degraded',
+        oa: {
+          active: null,
+        },
+        queue: {
+          pending: null,
+          processing: null,
+        },
+        leases: {
+          active: null,
+          expired: null,
+          missing: null,
+          residual: null,
+        },
+        reconciliation: {
+          jobs: null,
+          parts: null,
+          staleArmed: null,
+          pausedCampaigns: null,
+        },
+        checkedAt: new Date().toISOString(),
+      };
+    }
+
+    // No active OA: do not aggregate globally, all counts = null, oa.active = false, status = attention
+    // "no active OA does not run count queries"
+    if (!oaActive || !activeBotId) {
+      return {
+        success: true,
+        status: 'attention',
+        oa: {
+          active: false,
+        },
+        queue: {
+          pending: null,
+          processing: null,
+        },
+        leases: {
+          active: null,
+          expired: null,
+          missing: null,
+          residual: null,
+        },
+        reconciliation: {
+          jobs: null,
+          parts: null,
+          staleArmed: null,
+          pausedCampaigns: null,
+        },
+        checkedAt: new Date().toISOString(),
+      };
+    }
+
+    // 2. Metrics (strictly scoped to activeBotId)
+    try {
+      const now = new Date();
+      const staleArmedCutoff = new Date(now.getTime() - 60000);
+
+      const [
+        pending,
+        processing,
+        activeLease,
+        expiredLease,
+        missingLease,
+        residualLease,
+        recJobs,
+        recParts,
+        staleArmed,
+        pausedCampaigns,
+      ] = await Promise.all([
+        // queue.pending: CampaignJob status = pending
+        this.campaignJobRepository.count({
+          where: { botId: activeBotId, status: 'pending' },
+        }),
+        // queue.processing: CampaignJob status = processing
+        this.campaignJobRepository.count({
+          where: { botId: activeBotId, status: 'processing' },
+        }),
+        // leases.active: status = processing AND leaseToken not null AND leaseOwner not null AND leaseExpiresAt not null AND leaseExpiresAt > NOW
+        this.campaignJobRepository.count({
+          where: {
+            botId: activeBotId,
+            status: 'processing',
+            leaseToken: Not(IsNull()),
+            leaseOwner: Not(IsNull()),
+            leaseExpiresAt: MoreThan(now),
+          },
+        }),
+        // leases.expired: status = processing AND leaseToken not null AND leaseOwner not null AND leaseExpiresAt not null AND leaseExpiresAt <= NOW
+        this.campaignJobRepository.count({
+          where: {
+            botId: activeBotId,
+            status: 'processing',
+            leaseToken: Not(IsNull()),
+            leaseOwner: Not(IsNull()),
+            leaseExpiresAt: LessThanOrEqual(now),
+          },
+        }),
+        // leases.missing: status = processing AND at least one is null: leaseToken, leaseOwner, leaseExpiresAt (Count each job once)
+        this.campaignJobRepository.count({
+          where: [
+            { botId: activeBotId, status: 'processing', leaseToken: IsNull() },
+            { botId: activeBotId, status: 'processing', leaseOwner: IsNull() },
+            { botId: activeBotId, status: 'processing', leaseExpiresAt: IsNull() },
+          ],
+        }),
+        // leases.residual: status != processing AND any field remains populated: leaseToken, leaseOwner, leaseExpiresAt, leaseHeartbeatAt (Count each job once)
+        this.campaignJobRepository.count({
+          where: [
+            { botId: activeBotId, status: Not('processing'), leaseToken: Not(IsNull()) },
+            { botId: activeBotId, status: Not('processing'), leaseOwner: Not(IsNull()) },
+            { botId: activeBotId, status: Not('processing'), leaseExpiresAt: Not(IsNull()) },
+            { botId: activeBotId, status: Not('processing'), leaseHeartbeatAt: Not(IsNull()) },
+          ],
+        }),
+        // reconciliation.jobs: CampaignJob status = reconcile_required
+        this.campaignJobRepository.count({
+          where: { botId: activeBotId, status: 'reconcile_required' },
+        }),
+        // reconciliation.parts: CampaignSendPart status = reconcile_required
+        this.campaignSendPartRepository.count({
+          where: { botId: activeBotId, status: 'reconcile_required' },
+        }),
+        // reconciliation.staleArmed: CampaignSendPart status = armed AND (armedAt IS NULL OR armedAt <= NOW - 60 seconds)
+        this.campaignSendPartRepository.count({
+          where: [
+            { botId: activeBotId, status: 'armed', armedAt: IsNull() },
+            { botId: activeBotId, status: 'armed', armedAt: LessThanOrEqual(staleArmedCutoff) },
+          ],
+        }),
+        // reconciliation.pausedCampaigns: Campaign status = paused_reconcile
+        this.campaignRepository.count({
+          where: { botId: activeBotId, status: 'paused_reconcile' },
+        }),
+      ]);
+
+      // Status determination:
+      // attention if:
+      // - no active OA
+      // OR expired > 0
+      // OR missing > 0
+      // OR residual > 0
+      // OR reconciliation.jobs > 0
+      // OR reconciliation.parts > 0
+      // OR staleArmed > 0
+      // OR pausedCampaigns > 0
+      // otherwise: healthy
+      let status: 'healthy' | 'attention' = 'healthy';
+      if (
+        expiredLease > 0 ||
+        missingLease > 0 ||
+        residualLease > 0 ||
+        recJobs > 0 ||
+        recParts > 0 ||
+        staleArmed > 0 ||
+        pausedCampaigns > 0
+      ) {
+        status = 'attention';
+      }
+
+      return {
+        success: true,
+        status,
+        oa: {
+          active: true,
+        },
+        queue: {
+          pending,
+          processing,
+        },
+        leases: {
+          active: activeLease,
+          expired: expiredLease,
+          missing: missingLease,
+          residual: residualLease,
+        },
+        reconciliation: {
+          jobs: recJobs,
+          parts: recParts,
+          staleArmed,
+          pausedCampaigns,
+        },
+        checkedAt: new Date().toISOString(),
+      };
+    } catch {
+      // If ANY required monitoring query fails:
+      // status = degraded
+      // ALL queue/lease/reconciliation counts = null
+      return {
+        success: true,
+        status: 'degraded',
+        oa: {
+          active: true,
+        },
+        queue: {
+          pending: null,
+          processing: null,
+        },
+        leases: {
+          active: null,
+          expired: null,
+          missing: null,
+          residual: null,
+        },
+        reconciliation: {
+          jobs: null,
+          parts: null,
+          staleArmed: null,
+          pausedCampaigns: null,
+        },
+        checkedAt: new Date().toISOString(),
+      };
+    }
   }
 }
 
