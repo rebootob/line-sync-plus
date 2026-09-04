@@ -1,11 +1,11 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: MON-WP001-R1
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: NONE
+STATUS: STANDBY
 AUTHORIZED_BY: Project Owner
-NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: PENDING_REVIEW
+NEXT_CANDIDATE: MON-WP002
+NEXT_CANDIDATE_STATUS: AWAITING_OWNER_DIRECTION
 PHASE_0: CLOSED / PASS
 PHASE_1: IN PROGRESS
 ```
@@ -14,8 +14,8 @@ PHASE_1: IN PROGRESS
 
 ## 📋 Work Package Status Summary
 
-- **MON-WP001 — Operational Health & Readiness**: `CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW`
-  - **MON-WP001-R1 — Truthful Health State Corrective**: `READY_FOR_CHATGPT_REVIEW`
+- **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
+  - **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 - **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -40,8 +40,8 @@ PHASE_1: IN PROGRESS
 
 ---
 
-## 🩺 MON-WP001 — Operational Health & Readiness (STATUS: CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW)
-### 🩺 MON-WP001-R1 — Truthful Health State Corrective (READY_FOR_CHATGPT_REVIEW)
+## 🩺 MON-WP001 — Operational Health & Readiness (STATUS: CLOSED / PASS)
+### 🩺 MON-WP001-R1 — Truthful Health State Corrective (CLOSED / PASS)
 
 > [!IMPORTANT]
 > **Boundary & Invariants**:
@@ -121,7 +121,12 @@ PHASE_1: IN PROGRESS
   - Numeric zero returned only when count queries genuinely succeed with `healthy` status.
   - Non-mutating health inspection (does not update `workerSeenAt`).
   - Strict secret & PII exclusion verified.
-- **Total Test Suite**: 294/294 unit tests PASS (0 failures).
+- **Total Test Suite**: 294/294 unit tests PASS (0 failures, LOCAL REPORTED evidence only; no GitHub CI status checks existed for the accepted review HEAD).
+
+### Acceptance Evidence (Independent Review)
+- **Accepted Review HEAD**: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`
+- **Accepted Review Result**: `PASS`
+- **Work Package Status**: `CLOSED / PASS`
 
 ---
 
@@ -316,9 +321,10 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `MON-WP001-R1`
+- **Active Work Package**: `NONE`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `IN PROGRESS`
-- **MON-WP001 Status**: `CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW`
-- **MON-WP001-R1 Status**: `READY_FOR_CHATGPT_REVIEW`
-- **Next Candidate**: `NONE` (Awaiting review of MON-WP001-R1)
+- **MON-WP001 Status**: `CLOSED / PASS`
+- **MON-WP001-R1 Status**: `CLOSED / PASS`
+- **Next Candidate**: `MON-WP002`
+- **Next Candidate Status**: `AWAITING_OWNER_DIRECTION`

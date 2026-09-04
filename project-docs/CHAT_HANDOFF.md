@@ -4,9 +4,9 @@
 
 * Repository: rebootob/line-sync-plus
 * Canonical Branch: main
-* Working Tree: Clean (Phase 0 CLOSED / PASS)
-* Implementation Baseline: e5bad82a852fb70c954cef025afa17418673f624
-* Closure-Doc Baseline: 27e889fd430b1ed8946b6e190872f91208089a26
+* Working Tree: Clean (Phase 0 CLOSED / PASS, MON-WP001 CLOSED / PASS)
+* Implementation Baseline: 6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38
+* Closure-Doc Baseline: 6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38
 
 ## Project Purpose
 
@@ -22,11 +22,13 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `MON-WP001-R1`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
-* **MON-WP001 — Operational Health & Readiness**: `CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW`
-* **MON-WP001-R1 — Truthful Health State Corrective**: `READY_FOR_CHATGPT_REVIEW`
+* **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
+* **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
+* **NEXT_CANDIDATE**: `MON-WP002`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -103,13 +105,19 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Security & Privacy**: Zero tokens, zero credentials, zero PII, zero LINE chat data exposed. Read-only operation with zero side-effects on worker observation timestamps or heartbeats.
 - **Dashboard UI**: Compact responsive card in `index.html` polling every 6 seconds, displaying `? Unknown` for null/unavailable metrics, displaying numeric 0 only on genuine success, and falling back gracefully on network errors.
 - **Worker Script**: `run/LineSyncApp.js` UNTOUCHED (v28.16).
-- **Unit Tests**: 23 tests in `src/app.controller.spec.ts` under MON-WP001, full test suite: 294/294 passing cleanly.
+- **Unit Tests**: 23 tests in `src/app.controller.spec.ts` under MON-WP001, full test suite: 294/294 passing cleanly (LOCAL REPORTED evidence only; no GitHub CI/check runs existed).
+- **Accepted Independent Review Baseline**:
+  - Review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`
+  - Review Result: `PASS`
+  - Status: `CLOSED / PASS`
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `MON-WP001-R1`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `IN PROGRESS`
-* **MON-WP001**: `CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW`
-* **MON-WP001-R1**: `READY_FOR_CHATGPT_REVIEW`
-Submit MON-WP001-R1 implementation, tests (294/294 passing), and documentation to ChatGPT review. Await ChatGPT review result before proceeding.
+* **MON-WP001**: `CLOSED / PASS`
+* **MON-WP001-R1**: `CLOSED / PASS`
+* **NEXT_CANDIDATE**: `MON-WP002`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
+Awaiting project owner authorization and direction before starting candidate MON-WP002. Do not start MON-WP002 without explicit project owner authorization.

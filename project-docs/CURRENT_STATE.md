@@ -28,12 +28,16 @@
 
 ---
 
-## 🩺 Operational Health & Readiness (MON-WP001 STATUS: CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW; MON-WP001-R1 STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🩺 Operational Health & Readiness (MON-WP001 STATUS: CLOSED / PASS; MON-WP001-R1 STATUS: CLOSED / PASS)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
 - **Scope**: Phase 1 Observability & Monitoring. Read-only diagnostic endpoint and UI card.
+- **Accepted Review Evidence**:
+  - Accepted Review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`
+  - Accepted Review Result: `PASS`
+  - Local Automated Validation: 294/294 PASS (LOCAL REPORTED evidence only; no GitHub CI status checks existed).
 - **Implemented Capabilities**:
   - `GET /api/ops/health`: Loopback-only endpoint (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`). Returns 403 Forbidden for external IPs.
   - Truthful Status Enum: `healthy | degraded | attention`
@@ -156,10 +160,10 @@
 - **Phase 0 Status**: `CLOSED / PASS`.
 - **Phase 1 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003` (`CLOSED / PASS`).
-- **Active Work Package**: `MON-WP001-R1` (`READY_FOR_CHATGPT_REVIEW`).
+- **Active Work Package**: `NONE`.
 - **Work Package Status**:
-  - `MON-WP001`: `CORRECTIVE_REQUIRED / R1_READY_FOR_REVIEW`.
-  - `MON-WP001-R1`: `READY_FOR_CHATGPT_REVIEW`.
+  - `MON-WP001`: `CLOSED / PASS`.
+  - `MON-WP001-R1`: `CLOSED / PASS`.
   - `REL-WP003`: `CLOSED / PASS`.
   - `REL-WP003-R1`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP003-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
@@ -169,4 +173,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `NONE` (Awaiting review of MON-WP001-R1).
+- **Next Candidate**: `MON-WP002` (Status: `AWAITING_OWNER_DIRECTION`).
