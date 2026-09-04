@@ -21,16 +21,17 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **STATUS**: `STANDBY`
+* **ACTIVE_WORK_PACKAGE**: `P2-WP002`
+* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
 * **PHASE_2_TITLE**: `Campaign Builder v2`
 * **P2-WP001**: `CLOSED / PASS`
 * **P2-WP001-R1**: `CLOSED / PASS`
+* **P2-WP002**: `AUTHORIZED_FOR_EXECUTION`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
+* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
@@ -122,15 +123,15 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **STATUS**: `STANDBY`
+* **ACTIVE_WORK_PACKAGE**: `P2-WP002`
+* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
 * **P2-WP001**: `CLOSED / PASS`
 * **P2-WP001-R1**: `CLOSED / PASS`
+* **P2-WP002**: `AUTHORIZED_FOR_EXECUTION`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
+* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
 
-Await Project Owner / Control Plane direction.
-Do not start P2-WP002 without a new explicit authorization.
+Control plane authorization complete for P2-WP002 (Authoritative Campaign Preview & Safe Template Reuse V2). In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP002 within authorized scope. Do not start next task without explicit authorization.
