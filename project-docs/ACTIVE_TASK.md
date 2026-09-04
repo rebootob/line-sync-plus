@@ -1,23 +1,23 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: REL-WP003-R3B
-STATUS: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: NONE
+STATUS: CLOSED / PASS
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: PENDING_REVIEW
-PHASE_0: IN PROGRESS
+PHASE_0: CLOSED / PASS
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
-- **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `NOT CLOSED / CORRECTIVE REQUIRED`
-- **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
-- **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
-- **REL-WP003-R3A — Backend Final Fencing Only**: `CORRECTIVE REQUIRED / SUPERSEDED`
-- **REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration**: `READY_FOR_CHATGPT_REVIEW`
+- **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
+  - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
+  - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
+  - **REL-WP003-R3A — Backend Final Fencing Only**: `CORRECTIVE REQUIRED / SUPERSEDED`
+  - **REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration**: `PASS / CLOSED`
 - **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
 - **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
 - **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -37,17 +37,53 @@ PHASE_0: IN PROGRESS
 
 ---
 
-## 🛡️ REL-WP003-R3B Queue Prepass & Fail-Closed Ledger Migration Architecture
+## 🛡️ REL-WP003 Accepted Architecture & Closure Evidence
 
 > [!IMPORTANT]
-> **Crash-Safety Invariant**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
-> **Operational Policy**: Never automatically resend an ambiguous physical send.
-> **Testing Status**: No Live UAT performed. REL-WP003 remains NOT CLOSED / CORRECTIVE REQUIRED. Validated via 271 automated unit tests.
+> **Architectural Truth**: Do NOT claim true exactly-once physical delivery. The LINE Web UI remains outside our database transaction boundary.
+> **Accepted Safety Policy**: Never automatically resend an ambiguous physical send. Ambiguous state requires reconciliation before retry.
+
+### Static Verification Evidence
+- **Review**: REL-WP003-R3B static review `PASS`
+- **Worker Version**: `28.16` (`run/LineSyncApp.js`)
+- **Required Worker Version**: `28.16` (`src/runtime-version.ts`)
+- **Runtime Contract Version**: `2` (`src/runtime-version.ts`)
+- **Automated Validation**: Local automated test suite reported **271/271 PASS** (0 failures).
+- **CI Environment**: No GitHub CI status checks configured; verified locally.
+
+### Live / Controlled UAT Evidence
+1. **Backend Migration Startup**:
+   - `Database schema verified/initialized successfully` on service startup.
+   - Non-destructive migration, authoritative unique index enforced, legacy normalization fails closed without catch-swallow.
+2. **Normal Text Send**:
+   - Target: `1`, Success: `1`, Fail: `0`, Physical duplicate: `0`.
+3. **Durable Ledger Verification**:
+   - Database record verified: `job_status = success`, `partKey = text`, `part_status = dispatched`, `armedAt` present, `dispatchedAt` present, `reconcileReason = null`.
+4. **Clean Ambiguity Baseline**:
+   - Verified no pre-existing `armed` or `reconcile_required` rows before synthetic testing.
+5. **Controlled DB-Only Ambiguity Fixture**:
+   - Synthetic job state: `status = processing`, part state: `status = armed`. Zero physical LINE send performed.
+6. **Send-Plan Ambiguity Detection**:
+   - Calling `/campaign/send-plan` returned: `success = true`, `isFullyDispatched = false`, `hasQuarantine = true`.
+7. **Post-Quarantine DB State**:
+   - Authoritative DB quarantine confirmed: `CampaignJob.status = reconcile_required`, `CampaignSendPart.status = reconcile_required`, `reconcileReason = 'quarantined_on_reload_ambiguity'`, `Campaign.status = 'paused_reconcile'`.
+   - All job lease fields stripped: `leaseToken = null`, `leaseOwner = null`, `leaseExpiresAt = null`.
+8. **Operator Reconciliation GET**:
+   - `GET /campaign/reconciliation` correctly displayed quarantined campaign, job, and ambiguous send-part details while Master Bot was PAUSED.
+9. **Operator Resolution**:
+   - Executed resolution: `decision = confirmed_not_sent_retry`.
+   - Result: `success = true`, job and part reset to pending for safe retry, zero physical LINE messages sent.
+10. **Cleanup Verification**:
+    - Final DB inspection after test cleanup: `CAMPAIGN FOUND = 0`, `JOB FOUND = 0`, `PARTS FOUND = 0`. Clean baseline verified.
+
+---
+
+## 🛡️ REL-WP003 Implemented Crash-Safety Controls Summary
 
 ### 1. Legacy Schema Migration
 - **Table**: `campaign_send_parts` migrated non-destructively.
-- **Constraints**: Dropped legacy `UQ_campaign_send_parts_job_partIndex` and legacy index. Made legacy `partType` and `partIndex` nullable.
-- **Data Migration**: Legacy `sent` ➔ `dispatched`, `partKey` derived from `partType` (`'image'` or `'text'`), `dispatchedAt = COALESCE(dispatchedAt, sentAt)`.
+- **Constraints**: Dropped legacy `UQ_campaign_send_parts_job_partIndex` and legacy index. Removed legacy fields from TypeORM entity.
+- **Fail-Closed Data Migration**: Legacy `sent` ➔ `dispatched`, `partKey` derived from `partType`, `partOrder` from `partIndex`, `dispatchedAt = COALESCE(dispatchedAt, sentAt)` without catch-swallow.
 - **Authoritative Unique Constraint**: Enforced on `(jobId, partKey)` and index on `(botId, status)`.
 
 ### 2. Honor already_dispatched Before Physical Send
@@ -61,23 +97,28 @@ PHASE_0: IN PROGRESS
   - `CampaignJob.status = 'reconcile_required'`
   - `Campaign.status = 'paused_reconcile'`
   - Job leases stripped (`leaseToken = null`, `leaseOwner = null`, `leaseExpiresAt = null`, `leaseHeartbeatAt = null`).
-  - Candidate queue in `/campaign/next` cannot claim subsequent jobs from this campaign.
+  - Candidate queue in `/campaign/next` excludes jobs from paused_reconcile campaigns.
 
-### 4. Complete Ledger Required for Success
-- `/campaign/success` unconditionally validates the ledger against `getRequiredSendParts()` for every processing job:
+### 4. Separate Queue Pre-pass & All-Dispatched Auto-Finalize
+- `/campaign/next` separately pre-scans ALL expired processing jobs without `take: 100` limit before selecting pending jobs.
+- Quarantines ambiguous parts to `reconcile_required` with `Campaign = paused_reconcile`.
+- Concurrency-safe auto-finalization of all-dispatched expired jobs inside one transaction with row locks on `CampaignJob` and `Campaign`.
+
+### 5. Complete Ledger Required for Success
+- `/campaign/success` unconditionally validates the ledger against `getRequiredSendParts()`:
   - ZERO ledger rows ➔ 409 `send_ledger_incomplete`.
   - Missing multipart part ➔ 409 `send_ledger_incomplete`.
   - Ambiguous part (`armed`/`reconcile_required`) ➔ 409 `reconcile_required`.
   - Unexpected partKey ➔ 409 `send_ledger_inconsistent`.
   - Duplicate already-success acknowledgement remains idempotent without double incrementing `successCount`.
 
-### 5. Hard-Fenced Operator Reconciliation
+### 6. Hard-Fenced Operator Reconciliation
 - `POST /campaign/reconciliation/resolve` requires: loopback (`127.0.0.1` / `::1`), Master Bot PAUSED, active OA matches Job, `Job.status === reconcile_required`, NO active lease, target part ONLY `armed` or `reconcile_required`.
 - Rejects `pending` and `dispatched` parts.
 - Duplicate `confirmed_sent` on already-success job increments `successCount` at most once.
 - `confirmed_not_sent_retry` NEVER converts an already-dispatched part to pending.
 
-### 6. Same armRequestId Transient Retry & Confirm Idempotency
+### 7. Same armRequestId Transient Retry & Confirm Idempotency
 - `armSendPart` retries transient errors with the SAME `armRequestId`.
 - `confirmSendPart` returns idempotent success only when matching `armRequestId`.
 

@@ -21,13 +21,13 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `REL-WP003-R3B`
-* **PHASE_0**: `IN PROGRESS`
-* **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `NOT CLOSED / CORRECTIVE REQUIRED`
-* **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
-* **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
-* **REL-WP003-R3A — Backend Final Fencing Only**: `CORRECTIVE REQUIRED / SUPERSEDED`
-* **REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration**: `READY_FOR_CHATGPT_REVIEW`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **PHASE_0**: `CLOSED / PASS`
+* **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
+  - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
+  - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
+  - **REL-WP003-R3A — Backend Final Fencing Only**: `CORRECTIVE REQUIRED / SUPERSEDED`
+  - **REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration**: `PASS / CLOSED`
 * **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
 * **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing**: `CORRECTED / SUPERSEDED`
 * **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -62,19 +62,33 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Integrated Circuit Breaker**: 10 errors finalize via `POST /campaign/fail` with `errorOverflow: true` (increments failedCount, stops campaign `stopped_error`, clears remaining leases).
 - **Customer Rollback**: DB error updating blocked customer in `markFail` rolls back transaction.
 - **Post-Commit Telegram**: Sent only after DB transaction resolves.
-- **Crash Safety Invariant & Operator Reconciliation (REL-WP003-R2)**:
-  - True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
-  - Policy: Never automatically resend an ambiguous physical send.
-  - Safe migration of legacy schema: non-destructive migration deriving `partKey` from `partType` and `status = 'sent'` ➔ `'dispatched'`, dropping legacy unique index, making old columns nullable.
-  - `already_dispatched` handled before physical send in both image and text flows: skips physical DOM events completely.
-  - Immediate backend quarantine on reload ambiguity in `send-plan` and `quarantine` endpoints: job and campaign paused (`reconcile_required` / `paused_reconcile`), leases stripped.
+- **Crash Safety Boundary & Operator Reconciliation (REL-WP003)**:
+  - **Core Architectural Truth**: Do NOT claim true exactly-once physical delivery. The LINE Web UI remains outside our database transaction boundary.
+  - **Accepted Safety Policy**: Never automatically resend an ambiguous physical send. Ambiguous state requires reconciliation before retry.
+  - Safe migration of legacy schema: non-destructive migration deriving `partKey` from `partType` and `status = 'sent'` ➔ `'dispatched'`, fail-closed raw SQL execution, legacy fields removed from TypeORM entity.
+  - `already_dispatched` handled before physical send: skips physical DOM events completely.
+  - Immediate backend quarantine on reload ambiguity in `send-plan`: job and campaign paused (`reconcile_required` / `paused_reconcile`), leases stripped.
+  - Queue Safety Pre-pass in `/campaign/next`: separately pre-scans ALL expired processing jobs without `take: 100` limit before selecting pending jobs.
   - Full ledger validation on `markSuccess`: 0 rows or missing multipart or ambiguous parts reject with 409 `send_ledger_incomplete` / `reconcile_required`.
   - Operator reconciliation hard-fenced: loopback, active OA, bot paused, `job.status === reconcile_required`, no active lease, target part only `armed` or `reconcile_required`.
-  - `armSendPart` uses same `armRequestId` across transient retries.
-  - `confirmSendPart` enforces idempotency matching `armRequestId`.
-  - No Live UAT performed. All 264 executable unit tests passing.
+  - `armSendPart` uses same `armRequestId` across transient retries; `confirmSendPart` enforces idempotency matching `armRequestId`.
+  - Static Review: REL-WP003-R3B review PASS. All 271 executable unit tests passing. No GitHub CI status checks.
+
+## Accepted Live / Controlled UAT Evidence (REL-WP003)
+
+1. **Backend Migration Startup**: `Database schema verified/initialized successfully` on startup.
+2. **Normal Text Send**: target: 1, success: 1, fail: 0, physical duplicate: 0.
+3. **Durable Ledger Verification**: `job_status = success`, `partKey = text`, `part_status = dispatched`, `armedAt` and `dispatchedAt` present, `reconcileReason = null`.
+4. **Clean Ambiguity Baseline**: verified zero `armed` or `reconcile_required` rows before test.
+5. **Controlled DB-Only Ambiguity Fixture**: job `processing`, part `armed`, zero physical LINE send.
+6. **Send-Plan Ambiguity Detection**: `POST /api/campaign/send-plan` returned `success = true`, `isFullyDispatched = false`, `hasQuarantine = true`.
+7. **Post-Quarantine DB State**: `job = reconcile_required`, `part = reconcile_required`, `reconcileReason = 'quarantined_on_reload_ambiguity'`, `campaign = paused_reconcile`, `leaseToken`/`leaseOwner`/`leaseExpiresAt` cleared.
+8. **Operator Reconciliation GET**: synthetic campaign/job/ambiguous part visible while Master Bot PAUSED.
+9. **Operator Resolution**: `confirmed_not_sent_retry` returned `success = true`, zero physical LINE sends.
+10. **Cleanup Verification**: DB inspection verified `CAMPAIGN FOUND = 0`, `JOB FOUND = 0`, `PARTS FOUND = 0`. Clean baseline restored.
 
 ## Exact Recommended Next Step
 
-REL-WP003-R2 implementation complete and validated with all 264 tests passing.
-No Live LINE UAT. Do NOT send any additional LINE messages. Ready for ChatGPT review.
+Phase 0 (Security & Reliability Foundation) is **COMPLETE and CLOSED (PASS)**.
+All foundation work packages (`SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`) are CLOSED / PASS.
+Ready for Phase 1 planning / execution.

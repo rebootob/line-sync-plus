@@ -203,9 +203,9 @@ Over the course of safety hardening, 26 work packages were identified, implement
 - **CRITICAL**: The repository `rebootob/line-sync-plus` is **PUBLIC**.
 - **PROHIBITED**: Under no circumstances may `.env` files, API keys, passwords, database credentials, access tokens, refresh tokens, private keys, or LINE channel secrets be committed or pushed to Git.
 
-### Crash Safety Boundary Mandate (`REL-WP003-R3A`)
-- **Core Truth**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
-- **Operational Policy**: Never automatically resend an ambiguous physical send.
+### Crash Safety Boundary Mandate (`REL-WP003`)
+- **Core Truth**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary. The LINE Web UI remains outside our database transaction boundary.
+- **Operational Policy**: Never automatically resend an ambiguous physical send. Ambiguous state requires reconciliation before retry.
 - **Ambiguity Quarantine**: Jobs discovering `armed` or `reconcile_required` states are quarantined to `paused_reconcile` until operator review.
 - **Operator Reconciliation**: Hard-fenced via loopback UI, bot paused, active OA, job in `reconcile_required` with no active lease. Two valid actions: `confirmed_sent` and `confirmed_not_sent_retry`.
 
@@ -213,7 +213,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
 
 ## 10. Development Roadmap
 
-- **Phase 0 — Security & Reliability Foundation**: **IN PROGRESS**
+- **Phase 0 — Security & Reliability Foundation**: **CLOSED / PASS**
   - Safety hardening (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002`, `BUG-WP002-R1`): **COMPLETED**
   - `SEC-WP001` (Secret Hygiene): **COMPLETED / CLOSED**
   - `OPS-WP001 / R1` (Runtime Version Gate): **COMPLETED / CLOSED**
@@ -225,11 +225,11 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `REL-WP002-R1` (Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing): **CORRECTED / SUPERSEDED**
   - `REL-WP002-R2` (Serialize Lease Finalization and Circuit Breaker Stop): **CORRECTIVE REQUIRED / SUPERSEDED**
   - `REL-WP002-R3` (Complete R2 Corrective Exactly): **CLOSED / PASS**
-  - `REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety`: **NOT CLOSED / CORRECTIVE REQUIRED**
+  - `REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety`: **CLOSED / PASS**
   - `REL-WP003-R1 — Critical Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
   - `REL-WP003-R2 — Final Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
   - `REL-WP003-R3A — Backend Final Fencing Only`: **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration`: **READY_FOR_CHATGPT_REVIEW**
+  - `REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration`: **PASS / CLOSED**
 - **Phase 1 — Operations & Monitoring**: **NOT STARTED**
 - **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
@@ -240,14 +240,15 @@ Over the course of safety hardening, 26 work packages were identified, implement
 
 ## 11. Technical Evolution
 
-- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003-R3B READY_FOR_CHATGPT_REVIEW).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, operator reconciliation dashboard UI, and 271 passing local unit tests.
+- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003 CLOSED / PASS).
+- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, and 271 passing local unit tests.
 
 ---
 
 ## 12. Immediate Decision Gate
 
-Phase 0 REL-WP003-R3B is READY_FOR_CHATGPT_REVIEW.
+Phase 0 Foundation is **CLOSED / PASS**.
+All Phase 0 work packages (`SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`) are CLOSED / PASS.
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-No Live LINE UAT. Do NOT send any additional LINE messages. Ready for ChatGPT review.
+Ready for Phase 1 (Operations & Monitoring).

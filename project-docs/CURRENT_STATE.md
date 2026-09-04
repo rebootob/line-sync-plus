@@ -54,13 +54,13 @@
 
 ---
 
-## 🛡️ Durable Send-Part Ledger & Crash Safety (REL-WP003 STATUS: NOT CLOSED / CORRECTIVE REQUIRED; REL-WP003-R1 STATUS: CORRECTIVE REQUIRED / SUPERSEDED; REL-WP003-R2 STATUS: CORRECTIVE REQUIRED / SUPERSEDED; REL-WP003-R3A STATUS: CORRECTIVE REQUIRED / SUPERSEDED; REL-WP003-R3B STATUS: READY_FOR_CHATGPT_REVIEW)
+## 🛡️ Durable Send-Part Ledger & Crash Safety (REL-WP003 STATUS: CLOSED / PASS; REL-WP003-R3B STATUS: PASS / CLOSED)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
 - **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
 - **Core Safety Invariant**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary.
-- **Operational Policy**: Never automatically resend an ambiguous physical send.
+- **Operational Policy**: Never automatically resend an ambiguous physical send. Ambiguous state requires reconciliation before retry.
 - **Implemented Architecture**:
   - `campaign_send_parts` Entity & Table: Non-destructive migration from previous schema, composite uniqueness on `(jobId, partKey)`, legacy fields removed from TypeORM entity, fail-closed legacy normalization without swallow.
   - State Machine: `pending` ➔ `armed` ➔ `dispatched` | `reconcile_required`.
@@ -78,7 +78,18 @@
     - `getNextJob`: Safety pre-pass separately pre-scans ALL expired processing jobs (unlimited by `take: 100`) before selecting/claiming any pending job. Quarantines ambiguous parts to `reconcile_required` with `Campaign = paused_reconcile`. Concurrency-safe auto-finalization of all-dispatched expired jobs inside one transaction with row locks.
     - `resumeSavedActiveJob`: Queries authoritative send plan on page reload; if any part is `armed` or `reconcile_required`, immediately quarantines without physical resend.
     - `executeChatBot`: Skips already-`dispatched` parts.
-- **Validation**: 271/271 unit tests passing cleanly. No Live UAT performed.
+- **Accepted Static Evidence**: REL-WP003-R3B review PASS, 271/271 unit tests pass cleanly, no GitHub CI status checks.
+- **Accepted Live / Controlled UAT Evidence**:
+  1. Backend migration startup: `Database schema verified/initialized successfully`.
+  2. Normal text send: target: 1, success: 1, fail: 0, physical duplicate: 0.
+  3. Durable ledger verification: `job_status = success`, `partKey = text`, `part_status = dispatched`, `armedAt` and `dispatchedAt` present, `reconcileReason = null`.
+  4. Clean ambiguity baseline: 0 pre-existing `armed` or `reconcile_required` rows.
+  5. Controlled DB fixture: job `processing`, part `armed`, NO physical LINE send.
+  6. Send-plan ambiguity detection: `success = true`, `isFullyDispatched = false`, `hasQuarantine = true`.
+  7. Post-quarantine DB: `job = reconcile_required`, `part = reconcile_required`, `reconcileReason = 'quarantined_on_reload_ambiguity'`, `campaign = paused_reconcile`, leases stripped.
+  8. Operator reconciliation GET: synthetic fixture visible with Master Bot PAUSED.
+  9. Operator resolution: `confirmed_not_sent_retry` succeeded with zero LINE sends.
+  10. Cleanup verification: DB inspection confirmed `CAMPAIGN FOUND = 0`, `JOB FOUND = 0`, `PARTS FOUND = 0`. Clean baseline verified.
 
 ---
 
