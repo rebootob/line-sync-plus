@@ -205,10 +205,31 @@
 
 ---
 
+## 🏁 Phase 1 — Operations & Monitoring Closure (CLOSED / PASS)
+
+- **Phase Title**: Phase 1 — Operations & Monitoring
+- **Closure Status**: `CLOSED / PASS` (Approved by Project Owner)
+- **Closure Baseline HEAD**: `ac1ded4728df14f741104073618dd3623b6d1c25`
+- **Accepted Phase 1 Work Packages & Review HEADs**:
+  - `MON-WP001 — Operational Health & Readiness`: `CLOSED / PASS` (Accepted Review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`, Result: `PASS`)
+  - `MON-WP001-R1 — Truthful Health State Corrective`: `CLOSED / PASS` (Accepted Review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`, Result: `PASS`)
+  - `MON-WP002 — Queue / Lease / Reconciliation Monitoring`: `CLOSED / PASS` (Accepted Review HEAD: `5b34269397afbd9046610c366d9f0c27bf3d5532`, Result: `PASS`)
+  - `MON-WP003 — Alerts / Incident Visibility`: `CLOSED / PASS` (Accepted Review HEAD: `acb1185e1a5ff21c2c346d326669392cacdfa639`, Result: `PASS`)
+- **Scope & Closure Decisions**:
+  - Project Owner explicitly chose not to make Backup / Recovery / Retention work a Phase 1 closure requirement.
+  - Backup / Recovery / Retention classification: `DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE` (not implemented; OPS-WP002 is neither created nor authorized).
+  - Phase 2 execution gate is NOT installed. Phase 2 (Campaign Builder v2) remains future roadmap candidate only.
+- **Runtime Invariants**:
+  - Worker Version: `28.16` | Required Worker Version: `28.16` | Runtime Contract: `2`
+  - Observability endpoints remain strictly read-only.
+  - Policy: Never automatically resend an ambiguous physical send. True exactly-once physical LINE delivery is not guaranteed.
+
+---
+
 ## 🚀 Work Packages Overview
 
 - **Phase 0 Status**: `CLOSED / PASS`.
-- **Phase 1 Status**: `IN PROGRESS`.
+- **Phase 1 Status**: `CLOSED / PASS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003` (`CLOSED / PASS`).
 - **Active Work Package**: `NONE`.
 - **Status**: `STANDBY`.

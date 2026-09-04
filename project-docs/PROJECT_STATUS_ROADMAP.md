@@ -247,12 +247,13 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `REL-WP003-R2 — Final Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
   - `REL-WP003-R3A — Backend Final Fencing Only`: **CORRECTIVE REQUIRED / SUPERSEDED**
   - `REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration`: **PASS / CLOSED**
-- **Phase 1 — Operations & Monitoring**: **IN PROGRESS**
+- **Phase 1 — Operations & Monitoring**: **CLOSED / PASS**
   - `MON-WP001 — Operational Health & Readiness`: **CLOSED / PASS**
   - `MON-WP001-R1 — Truthful Health State Corrective`: **CLOSED / PASS**
   - `MON-WP002 — Queue / Lease / Reconciliation Monitoring`: **CLOSED / PASS**
   - `MON-WP003 — Alerts / Incident Visibility`: **CLOSED / PASS**
-- **Phase 2 — Campaign Builder v2**: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
+  - *Backup / Recovery / Retention*: **DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE** (OPS-WP002 not authorized)
+- **Phase 2 — Campaign Builder v2** *(Future Roadmap Only)*: Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
 - **Phase 5 — Analytics & Optimization**: Performance reporting, delivery throughput metrics, and campaign success analytics.
@@ -269,12 +270,15 @@ Over the course of safety hardening, 26 work packages were identified, implement
 ## 12. Immediate Decision Gate
 
 Phase 0 Foundation is **CLOSED / PASS**.
-Phase 1 (Operations & Monitoring) is **IN PROGRESS**.
+Phase 1 (Operations & Monitoring) is **CLOSED / PASS**.
 MON-WP001 / MON-WP001-R1 is **CLOSED / PASS** (Accepted review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`, Result: PASS).
 MON-WP002 is **CLOSED / PASS** (Accepted review HEAD: `5b34269397afbd9046610c366d9f0c27bf3d5532`, Result: PASS).
 MON-WP003 is **CLOSED / PASS** (Accepted review HEAD: `acb1185e1a5ff21c2c346d326669392cacdfa639`, Result: PASS).
+Phase 1 Scope Note: Project Owner explicitly chose not to make Backup / Recovery / Retention work a Phase 1 closure requirement (classified as `DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE`; OPS-WP002 is neither created nor authorized).
 Active Work Package: **NONE**.
+Status: **STANDBY**.
 Next Candidate: **NONE** (Status: **AWAITING_OWNER_DIRECTION**).
+Phase 2 (Campaign Builder v2) remains future roadmap candidate only (not active, authorized, started, or in progress).
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
 Awaiting project owner authorization and direction before starting next candidate.

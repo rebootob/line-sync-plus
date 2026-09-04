@@ -1,18 +1,27 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 2
+CONTROL_VERSION: 3
 
 TASK_ID:
-MON-WP003-CLOSE
+PHASE1-CLOSE
 
 TITLE:
-Close MON-WP003 After Independent Review
+Close Phase 1 — Operations & Monitoring
 
 STATUS:
 CLOSED_PASS
 
+CLOSURE_BASELINE_HEAD:
+ac1ded4728df14f741104073618dd3623b6d1c25
+
 AUTHORIZED_BY:
 Project Owner
+
+OWNER_DECISION:
+APPROVED
+
+PHASE_1_RESULT:
+CLOSED_PASS
 
 CONTROL_PLANE:
 ChatGPT
@@ -23,12 +32,6 @@ Antigravity
 CANONICAL_BRANCH:
 main
 
-ACCEPTED_REVIEW_HEAD:
-acb1185e1a5ff21c2c346d326669392cacdfa639
-
-ACCEPTED_REVIEW_RESULT:
-PASS
-
 NEXT_TASK:
 NONE
 
@@ -36,85 +39,50 @@ NEXT_TASK_STATUS:
 AWAITING_OWNER_DIRECTION
 
 --------------------------------------------------
-ACCEPTED EVIDENCE SUMMARY
+PHASE 1 ACCEPTED WORK PACKAGES & EVIDENCE
 --------------------------------------------------
 
-- focused incident validation: 23/23 PASS
-- full Jest suite: 317/317 PASS
-- evidence classification: LOCAL REPORTED evidence
-- no GitHub CI/status/workflow evidence
-- no Live LINE UAT was required/performed
-- zero Telegram activity
-- dashboard-only implementation
-- Worker remains 28.16
-- Required Worker remains 28.16
-- Runtime Contract remains 2
-- never automatically resend ambiguous physical sends
-- observability endpoints remain read-only
+- Phase 0 Foundation: CLOSED / PASS
+- Phase 1 (Operations & Monitoring): CLOSED / PASS
+
+Accepted Phase 1 Work Packages:
+1. MON-WP001 — Operational Health & Readiness: CLOSED / PASS
+   Accepted Review HEAD: 6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38
+2. MON-WP001-R1 — Truthful Health State Corrective: CLOSED / PASS
+   Accepted Review HEAD: 6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38
+3. MON-WP002 — Queue / Lease / Reconciliation Monitoring: CLOSED / PASS
+   Accepted Review HEAD: 5b34269397afbd9046610c366d9f0c27bf3d5532
+4. MON-WP003 — Alerts / Incident Visibility: CLOSED / PASS
+   Accepted Review HEAD: acb1185e1a5ff21c2c346d326669392cacdfa639
+
+Closure Scope & Decisions:
+- Project Owner explicitly chose not to make Backup / Recovery / Retention work a Phase 1 closure requirement.
+- Backup / Recovery / Retention status: DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE (not implemented, OPS-WP002 is not created or authorized).
+- Phase 2 execution gate is NOT installed. Phase 2 remains future roadmap candidate only.
 
 --------------------------------------------------
-MON-WP003 OBJECTIVE (COMPLETED / CLOSED_PASS)
+PERMANENT SAFETY CONTRACT & RUNTIME INVARIANTS
 --------------------------------------------------
 
-Provide clear operator-facing incident visibility using the
-already accepted read-only monitoring data from:
-
-GET /api/ops/health
-GET /api/ops/queue
-
-MON-WP003 V1 is DASHBOARD-ONLY.
-
---------------------------------------------------
-IMPLEMENTATION FILES
---------------------------------------------------
-
-- index.html
-
-Supporting docs:
-
-- project-docs/ACTIVE_TASK.md
-- project-docs/CHAT_HANDOFF.md
-- project-docs/CURRENT_STATE.md
-- project-docs/PROJECT_STATUS_ROADMAP.md
-- project-docs/EXECUTION_GATE.md
-
---------------------------------------------------
-PROHIBITED FILES (VERIFIED UNTOUCHED)
---------------------------------------------------
-
-- src/**
-- run/**
-- package*.json
-- entities/**
-- database-init.service.ts
-- telegram.service.ts
-- schema/migrations
-- Worker version changes
-- Runtime Contract changes
-- LINE send
-- Telegram send
-- lease mutation/reclaim
-- reconciliation mutation
-- auto recovery
-- ack/snooze/retry/reset/reconcile controls
-
-Worker remains:
-28.16
-
-Required Worker remains:
-28.16
-
-Runtime Contract remains:
-2
+- Worker Version: 28.16
+- Required Worker Version: 28.16
+- Runtime Contract: 2
+- Never automatically resend an ambiguous physical send.
+- True exactly-once physical LINE delivery is not guaranteed.
+- Ambiguous physical-send state requires reconciliation before retry.
+- Existing monitoring endpoints remain read-only.
+- Zero LINE activity in this control update.
+- Zero Telegram activity in this control update.
 
 --------------------------------------------------
 CLOSURE STATUS
 --------------------------------------------------
 
-TASK_ID: MON-WP003-CLOSE
+TASK_ID: PHASE1-CLOSE
 STATUS: CLOSED_PASS
-ACCEPTED_REVIEW_HEAD: acb1185e1a5ff21c2c346d326669392cacdfa639
-ACCEPTED_REVIEW_RESULT: PASS
+CLOSURE_BASELINE_HEAD: ac1ded4728df14f741104073618dd3623b6d1c25
+OWNER_DECISION: APPROVED
+PHASE_1_RESULT: CLOSED_PASS
 
 NEXT_TASK: NONE
 NEXT_TASK_STATUS: AWAITING_OWNER_DIRECTION
