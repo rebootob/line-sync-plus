@@ -2,7 +2,7 @@
 
 ```yaml
 ACTIVE_WORK_PACKAGE: P2-WP001
-STATUS: AUTHORIZED_FOR_EXECUTION
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: PENDING_REVIEW
@@ -10,14 +10,14 @@ PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: IN PROGRESS
 PHASE_2_TITLE: Campaign Builder v2
-P2-WP001: AUTHORIZED_FOR_EXECUTION
+P2-WP001: READY_FOR_CHATGPT_REVIEW
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
-- **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `AUTHORIZED_FOR_EXECUTION`
+- **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `READY_FOR_CHATGPT_REVIEW`
 - **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`
 - **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
 - **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
@@ -436,7 +436,7 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
-## 🎯 P2-WP001 — Campaign Authoring Contract & OA Isolation (STATUS: AUTHORIZED_FOR_EXECUTION)
+## 🎯 P2-WP001 — Campaign Authoring Contract & OA Isolation (STATUS: READY_FOR_CHATGPT_REVIEW)
 
 > [!IMPORTANT]
 > **Boundary & Invariants**:
@@ -449,58 +449,51 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 ### Objective
 Make campaign creation, campaign reads, template reuse, scheduled-campaign reads, pause, resume and reschedule operations fail-closed, active-OA isolated and governed by an authoritative server-side campaign authoring contract. Do this BEFORE Campaign Preview / Template Reuse V2 UI work.
 
-### Specification Details
-
-1. **Authoritative Message Type Contract**:
-   - Allowed: `text`, `text_link`, `image_only`, `image_link`, `link_only`. Any other messageType => HTTP 400 / fail closed.
-   - `text`: non-empty message REQUIRED; imageUrl & linkUrl prohibited.
-   - `text_link`: non-empty message REQUIRED; valid linkUrl REQUIRED; imageUrl prohibited.
-   - `image_only`: valid imageUrl REQUIRED; linkUrl prohibited; message not required.
-   - `image_link`: valid imageUrl REQUIRED; non-empty message REQUIRED; valid linkUrl REQUIRED.
-   - `link_only`: valid linkUrl REQUIRED; imageUrl prohibited; message optional.
-   - Trim textual inputs before validation/persistence. Never silently coerce unknown messageType to text.
-
-2. **URL Validation**:
-   - Parse as URL; protocol must be `http:` or `https:`. Reject malformed values or unsupported protocols (`javascript:`, `data:`, `file:`, `ftp:`).
-   - Local uploaded image URLs (`http://localhost:<port>/api/uploads/...`) must remain valid.
-   - Frontend must send only fields relevant to selected message type so hidden stale form values cannot violate the contract.
-
-3. **Schedule Contract**:
-   - If `scheduledAt` absent/blank: immediate/pending.
-   - If supplied: valid datetime representing future time; invalid/past/current => reject. NEVER silently convert to immediate send.
-   - Frontend `datetime-local` normalized to unambiguous ISO timestamp before POST where practical.
-
-4. **Active OA Isolation — Reads**:
-   - Endpoints scoped to botId: `GET /api/campaigns`, `GET /api/campaigns/templates`, `GET /api/campaigns/scheduled`, `GET /api/campaigns/:id`.
-   - Requires valid `botId` matching current `activeBotId`. Returns only campaigns with `campaign.botId == botId`. Cross-OA campaign detail behaves as not found.
-   - `index.html` updated to pass `currentActiveBotId` explicitly.
-
-5. **Active OA Isolation — Mutations**:
-   - Fencing applied to: `POST /api/campaign/pause`, `POST /api/campaign/resume`, `POST /api/campaign/reschedule`.
-   - Dashboard sends `botId`. Requires valid `botId == current activeBotId` and campaign exists with matching `id` and `botId`. Never mutate another OA's campaign.
-
-6. **State-Safe Mutations**:
-   - `PAUSE`: Allowed only from `pending`, `scheduled`, `processing`. Rejects `paused`, `paused_reconcile`, `completed`, `failed`, `stopped_*`, terminal/unknown states.
-   - `RESUME`: Allowed ONLY from `paused`. Never normal-resume `paused_reconcile`. If `scheduledAt` remains in future => `scheduled`; otherwise => `pending`.
-   - `RESCHEDULE`: Allowed ONLY when `scheduled` or `paused`. New `scheduledAt` required, valid, future only. Paused remains paused; scheduled remains scheduled. Never reschedule completed/failed/stopped/processing/paused_reconcile campaigns.
-
-7. **Preserve Existing Safety**:
-   - Active OA runtime fencing, target OA membership, blocked/duplicate target exclusion, durable leases, heartbeats, pre-send lease renewal, send-part ARM/CONFIRM, ambiguity quarantine, reconciliation fencing, account protection all preserved.
-
-8. **Tests & Validation**:
-   - 42 focused Jest tests covering authoring contract, schedule, OA read/mutation isolation, state safety, and frontend contract.
-   - Zero Live LINE send UAT required for P2-WP001. Master Bot remains PAUSED.
+### Implementation Summary
+1. **Authoritative Message Type Contract (`src/app.controller.ts`)**:
+   - Enforced allowed types: `text`, `text_link`, `image_only`, `image_link`, `link_only`. Any other or unknown string strictly rejected with HTTP 400.
+   - Text inputs trimmed before validation/persistence.
+   - Prohibited fields per message type validated and rejected with HTTP 400.
+2. **URL Validation (`src/app.controller.ts`)**:
+   - `isValidHttpUrl` validates `http:` or `https:` protocol. Rejects `javascript:`, `data:`, `file:`, `ftp:`, and malformed strings. Local uploads (`/api/uploads/...`) remain supported.
+3. **Schedule Contract (`src/app.controller.ts` & `index.html`)**:
+   - Absent/empty `scheduledAt` defaults to immediate (`status: 'pending'`, `scheduledAt: null`).
+   - Invalid or past datetimes rejected with HTTP 400 (never silently converted to immediate).
+   - Future ISO dates set initial status to `scheduled`.
+   - Frontend normalizes `scheduledAt` to ISO string before submission.
+4. **Active OA Isolation — Reads (`src/app.controller.ts` & `index.html`)**:
+   - Scoped with `botId` query parameter matching `activeBotId`: `/api/campaigns`, `/api/campaigns/templates`, `/api/campaigns/scheduled`, `/api/campaigns/:id`.
+   - Mismatch returns HTTP 409 Conflict. Cross-OA campaign detail returns HTTP 404.
+   - `index.html` passes `currentActiveBotId` across all campaign reads.
+5. **Active OA Isolation — Mutations (`src/app.controller.ts` & `index.html`)**:
+   - Fencing applied with `botId` in request body matching `activeBotId`: `/api/campaign/pause`, `/api/campaign/resume`, `/api/campaign/reschedule`.
+   - Campaign must exist and belong to the specified `botId`. Mismatched OA or foreign campaign rejected.
+6. **State-Safe Mutations (`src/app.controller.ts`)**:
+   - Pause allowed only from `pending`, `scheduled`, `processing`. Rejects terminal, paused, and `paused_reconcile` states.
+   - Resume allowed ONLY from `paused`. Rejects `paused_reconcile`. Transitions to `scheduled` if schedule in future, else `pending`.
+   - Reschedule allowed ONLY from `scheduled` or `paused` with future date. Retains status. Rejects `processing`, terminal, and `paused_reconcile` states.
+7. **Frontend Compatibility (`index.html`)**:
+   - `submitCampaign` constructs payload sending only relevant fields per chosen `messageType`.
+   - Normalizes datetime input to ISO timestamp.
+   - Passes `currentActiveBotId` across all read and mutation endpoints.
+8. **Validation Evidence**:
+   - 42 dedicated unit tests added under `describe('P2-WP001 — Campaign Authoring Contract & OA Isolation Tests')`.
+   - Full test suite: **359/359 PASS** (0 failures, `npm test -- --runInBand`).
+   - Build: **PASS** (`npm run build`, 0 errors).
+   - Whitespace check: **PASS** (`git diff --check`, 0 errors).
+   - Evidence Classification: **LOCAL REPORTED evidence** (no GitHub CI status checks).
+   - Zero Live LINE send UAT performed (authoring and OA isolation contracts only; Master Bot remained PAUSED).
 
 ---
 
 ## 🚀 Work Package Execution Status
 
 - **Active Work Package**: `P2-WP001`
-- **Status**: `AUTHORIZED_FOR_EXECUTION`
+- **Status**: `READY_FOR_CHATGPT_REVIEW`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `CLOSED / PASS`
 - **Phase 2 Status**: `IN PROGRESS`
-- **P2-WP001 Status**: `AUTHORIZED_FOR_EXECUTION`
+- **P2-WP001 Status**: `READY_FOR_CHATGPT_REVIEW`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`
 - **MON-WP002 Status**: `CLOSED / PASS`

@@ -23,12 +23,12 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 ## Work Package Status
 
 * **ACTIVE_WORK_PACKAGE**: `P2-WP001`
-* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
 * **PHASE_2_TITLE**: `Campaign Builder v2`
-* **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `AUTHORIZED_FOR_EXECUTION`
+* **P2-WP001 — Campaign Authoring Contract & OA Isolation**: `READY_FOR_CHATGPT_REVIEW`
 * **NEXT_CANDIDATE**: `NONE`
 * **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
@@ -170,25 +170,37 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
   - Backup / Recovery / Retention status: `DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE` (not implemented; OPS-WP002 is neither created nor authorized).
   - Phase 2 is now authorized under P2-WP001.
 
-## Authorized P2-WP001 Campaign Authoring Contract & OA Isolation Summary
+## Implemented P2-WP001 Campaign Authoring Contract & OA Isolation Summary
 
 - **Task**: P2-WP001 (Campaign Authoring Contract & OA Isolation)
-- **Status**: AUTHORIZED_FOR_EXECUTION
+- **Status**: READY_FOR_CHATGPT_REVIEW
 - **Code Baseline HEAD**: `7204f6b1c08ffa4f4ab6b7b071f3d34d1900bf7b`
 - **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts`, `index.html`
 - **Prohibited Files**: `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), entities, DB schema/migrations, send plan/ledger/ARM/CONFIRM, LINE DOM/send behavior, Telegram.
-- **Objective**: Authoritative message type contract (text, text_link, image_only, image_link, link_only), URL validation (http/https only), schedule validation (future only, reject past/invalid), active-OA scoped reads (`/campaigns`, `/templates`, `/scheduled`, `/:id`), active-OA scoped mutations (`/pause`, `/resume`, `/reschedule`), state-safe transitions.
-- **Safety Invariant**: Never automatically resend ambiguous physical sends. True exactly-once physical LINE delivery is not guaranteed.
-- **Validation Scope**: 42 focused Jest tests, `npm test -- --runInBand`, `npm run build`. Zero Live LINE sends.
+- **Implemented Contracts**:
+  - Authoritative message type contract: `text`, `text_link`, `image_only`, `image_link`, `link_only` (fail-closed HTTP 400 for unknown).
+  - Strict URL validation: HTTP/HTTPS only; reject javascript/data/file/ftp. Local uploads remain valid.
+  - Future-only schedule validation; reject invalid/past/current datetimes without silent fallback.
+  - Active OA scoped reads: `/campaigns`, `/campaigns/templates`, `/campaigns/scheduled`, `/campaigns/:id`. Cross-OA campaign detail behaves as not found (404).
+  - Active OA scoped mutations: `/campaign/pause`, `/campaign/resume`, `/campaign/reschedule`. Fenced by botId == activeBotId.
+  - State-safe mutation transitions (pause from pending/scheduled/processing; resume from paused; reschedule from scheduled/paused).
+  - Frontend payload hardening: sends only relevant fields per chosen message type; normalizes datetime to ISO string.
+- **Validation Evidence**:
+  - 42 focused Jest tests covering all required authoring, schedule, OA isolation, state safety, and frontend contracts.
+  - Full test suite: **359/359 PASS** (0 failures, `npm test -- --runInBand`).
+  - Build: **PASS** (`npm run build`, 0 errors).
+  - Whitespace check: **PASS** (`git diff --check`, 0 errors).
+  - Evidence Classification: **LOCAL REPORTED evidence** (no GitHub CI status checks).
+  - Zero Live LINE send UAT performed (authoring and OA isolation contracts only; Master Bot remained PAUSED).
 
 ## Exact Recommended Next Step
 
 * **ACTIVE_WORK_PACKAGE**: `P2-WP001`
-* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
-* **P2-WP001**: `AUTHORIZED_FOR_EXECUTION`
+* **P2-WP001**: `READY_FOR_CHATGPT_REVIEW`
 * **NEXT_CANDIDATE**: `NONE`
 * **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
-Control plane authorization complete. In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP001 within authorized scope. Do not start next task without explicit authorization.
+P2-WP001 implementation complete and fully tested locally. Awaiting independent ChatGPT review. Do not start next task without explicit authorization.

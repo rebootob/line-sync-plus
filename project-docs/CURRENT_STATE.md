@@ -226,7 +226,7 @@
 
 ---
 
-## 🎯 Campaign Authoring Contract & OA Isolation (P2-WP001 STATUS: AUTHORIZED_FOR_EXECUTION)
+## 🎯 Campaign Authoring Contract & OA Isolation (P2-WP001 STATUS: READY_FOR_CHATGPT_REVIEW)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
 - **Backend Required Version**: `28.16` (`src/runtime-version.ts` - UNTOUCHED).
@@ -239,10 +239,11 @@
   - Authoritative message type contract: `text`, `text_link`, `image_only`, `image_link`, `link_only` (fail-closed HTTP 400 for unknown).
   - Strict URL validation: HTTP/HTTPS only; reject javascript/data/file/ftp. Local uploads remain valid.
   - Future-only schedule validation; reject invalid/past/current datetimes without silent fallback.
-  - Active OA scoped reads: `/campaigns`, `/campaigns/templates`, `/campaigns/scheduled`, `/campaigns/:id`. Cross-OA campaign detail behaves as not found.
+  - Active OA scoped reads: `/campaigns`, `/campaigns/templates`, `/campaigns/scheduled`, `/campaigns/:id`. Cross-OA campaign detail behaves as not found (404).
   - Active OA scoped mutations: `/campaign/pause`, `/campaign/resume`, `/campaign/reschedule`. Fenced by botId == activeBotId.
   - State-safe mutation transitions (pause from pending/scheduled/processing; resume from paused; reschedule from scheduled/paused).
-- **Testing & Safety**: 42 focused Jest tests, `npm test -- --runInBand`, `npm run build`. Zero Live LINE sends.
+  - Frontend payload hardening: sends only relevant fields per chosen message type; normalizes datetime to ISO string.
+- **Testing & Safety**: 42 focused Jest tests, full test suite 359/359 PASS (`npm test -- --runInBand`), `npm run build` PASS (0 errors), `git diff --check` PASS. Zero Live LINE sends (Master Bot remained PAUSED).
 
 ---
 
@@ -253,9 +254,9 @@
 - **Phase 2 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003` (`CLOSED / PASS`).
 - **Active Work Package**: `P2-WP001`.
-- **Status**: `AUTHORIZED_FOR_EXECUTION`.
+- **Status**: `READY_FOR_CHATGPT_REVIEW`.
 - **Work Package Status**:
-  - `P2-WP001`: `AUTHORIZED_FOR_EXECUTION`.
+  - `P2-WP001`: `READY_FOR_CHATGPT_REVIEW`.
   - `MON-WP001`: `CLOSED / PASS`.
   - `MON-WP001-R1`: `CLOSED / PASS`.
   - `MON-WP002`: `CLOSED / PASS`.

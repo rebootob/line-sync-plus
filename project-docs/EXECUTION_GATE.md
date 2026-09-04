@@ -9,7 +9,7 @@ TITLE:
 Campaign Authoring Contract & OA Isolation
 
 STATUS:
-AUTHORIZED_FOR_EXECUTION
+READY_FOR_CHATGPT_REVIEW
 
 CODE_BASELINE_HEAD:
 7204f6b1c08ffa4f4ab6b7b071f3d34d1900bf7b
@@ -370,7 +370,15 @@ Run:
 npm test -- --runInBand
 npm run build
 
-Record ACTUAL results.
+Record ACTUAL results:
+
+- `npm test -- --runInBand`: PASS
+  - Test Suites: 1 passed, 1 total
+  - Tests: 359 passed, 359 total (317 existing + 42 new P2-WP001 tests)
+  - Snapshots: 0 total
+  - Time: 2.493 s
+- `npm run build`: PASS (nest build completed with 0 errors)
+- `git diff --check`: PASS (0 whitespace errors)
 
 All test evidence must be classified:
 

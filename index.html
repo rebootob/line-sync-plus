@@ -1553,7 +1553,7 @@
                 const [resCust, resGroups, resCampaigns] = await Promise.all([
                     fetch(`${API_BASE}/customers?botId=${encodeURIComponent(currentActiveBotId)}`),
                     fetch(`${API_BASE}/groups?botId=${encodeURIComponent(currentActiveBotId)}`),
-                    fetch(`${API_BASE}/campaigns`)
+                    fetch(`${API_BASE}/campaigns?botId=${encodeURIComponent(currentActiveBotId)}`)
                 ]);
 
                 allCustomers = await resCust.json();
@@ -1897,7 +1897,7 @@
 
         async function loadTemplatePresetDropdown() {
             try {
-                const res = await fetch(`${API_BASE}/campaigns/templates`);
+                const res = await fetch(`${API_BASE}/campaigns/templates?botId=${encodeURIComponent(currentActiveBotId)}`);
                 campaignTemplates = await res.json();
                 const select = document.getElementById('templateReuseSelect');
                 select.innerHTML = '<option value="">-- พิมพ์สร้างใหม่ หรือ เลือกแคมเปญเดิมที่เคยส่ง --</option>' +
@@ -1970,13 +1970,16 @@
                 const res = await fetch(`${API_BASE}/campaign/pause`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ campaignId })
+                    body: JSON.stringify({ campaignId, botId: currentActiveBotId })
                 });
                 const data = await res.json();
                 if (data.success) {
                     alert('⏸️ สั่งหยุดส่งแคมเปญชั่วคราวเรียบร้อยแล้ว (บอทจะไม่ดึงคิวไปรันชั่วคราว)');
                     loadData();
                     if (document.getElementById('historyModal').style.display === 'flex') openHistoryModal();
+                    if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+                } else {
+                    alert(`❌ ${data.message || 'ไม่สามารถหยุดแคมเปญชั่วคราวได้'}`);
                 }
             } catch(e) { alert('❌ ไม่สามารถหยุดแคมเปญชั่วคราวได้'); }
         }
@@ -1986,7 +1989,7 @@
                 const res = await fetch(`${API_BASE}/campaign/resume`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ campaignId })
+                    body: JSON.stringify({ campaignId, botId: currentActiveBotId })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1994,25 +1997,10 @@
                     loadData();
                     if (document.getElementById('historyModal').style.display === 'flex') openHistoryModal();
                     if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+                } else {
+                    alert(`❌ ${data.message || 'ไม่สามารถสั่งทำงานต่อได้'}`);
                 }
             } catch(e) { alert('❌ ไม่สามารถสั่งทำงานต่อได้'); }
-        }
-
-        async function pauseCampaignControl(campaignId) {
-            try {
-                const res = await fetch(`${API_BASE}/campaign/pause`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ campaignId })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    alert('⏸️ สั่งหยุดส่งแคมเปญชั่วคราวเรียบร้อยแล้ว (บอทจะไม่ดึงคิวไปรันชั่วคราว)');
-                    loadData();
-                    if (document.getElementById('historyModal').style.display === 'flex') openHistoryModal();
-                    if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
-                }
-            } catch(e) { alert('❌ ไม่สามารถหยุดแคมเปญชั่วคราวได้'); }
         }
 
         async function openTelegramModal() {
@@ -2094,7 +2082,7 @@
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">⏳ กำลังดึงรายการตารางส่ง...</td></tr>';
 
             try {
-                const res = await fetch(`${API_BASE}/campaigns/scheduled`);
+                const res = await fetch(`${API_BASE}/campaigns/scheduled?botId=${encodeURIComponent(currentActiveBotId)}`);
                 const campaigns = await res.json();
 
                 if (campaigns.length === 0) {
@@ -2207,11 +2195,17 @@
             const newTime = prompt('📅 ระบุวันและเวลาส่งล่วงหน้าใหม่ (รูปแบบ: YYYY-MM-DDTHH:mm เช่น 2026-08-21T21:00):', currentDtStr);
             if (!newTime) return;
 
+            let normalizedIso = newTime;
+            const parsed = new Date(newTime);
+            if (!isNaN(parsed.getTime())) {
+                normalizedIso = parsed.toISOString();
+            }
+
             try {
                 const res = await fetch(`${API_BASE}/campaign/reschedule`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ campaignId, scheduledAt: newTime })
+                    body: JSON.stringify({ campaignId, botId: currentActiveBotId, scheduledAt: normalizedIso })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -2495,7 +2489,16 @@
             if (document.getElementById('enableScheduleCheckbox').checked) {
                 const schedVal = document.getElementById('campaignScheduledAtInput').value;
                 if (schedVal) {
-                    scheduledAt = schedVal;
+                    const parsed = new Date(schedVal);
+                    if (isNaN(parsed.getTime())) {
+                        alert('รูปแบบวันเวลาที่ตั้งเวลาส่งล่วงหน้าไม่ถูกต้อง');
+                        return;
+                    }
+                    if (parsed.getTime() <= Date.now()) {
+                        alert('วันเวลาที่ตั้งเวลาส่งล่วงหน้าต้องเป็นเวลาในอนาคต');
+                        return;
+                    }
+                    scheduledAt = parsed.toISOString();
                 } else {
                     alert('กรุณาระบุวันและเวลาที่ต้องการตั้งเวลาส่งล่วงหน้า');
                     return;
@@ -2506,9 +2509,6 @@
                 if (!imageUrl || imageUrl.trim() === '') {
                     alert('กรุณาเลือก/แนบรูปภาพจากเครื่อง หรือ ระบุ URL รูปภาพ');
                     return;
-                }
-                if (!message || message.trim() === '') {
-                    message = '🖼️ [ส่งรูปภาพเดี่ยว]';
                 }
             } else if (messageType === 'link_only') {
                 if (!linkUrl || linkUrl.trim() === '') {
@@ -2524,10 +2524,53 @@
                     alert('กรุณากรอกข้อความที่จะส่ง');
                     return;
                 }
+                if (!linkUrl || linkUrl.trim() === '') {
+                    alert('กรุณาระบุ URL ลิงก์ปลายทาง (Target Link URL)');
+                    return;
+                }
+            } else if (messageType === 'text_link') {
+                if (!message || message.trim() === '') {
+                    alert('กรุณากรอกข้อความที่จะส่ง');
+                    return;
+                }
+                if (!linkUrl || linkUrl.trim() === '') {
+                    alert('กรุณาระบุ URL ลิงก์ปลายทาง (Target Link URL)');
+                    return;
+                }
             } else {
                 if (!message || message.trim() === '') {
                     alert('กรุณากรอกข้อความที่จะส่ง');
                     return;
+                }
+            }
+
+            // Construct payload sending only relevant fields for the chosen messageType
+            const payload = {
+                botId: currentActiveBotId,
+                name: (name || '').trim(),
+                messageType: messageType,
+                targetIds: targetIds
+            };
+
+            if (scheduledAt) {
+                payload.scheduledAt = scheduledAt;
+            }
+
+            if (messageType === 'text') {
+                payload.message = message.trim();
+            } else if (messageType === 'text_link') {
+                payload.message = message.trim();
+                payload.linkUrl = linkUrl.trim();
+            } else if (messageType === 'image_only') {
+                payload.imageUrl = imageUrl.trim();
+            } else if (messageType === 'image_link') {
+                payload.imageUrl = imageUrl.trim();
+                payload.message = message.trim();
+                payload.linkUrl = linkUrl.trim();
+            } else if (messageType === 'link_only') {
+                payload.linkUrl = linkUrl.trim();
+                if (message && message.trim()) {
+                    payload.message = message.trim();
                 }
             }
 
@@ -2538,16 +2581,7 @@
                 const res = await fetch(`${API_BASE}/campaign/add`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        botId: currentActiveBotId,
-                        name: name,
-                        messageType: messageType,
-                        message: message,
-                        imageUrl: imageUrl,
-                        linkUrl: linkUrl,
-                        targetIds: targetIds,
-                        scheduledAt: scheduledAt
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await res.json();
@@ -2561,6 +2595,8 @@
                     closeModal('campaignModal');
                     selectedUsers.clear();
                     renderTable();
+                } else {
+                    alert(`❌ ไม่สามารถสร้างแคมเปญได้: ${data.message || 'เกิดข้อผิดพลาด'}`);
                 }
             } catch (err) {
                 alert('❌ ไม่สามารถสร้างแคมเปญได้');
@@ -2578,7 +2614,7 @@
             tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">⏳ กำลังดึงประวัติ...</td></tr>';
 
             try {
-                const res = await fetch(`${API_BASE}/campaigns`);
+                const res = await fetch(`${API_BASE}/campaigns?botId=${encodeURIComponent(currentActiveBotId)}`);
                 const campaigns = await res.json();
 
                 if (campaigns.length === 0) {
@@ -2655,7 +2691,11 @@
             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">⏳ กำลังดึงข้อมูลผู้รับ...</td></tr>';
 
             try {
-                const res = await fetch(`${API_BASE}/campaigns/${campaignId}`);
+                const res = await fetch(`${API_BASE}/campaigns/${encodeURIComponent(campaignId)}?botId=${encodeURIComponent(currentActiveBotId)}`);
+                if (!res.ok) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red; padding:20px;">❌ ไม่พบข้อมูลแคมเปญ หรือไม่มีสิทธิ์เข้าถึงใน OA ปัจจุบัน</td></tr>';
+                    return;
+                }
                 const data = await res.json();
                 const campaign = data.campaign;
                 const jobs = data.jobs || [];

@@ -628,6 +628,19 @@ export class AppController {
   // 3. ระบบจัดการแคมเปญส่งข้อความ (Campaign & DB Queue APIs)
   // ==========================================
 
+  // ตรวจสอบความถูกต้องของ URL (รองรับ http: และ https: เท่านั้น)
+  private isValidHttpUrl(urlString: string): boolean {
+    if (typeof urlString !== 'string' || !urlString.trim()) {
+      return false;
+    }
+    try {
+      const parsed = new URL(urlString.trim());
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
   // สร้างแคมเปญและสร้างคิวงานในฐานข้อมูล (รองรับ Scheduled Time & Multi-type & OA Ownership)
   @Post('campaign/add')
   async addCampaign(
@@ -636,7 +649,7 @@ export class AppController {
       botId: string;
       name?: string;
       messageType?: string;
-      message: string;
+      message?: string;
       imageUrl?: string;
       linkUrl?: string;
       targetIds: string[];
@@ -656,6 +669,119 @@ export class AppController {
     if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
       res.status(HttpStatus.CONFLICT);
       return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+    }
+
+    // 1. Authoritative Message Type Contract
+    const rawType = body.messageType !== undefined ? (typeof body.messageType === 'string' ? body.messageType.trim() : '') : 'text';
+    const allowedTypes = ['text', 'text_link', 'image_only', 'image_link', 'link_only'];
+    if (!allowedTypes.includes(rawType)) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: `Invalid or unsupported messageType: ${rawType}` };
+    }
+    const messageType = rawType;
+
+    const rawMsg = typeof body.message === 'string' ? body.message.trim() : '';
+    const rawImg = typeof body.imageUrl === 'string' ? body.imageUrl.trim() : '';
+    const rawLink = typeof body.linkUrl === 'string' ? body.linkUrl.trim() : '';
+
+    if (messageType === 'text') {
+      if (!rawMsg) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Message is required for text messageType' };
+      }
+      if (rawImg !== '') {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'imageUrl is prohibited for text messageType' };
+      }
+      if (rawLink !== '') {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'linkUrl is prohibited for text messageType' };
+      }
+    } else if (messageType === 'text_link') {
+      if (!rawMsg) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Message is required for text_link messageType' };
+      }
+      if (!rawLink) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'linkUrl is required for text_link messageType' };
+      }
+      if (!this.isValidHttpUrl(rawLink)) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Invalid linkUrl protocol or format' };
+      }
+      if (rawImg !== '') {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'imageUrl is prohibited for text_link messageType' };
+      }
+    } else if (messageType === 'image_only') {
+      if (!rawImg) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'imageUrl is required for image_only messageType' };
+      }
+      if (!this.isValidHttpUrl(rawImg)) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Invalid imageUrl protocol or format' };
+      }
+      if (rawLink !== '') {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'linkUrl is prohibited for image_only messageType' };
+      }
+    } else if (messageType === 'image_link') {
+      if (!rawImg) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'imageUrl is required for image_link messageType' };
+      }
+      if (!this.isValidHttpUrl(rawImg)) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Invalid imageUrl protocol or format' };
+      }
+      if (!rawMsg) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Message is required for image_link messageType' };
+      }
+      if (!rawLink) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'linkUrl is required for image_link messageType' };
+      }
+      if (!this.isValidHttpUrl(rawLink)) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Invalid linkUrl protocol or format' };
+      }
+    } else if (messageType === 'link_only') {
+      if (!rawLink) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'linkUrl is required for link_only messageType' };
+      }
+      if (!this.isValidHttpUrl(rawLink)) {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Invalid linkUrl protocol or format' };
+      }
+      if (rawImg !== '') {
+        res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'imageUrl is prohibited for link_only messageType' };
+      }
+    }
+
+    // 2. Schedule Contract
+    let scheduledDate: Date | null = null;
+    let initialStatus = 'pending';
+
+    if (body.scheduledAt !== undefined && body.scheduledAt !== null) {
+      const schedTrim = typeof body.scheduledAt === 'string' ? body.scheduledAt.trim() : '';
+      if (schedTrim !== '') {
+        const parsedDate = new Date(schedTrim);
+        if (isNaN(parsedDate.getTime())) {
+          res.status(HttpStatus.BAD_REQUEST);
+          return { success: false, message: 'Invalid scheduledAt datetime' };
+        }
+        if (parsedDate.getTime() <= Date.now()) {
+          res.status(HttpStatus.BAD_REQUEST);
+          return { success: false, message: 'scheduledAt must represent a future time' };
+        }
+        scheduledDate = parsedDate;
+        initialStatus = 'scheduled';
+      }
     }
 
     if (!body.targetIds || body.targetIds.length === 0) {
@@ -696,30 +822,18 @@ export class AppController {
       };
     }
 
-    const messageType = body.messageType || 'text';
-    const campaignName = body.name || `แคมเปญ ${new Date().toLocaleString('th-TH')}`;
-
-    let scheduledDate: Date | null = null;
-    let initialStatus = 'pending';
-
-    if (body.scheduledAt && body.scheduledAt.trim() !== '') {
-      const parsedDate = new Date(body.scheduledAt);
-      if (!isNaN(parsedDate.getTime())) {
-        scheduledDate = parsedDate;
-        if (parsedDate.getTime() > Date.now()) {
-          initialStatus = 'scheduled';
-        }
-      }
-    }
+    const campaignName = (body.name && typeof body.name === 'string' && body.name.trim())
+      ? body.name.trim()
+      : `แคมเปญ ${new Date().toLocaleString('th-TH')}`;
 
     // สร้าง Record แคมเปญใน DB พร้อม botId
     const campaign = this.campaignRepository.create({
       botId: cleanBotId,
       name: campaignName,
       messageType: messageType,
-      message: body.message,
-      imageUrl: body.imageUrl || null,
-      linkUrl: body.linkUrl || null,
+      message: rawMsg || '',
+      imageUrl: rawImg || null,
+      linkUrl: rawLink || null,
       totalTargets: validTargetIds.length,
       successCount: 0,
       failedCount: 0,
@@ -2351,38 +2465,104 @@ export class AppController {
 
   // API สำหรับสั่งหยุดแคมเปญชั่วคราว (Pause Campaign)
   @Post('campaign/pause')
-  async pauseCampaign(@Body() body: { campaignId: string }) {
-    if (!body.campaignId) return { success: false, message: 'กรุณาระบุ campaignId' };
-
-    const campaign = await this.campaignRepository.findOne({ where: { id: body.campaignId } });
-    if (campaign) {
-      campaign.status = 'paused';
-      await this.campaignRepository.save(campaign);
-      console.log(`⏸️ สั่งหยุดแคมเปญชั่วคราว (Pause): "${campaign.name}"`);
-      return { success: true, status: 'paused' };
+  async pauseCampaign(
+    @Body() body: { campaignId?: string; botId?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!body || !body.campaignId || !body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid campaignId or botId parameter' };
     }
-    return { success: false, message: 'ไม่พบแคมเปญที่ระบุ' };
+
+    const cleanBotId = body.botId.trim();
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+    }
+
+    const campaign = await this.campaignRepository.findOne({ where: { id: body.campaignId, botId: cleanBotId } });
+    if (!campaign) {
+      res.status(HttpStatus.NOT_FOUND);
+      return { success: false, message: 'ไม่พบแคมเปญที่ระบุ' };
+    }
+
+    // Allowed only from: pending, scheduled, processing
+    const allowedPauseStatuses = ['pending', 'scheduled', 'processing'];
+    if (!allowedPauseStatuses.includes(campaign.status)) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: `Cannot pause campaign in status ${campaign.status}` };
+    }
+
+    campaign.status = 'paused';
+    await this.campaignRepository.save(campaign);
+    console.log(`⏸️ สั่งหยุดแคมเปญชั่วคราว (Pause): "${campaign.name}" (OA: ${cleanBotId})`);
+    return { success: true, status: 'paused' };
   }
 
   // API สำหรับสั่งทำงานต่อ (Resume Campaign)
   @Post('campaign/resume')
-  async resumeCampaign(@Body() body: { campaignId: string }) {
-    if (!body.campaignId) return { success: false, message: 'กรุณาระบุ campaignId' };
-
-    const campaign = await this.campaignRepository.findOne({ where: { id: body.campaignId } });
-    if (campaign) {
-      campaign.status = campaign.scheduledAt && new Date(campaign.scheduledAt) > new Date() ? 'scheduled' : 'processing';
-      await this.campaignRepository.save(campaign);
-      console.log(`▶️ สั่งทำงานต่อ (Resume): "${campaign.name}" (สถานะ: ${campaign.status})`);
-      return { success: true, status: campaign.status };
+  async resumeCampaign(
+    @Body() body: { campaignId?: string; botId?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!body || !body.campaignId || !body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid campaignId or botId parameter' };
     }
-    return { success: false, message: 'ไม่พบแคมเปญที่ระบุ' };
+
+    const cleanBotId = body.botId.trim();
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+    }
+
+    const campaign = await this.campaignRepository.findOne({ where: { id: body.campaignId, botId: cleanBotId } });
+    if (!campaign) {
+      res.status(HttpStatus.NOT_FOUND);
+      return { success: false, message: 'ไม่พบแคมเปญที่ระบุ' };
+    }
+
+    // Allowed ONLY from: paused
+    // Never normal-resume: paused_reconcile
+    if (campaign.status !== 'paused') {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: `Cannot resume campaign in status ${campaign.status}` };
+    }
+
+    // On successful resume:
+    // - if scheduledAt remains in the future => scheduled
+    // - otherwise => pending
+    // Do not jump directly to processing merely because schedule time passed.
+    const isFutureScheduled = campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now();
+    campaign.status = isFutureScheduled ? 'scheduled' : 'pending';
+
+    await this.campaignRepository.save(campaign);
+    console.log(`▶️ สั่งทำงานต่อ (Resume): "${campaign.name}" (สถานะ: ${campaign.status}, OA: ${cleanBotId})`);
+    return { success: true, status: campaign.status };
   }
 
   // ดึงรายการตารางตั้งเวลาส่งล่วงหน้าทั้งหมดพร้อมประวัติสถานะ (Scheduled Campaigns List with Execution History)
   @Get('campaigns/scheduled')
-  async getScheduledCampaigns() {
+  async getScheduledCampaigns(
+    @Query('botId') botId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!botId || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId parameter' };
+    }
+
+    const cleanBotId = botId.trim();
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+    }
+
     const campaigns = await this.campaignRepository.find({
+      where: { botId: cleanBotId },
       order: { scheduledAt: 'DESC' },
     });
 
@@ -2392,34 +2572,63 @@ export class AppController {
   // ปรับเปลี่ยนวัน-เวลาส่งล่วงหน้า (Reschedule Campaign Time)
   @Post('campaign/reschedule')
   async rescheduleCampaign(
-    @Body() body: { campaignId: string; scheduledAt: string },
+    @Body() body: { campaignId?: string; botId?: string; scheduledAt?: string },
+    @Res({ passthrough: true }) res: Response,
   ) {
-    if (!body.campaignId || !body.scheduledAt) {
-      return { success: false, message: 'ข้อมูลไม่ครบถ้วน' };
+    if (!body || !body.campaignId || !body.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid campaignId or botId parameter' };
     }
 
-    const campaign = await this.campaignRepository.findOne({ where: { id: body.campaignId } });
+    const cleanBotId = body.botId.trim();
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+    }
+
+    const campaign = await this.campaignRepository.findOne({ where: { id: body.campaignId, botId: cleanBotId } });
     if (!campaign) {
+      res.status(HttpStatus.NOT_FOUND);
       return { success: false, message: 'ไม่พบแคมเปญที่ระบุ' };
     }
 
-    const parsedDate = new Date(body.scheduledAt);
+    // Allowed ONLY when campaign is: scheduled or paused
+    // Never reschedule completed/failed/stopped/processing/paused_reconcile campaigns.
+    const allowedRescheduleStatuses = ['scheduled', 'paused'];
+    if (!allowedRescheduleStatuses.includes(campaign.status)) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: `Cannot reschedule campaign in status ${campaign.status}` };
+    }
+
+    if (!body.scheduledAt || typeof body.scheduledAt !== 'string' || body.scheduledAt.trim() === '') {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'scheduledAt is required' };
+    }
+
+    const parsedDate = new Date(body.scheduledAt.trim());
     if (isNaN(parsedDate.getTime())) {
+      res.status(HttpStatus.BAD_REQUEST);
       return { success: false, message: 'รูปแบบวันเวลาไม่ถูกต้อง' };
     }
 
-    campaign.scheduledAt = parsedDate;
-    if (campaign.status !== 'paused') {
-      campaign.status = parsedDate > new Date() ? 'scheduled' : 'pending';
+    if (parsedDate.getTime() <= Date.now()) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'scheduledAt must be in the future' };
     }
 
+    // If original status is paused: remain paused.
+    // If original status is scheduled: remain scheduled.
+    campaign.scheduledAt = parsedDate;
+
     await this.campaignRepository.save(campaign);
-    console.log(`⏰ อัปเดตเวลาส่งล่วงหน้าของแคมเปญ "${campaign.name}": ${parsedDate.toLocaleString('th-TH')}`);
+    console.log(`⏰ อัปเดตเวลาส่งล่วงหน้าของแคมเปญ "${campaign.name}": ${parsedDate.toLocaleString('th-TH')} (สถานะ: ${campaign.status}, OA: ${cleanBotId})`);
 
     return {
       success: true,
       campaign,
       scheduledAt: parsedDate,
+      status: campaign.status,
     };
   }
 
@@ -2494,14 +2703,48 @@ export class AppController {
 
   // ดึงรายการแคมเปญทั้งหมด (สำหรับ Dashboard History)
   @Get('campaigns')
-  async getAllCampaigns() {
-    return this.campaignRepository.find({ order: { createdAt: 'DESC' } });
+  async getAllCampaigns(
+    @Query('botId') botId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!botId || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId parameter' };
+    }
+
+    const cleanBotId = botId.trim();
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+    }
+
+    return this.campaignRepository.find({
+      where: { botId: cleanBotId },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   // ดึงแม่แบบแคมเปญย้อนหลัง (สำหรับ Template Reuse Dropdown)
   @Get('campaigns/templates')
-  async getCampaignTemplates() {
+  async getCampaignTemplates(
+    @Query('botId') botId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!botId || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId parameter' };
+    }
+
+    const cleanBotId = botId.trim();
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+    }
+
     return this.campaignRepository.find({
+      where: { botId: cleanBotId },
       order: { createdAt: 'DESC' },
       take: 15,
     });
@@ -2509,14 +2752,30 @@ export class AppController {
 
   // ดึงรายละเอียดแคมเปญและรายการคิวงานรายบุคคล
   @Get('campaigns/:id')
-  async getCampaignDetail(@Param('id') id: string) {
-    const campaign = await this.campaignRepository.findOne({ where: { id } });
+  async getCampaignDetail(
+    @Param('id') id: string,
+    @Query('botId') botId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!botId || !/^U[0-9a-fA-F]{32}$/.test(botId.trim())) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing or invalid botId parameter' };
+    }
+
+    const cleanBotId = botId.trim();
+    const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+    }
+
+    const campaign = await this.campaignRepository.findOne({ where: { id, botId: cleanBotId } });
     if (!campaign) {
       throw new NotFoundException('ไม่พบข้อมูลแคมเปญที่ระบุ');
     }
 
     const jobs = await this.campaignJobRepository.find({
-      where: { campaignId: id },
+      where: { campaignId: id, botId: cleanBotId },
       order: { createdAt: 'ASC' },
     });
 

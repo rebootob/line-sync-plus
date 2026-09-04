@@ -4508,6 +4508,743 @@ describe('AppController', () => {
       expect(res.oa.active).toBe(false);
     });
   });
+
+  describe('P2-WP001 — Campaign Authoring Contract & OA Isolation Tests', () => {
+    const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+    const foreignBotId = 'U11111111222222223333333344444444';
+
+    const createMockRes = () => {
+      const res: any = {
+        statusCode: 200,
+        status: jest.fn().mockImplementation((code: number) => {
+          res.statusCode = code;
+          return res;
+        }),
+      };
+      return res;
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockOaRuntimeStateRepo.findOne.mockResolvedValue({ id: 'global', activeBotId: testBotId });
+      mockCustomerRepo.findOne.mockImplementation((opts: any) => {
+        const w = opts && opts.where ? opts.where : {};
+        if (w.botId === testBotId && w.lineUserId === 'U12345') {
+          return Promise.resolve({ botId: testBotId, lineUserId: 'U12345', isBlocked: false });
+        }
+        return Promise.resolve(null);
+      });
+      mockCampaignRepo.create.mockImplementation((dto: any) => ({ ...dto, id: 'c1' }));
+      mockCampaignRepo.save.mockImplementation((c: any) => Promise.resolve({ ...c, id: c.id || 'c1' }));
+      mockCampaignJobRepo.create.mockImplementation((dto: any) => ({ ...dto, id: 'j1' }));
+      mockCampaignJobRepo.save.mockImplementation((jobs: any) => Promise.resolve(jobs));
+    });
+
+    // ==========================================
+    // AUTHORING CONTRACT (Tests 1 - 13)
+    // ==========================================
+
+    it('1. valid text', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text',
+        message: 'Hello world',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(mockCampaignRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+        botId: testBotId,
+        messageType: 'text',
+        message: 'Hello world',
+        imageUrl: null,
+        linkUrl: null,
+      }));
+    });
+
+    it('2. text without message rejected', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text',
+        message: '   ',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('Message is required');
+    });
+
+    it('3. valid text_link', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text_link',
+        message: 'Check our link',
+        linkUrl: 'https://example.com/promo',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(mockCampaignRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+        messageType: 'text_link',
+        message: 'Check our link',
+        linkUrl: 'https://example.com/promo',
+        imageUrl: null,
+      }));
+    });
+
+    it('4. text_link without link rejected', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text_link',
+        message: 'Check our link',
+        linkUrl: '   ',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('linkUrl is required');
+    });
+
+    it('5. invalid URL rejected', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text_link',
+        message: 'Check our link',
+        linkUrl: 'not_a_valid_url',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('Invalid linkUrl');
+    });
+
+    it('6. unsupported URL protocol rejected', async () => {
+      const mockRes = createMockRes();
+      const protocols = [
+        'javascript:alert(1)',
+        'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==',
+        'file:///etc/passwd',
+        'ftp://files.example.com/item',
+      ];
+
+      for (const proto of protocols) {
+        const res: any = await appController.addCampaign({
+          botId: testBotId,
+          messageType: 'text_link',
+          message: 'Check our link',
+          linkUrl: proto,
+          targetIds: ['U12345'],
+        }, mockRes);
+
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      }
+    });
+
+    it('7. valid image_only', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'image_only',
+        imageUrl: 'http://localhost:3000/api/uploads/img.png',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(mockCampaignRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+        messageType: 'image_only',
+        imageUrl: 'http://localhost:3000/api/uploads/img.png',
+        linkUrl: null,
+      }));
+    });
+
+    it('8. image_only without image rejected', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'image_only',
+        imageUrl: '   ',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('imageUrl is required');
+    });
+
+    it('9. valid image_link', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'image_link',
+        imageUrl: 'https://example.com/banner.jpg',
+        message: 'Look at this',
+        linkUrl: 'https://example.com/landing',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(mockCampaignRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+        messageType: 'image_link',
+        imageUrl: 'https://example.com/banner.jpg',
+        message: 'Look at this',
+        linkUrl: 'https://example.com/landing',
+      }));
+    });
+
+    it('10. image_link missing required field rejected', async () => {
+      const mockRes = createMockRes();
+
+      // missing imageUrl
+      const res1: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'image_link',
+        message: 'Look',
+        linkUrl: 'https://example.com',
+        targetIds: ['U12345'],
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res1.success).toBe(false);
+
+      // missing message
+      const res2: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'image_link',
+        imageUrl: 'https://example.com/img.jpg',
+        message: '  ',
+        linkUrl: 'https://example.com',
+        targetIds: ['U12345'],
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res2.success).toBe(false);
+
+      // missing linkUrl
+      const res3: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'image_link',
+        imageUrl: 'https://example.com/img.jpg',
+        message: 'Look',
+        linkUrl: '  ',
+        targetIds: ['U12345'],
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res3.success).toBe(false);
+    });
+
+    it('11. valid link_only', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'link_only',
+        linkUrl: 'https://line.me/ti/p/@example',
+        message: 'Optional text',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(mockCampaignRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+        messageType: 'link_only',
+        linkUrl: 'https://line.me/ti/p/@example',
+        message: 'Optional text',
+        imageUrl: null,
+      }));
+    });
+
+    it('12. unknown messageType rejected', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'video_carousel',
+        message: 'Not supported',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('Invalid or unsupported messageType');
+    });
+
+    it('13. irrelevant prohibited content rejected', async () => {
+      const mockRes = createMockRes();
+
+      // text with imageUrl
+      const res1: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text',
+        message: 'Hello',
+        imageUrl: 'https://example.com/img.png',
+        targetIds: ['U12345'],
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res1.message).toContain('imageUrl is prohibited');
+
+      // text with linkUrl
+      const res2: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text',
+        message: 'Hello',
+        linkUrl: 'https://example.com',
+        targetIds: ['U12345'],
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res2.message).toContain('linkUrl is prohibited');
+
+      // text_link with imageUrl
+      const res3: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text_link',
+        message: 'Hello',
+        linkUrl: 'https://example.com',
+        imageUrl: 'https://example.com/img.png',
+        targetIds: ['U12345'],
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res3.message).toContain('imageUrl is prohibited');
+
+      // image_only with linkUrl
+      const res4: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'image_only',
+        imageUrl: 'https://example.com/img.png',
+        linkUrl: 'https://example.com',
+        targetIds: ['U12345'],
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res4.message).toContain('linkUrl is prohibited');
+
+      // link_only with imageUrl
+      const res5: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'link_only',
+        linkUrl: 'https://example.com',
+        imageUrl: 'https://example.com/img.png',
+        targetIds: ['U12345'],
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res5.message).toContain('imageUrl is prohibited');
+    });
+
+    // ==========================================
+    // SCHEDULE (Tests 14 - 17)
+    // ==========================================
+
+    it('14. immediate campaign with no scheduledAt accepted', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text',
+        message: 'Immediate send',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(res.status).toBe('pending');
+      expect(mockCampaignRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+        status: 'pending',
+        scheduledAt: null,
+      }));
+    });
+
+    it('15. valid future scheduledAt accepted', async () => {
+      const mockRes = createMockRes();
+      const futureDate = new Date(Date.now() + 3600000).toISOString();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text',
+        message: 'Future send',
+        scheduledAt: futureDate,
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(res.status).toBe('scheduled');
+      expect(mockCampaignRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+        status: 'scheduled',
+      }));
+    });
+
+    it('16. malformed scheduledAt rejected', async () => {
+      const mockRes = createMockRes();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text',
+        message: 'Bad date',
+        scheduledAt: '2026-99-99T99:99:99',
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('Invalid scheduledAt');
+    });
+
+    it('17. past/current scheduledAt rejected', async () => {
+      const mockRes = createMockRes();
+      const pastDate = new Date(Date.now() - 60000).toISOString();
+      const res: any = await appController.addCampaign({
+        botId: testBotId,
+        messageType: 'text',
+        message: 'Past date',
+        scheduledAt: pastDate,
+        targetIds: ['U12345'],
+      }, mockRes);
+
+      expect(mockRes.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+      expect(res.message).toContain('future');
+    });
+
+    // ==========================================
+    // OA READ ISOLATION (Tests 18 - 23)
+    // ==========================================
+
+    it('18. campaigns list scoped to botId', async () => {
+      const mockRes = createMockRes();
+      mockCampaignRepo.find.mockResolvedValueOnce([{ id: 'c1', botId: testBotId }]);
+
+      await appController.getAllCampaigns(testBotId, mockRes);
+      expect(mockCampaignRepo.find).toHaveBeenCalledWith(expect.objectContaining({
+        where: { botId: testBotId },
+      }));
+    });
+
+    it('19. templates scoped to botId', async () => {
+      const mockRes = createMockRes();
+      mockCampaignRepo.find.mockResolvedValueOnce([{ id: 'c1', botId: testBotId }]);
+
+      await appController.getCampaignTemplates(testBotId, mockRes);
+      expect(mockCampaignRepo.find).toHaveBeenCalledWith(expect.objectContaining({
+        where: { botId: testBotId },
+        take: 15,
+      }));
+    });
+
+    it('20. scheduled campaigns scoped to botId', async () => {
+      const mockRes = createMockRes();
+      mockCampaignRepo.find.mockResolvedValueOnce([{ id: 'c1', botId: testBotId, status: 'scheduled' }]);
+
+      await appController.getScheduledCampaigns(testBotId, mockRes);
+      expect(mockCampaignRepo.find).toHaveBeenCalledWith(expect.objectContaining({
+        where: { botId: testBotId },
+      }));
+    });
+
+    it('21. campaign detail scoped to botId', async () => {
+      const mockRes = createMockRes();
+      mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, name: 'Detail Camp' });
+      mockCampaignJobRepo.find.mockResolvedValueOnce([{ id: 'j1', campaignId: 'c1', botId: testBotId }]);
+
+      const res: any = await appController.getCampaignDetail('c1', testBotId, mockRes);
+      expect(mockCampaignRepo.findOne).toHaveBeenCalledWith({ where: { id: 'c1', botId: testBotId } });
+      expect(mockCampaignJobRepo.find).toHaveBeenCalledWith(expect.objectContaining({
+        where: { campaignId: 'c1', botId: testBotId },
+      }));
+      expect(res.campaign.id).toBe('c1');
+    });
+
+    it('22. cross-OA detail not exposed', async () => {
+      const mockRes = createMockRes();
+      mockCampaignRepo.findOne.mockResolvedValueOnce(null);
+
+      await expect(appController.getCampaignDetail('c_foreign', testBotId, mockRes)).rejects.toThrow();
+    });
+
+    it('23. requested botId != activeBotId rejected', async () => {
+      const mockRes = createMockRes();
+
+      const r1: any = await appController.getAllCampaigns(foreignBotId, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(r1.success).toBe(false);
+
+      const r2: any = await appController.getCampaignTemplates(foreignBotId, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(r2.success).toBe(false);
+
+      const r3: any = await appController.getScheduledCampaigns(foreignBotId, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(r3.success).toBe(false);
+
+      const r4: any = await appController.getCampaignDetail('c1', foreignBotId, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(r4.success).toBe(false);
+    });
+
+    // ==========================================
+    // OA MUTATION ISOLATION (Tests 24 - 26)
+    // ==========================================
+
+    it('24. cross-OA pause rejected', async () => {
+      const mockRes = createMockRes();
+
+      // botId mismatch active OA
+      const r1: any = await appController.pauseCampaign({ campaignId: 'c1', botId: foreignBotId }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(r1.success).toBe(false);
+
+      // campaign not belonging to requested OA
+      mockCampaignRepo.findOne.mockResolvedValueOnce(null);
+      const r2: any = await appController.pauseCampaign({ campaignId: 'c_other', botId: testBotId }, mockRes);
+      expect(mockRes.statusCode).toBe(404);
+      expect(r2.success).toBe(false);
+    });
+
+    it('25. cross-OA resume rejected', async () => {
+      const mockRes = createMockRes();
+
+      // botId mismatch active OA
+      const r1: any = await appController.resumeCampaign({ campaignId: 'c1', botId: foreignBotId }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(r1.success).toBe(false);
+
+      // campaign not belonging to requested OA
+      mockCampaignRepo.findOne.mockResolvedValueOnce(null);
+      const r2: any = await appController.resumeCampaign({ campaignId: 'c_other', botId: testBotId }, mockRes);
+      expect(mockRes.statusCode).toBe(404);
+      expect(r2.success).toBe(false);
+    });
+
+    it('26. cross-OA reschedule rejected', async () => {
+      const mockRes = createMockRes();
+      const futureDate = new Date(Date.now() + 60000).toISOString();
+
+      // botId mismatch active OA
+      const r1: any = await appController.rescheduleCampaign({ campaignId: 'c1', botId: foreignBotId, scheduledAt: futureDate }, mockRes);
+      expect(mockRes.statusCode).toBe(409);
+      expect(r1.success).toBe(false);
+
+      // campaign not belonging to requested OA
+      mockCampaignRepo.findOne.mockResolvedValueOnce(null);
+      const r2: any = await appController.rescheduleCampaign({ campaignId: 'c_other', botId: testBotId, scheduledAt: futureDate }, mockRes);
+      expect(mockRes.statusCode).toBe(404);
+      expect(r2.success).toBe(false);
+    });
+
+    // ==========================================
+    // STATE SAFETY (Tests 27 - 37)
+    // ==========================================
+
+    it('27. valid pending/scheduled/processing pause behavior', async () => {
+      const statuses = ['pending', 'scheduled', 'processing'];
+      for (const st of statuses) {
+        const mockRes = createMockRes();
+        const camp = { id: 'c1', botId: testBotId, status: st, name: 'Pause Test' };
+        mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+        mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+        const res: any = await appController.pauseCampaign({ campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(res.success).toBe(true);
+        expect(camp.status).toBe('paused');
+      }
+    });
+
+    it('28. terminal pause rejected', async () => {
+      const terminalStatuses = ['completed', 'failed', 'stopped_limit', 'stopped_error', 'stopped_user', 'paused'];
+      for (const st of terminalStatuses) {
+        const mockRes = createMockRes();
+        mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: st });
+
+        const res: any = await appController.pauseCampaign({ campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      }
+    });
+
+    it('29. paused_reconcile pause/reuse path rejected', async () => {
+      const mockRes = createMockRes();
+      mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: 'paused_reconcile' });
+
+      const res: any = await appController.pauseCampaign({ campaignId: 'c1', botId: testBotId }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+    });
+
+    it('30. resume only from paused', async () => {
+      const invalidStatuses = ['pending', 'scheduled', 'processing', 'completed', 'failed', 'stopped_user'];
+      for (const st of invalidStatuses) {
+        const mockRes = createMockRes();
+        mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: st });
+
+        const res: any = await appController.resumeCampaign({ campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      }
+    });
+
+    it('31. paused_reconcile resume rejected', async () => {
+      const mockRes = createMockRes();
+      mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: 'paused_reconcile' });
+
+      const res: any = await appController.resumeCampaign({ campaignId: 'c1', botId: testBotId }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(res.success).toBe(false);
+    });
+
+    it('32. resume future schedule => scheduled', async () => {
+      const mockRes = createMockRes();
+      const futureDate = new Date(Date.now() + 3600000);
+      const camp = { id: 'c1', botId: testBotId, status: 'paused', scheduledAt: futureDate, name: 'Resume Test' };
+      mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+      mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+      const res: any = await appController.resumeCampaign({ campaignId: 'c1', botId: testBotId }, mockRes);
+      expect(res.success).toBe(true);
+      expect(camp.status).toBe('scheduled');
+    });
+
+    it('33. resume elapsed/no schedule => pending', async () => {
+      // past schedule
+      const mockRes1 = createMockRes();
+      const pastDate = new Date(Date.now() - 3600000);
+      const camp1 = { id: 'c1', botId: testBotId, status: 'paused', scheduledAt: pastDate, name: 'Resume Test' };
+      mockCampaignRepo.findOne.mockResolvedValueOnce(camp1);
+      mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+      const res1: any = await appController.resumeCampaign({ campaignId: 'c1', botId: testBotId }, mockRes1);
+      expect(res1.success).toBe(true);
+      expect(camp1.status).toBe('pending');
+
+      // no schedule
+      const mockRes2 = createMockRes();
+      const camp2 = { id: 'c2', botId: testBotId, status: 'paused', scheduledAt: null, name: 'Resume Test 2' };
+      mockCampaignRepo.findOne.mockResolvedValueOnce(camp2);
+      mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+      const res2: any = await appController.resumeCampaign({ campaignId: 'c2', botId: testBotId }, mockRes2);
+      expect(res2.success).toBe(true);
+      expect(camp2.status).toBe('pending');
+    });
+
+    it('34. reschedule scheduled accepted', async () => {
+      const mockRes = createMockRes();
+      const futureDate = new Date(Date.now() + 7200000);
+      const camp = { id: 'c1', botId: testBotId, status: 'scheduled', scheduledAt: new Date(Date.now() + 3600000), name: 'Sched Test' };
+      mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+      mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+      const res: any = await appController.rescheduleCampaign({
+        campaignId: 'c1',
+        botId: testBotId,
+        scheduledAt: futureDate.toISOString(),
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(camp.status).toBe('scheduled');
+      expect(camp.scheduledAt.getTime()).toBe(futureDate.getTime());
+    });
+
+    it('35. reschedule paused accepted and remains paused', async () => {
+      const mockRes = createMockRes();
+      const futureDate = new Date(Date.now() + 7200000);
+      const camp = { id: 'c1', botId: testBotId, status: 'paused', scheduledAt: new Date(Date.now() + 3600000), name: 'Paused Sched Test' };
+      mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+      mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+      const res: any = await appController.rescheduleCampaign({
+        campaignId: 'c1',
+        botId: testBotId,
+        scheduledAt: futureDate.toISOString(),
+      }, mockRes);
+
+      expect(res.success).toBe(true);
+      expect(camp.status).toBe('paused');
+      expect(camp.scheduledAt.getTime()).toBe(futureDate.getTime());
+    });
+
+    it('36. processing/terminal/paused_reconcile reschedule rejected', async () => {
+      const invalidStatuses = ['processing', 'completed', 'failed', 'stopped_limit', 'stopped_error', 'stopped_user', 'paused_reconcile'];
+      const futureDate = new Date(Date.now() + 7200000).toISOString();
+
+      for (const st of invalidStatuses) {
+        const mockRes = createMockRes();
+        mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: st });
+
+        const res: any = await appController.rescheduleCampaign({
+          campaignId: 'c1',
+          botId: testBotId,
+          scheduledAt: futureDate,
+        }, mockRes);
+
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      }
+    });
+
+    it('37. invalid/past reschedule rejected', async () => {
+      const mockRes = createMockRes();
+      const camp = { id: 'c1', botId: testBotId, status: 'scheduled', scheduledAt: new Date(Date.now() + 3600000) };
+
+      // invalid format
+      mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+      const r1: any = await appController.rescheduleCampaign({
+        campaignId: 'c1',
+        botId: testBotId,
+        scheduledAt: 'invalid-date',
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(r1.success).toBe(false);
+
+      // past date
+      mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+      const r2: any = await appController.rescheduleCampaign({
+        campaignId: 'c1',
+        botId: testBotId,
+        scheduledAt: new Date(Date.now() - 60000).toISOString(),
+      }, mockRes);
+      expect(mockRes.statusCode).toBe(400);
+      expect(r2.success).toBe(false);
+    });
+
+    // ==========================================
+    // FRONTEND CONTRACT (Tests 38 - 42)
+    // ==========================================
+
+    it('38. campaign/template/scheduled/detail reads include botId', () => {
+      const indexHtml = fs.readFileSync('index.html', 'utf8');
+      expect(indexHtml).toContain('${API_BASE}/campaigns?botId=');
+      expect(indexHtml).toContain('${API_BASE}/campaigns/templates?botId=');
+      expect(indexHtml).toContain('${API_BASE}/campaigns/scheduled?botId=');
+      expect(indexHtml).toContain('${API_BASE}/campaigns/${encodeURIComponent(campaignId)}?botId=');
+    });
+
+    it('39. pause/resume/reschedule send botId', () => {
+      const indexHtml = fs.readFileSync('index.html', 'utf8');
+      expect(indexHtml).toContain('body: JSON.stringify({ campaignId, botId: currentActiveBotId })');
+      expect(indexHtml).toContain('body: JSON.stringify({ campaignId, botId: currentActiveBotId, scheduledAt: normalizedIso })');
+    });
+
+    it('40. frontend sends only message-type-relevant content', () => {
+      const indexHtml = fs.readFileSync('index.html', 'utf8');
+      expect(indexHtml).toContain("if (messageType === 'text') {");
+      expect(indexHtml).toContain("payload.message = message.trim();");
+      expect(indexHtml).toContain("} else if (messageType === 'text_link') {");
+      expect(indexHtml).toContain("payload.linkUrl = linkUrl.trim();");
+      expect(indexHtml).toContain("} else if (messageType === 'image_only') {");
+      expect(indexHtml).toContain("payload.imageUrl = imageUrl.trim();");
+      expect(indexHtml).toContain("} else if (messageType === 'image_link') {");
+      expect(indexHtml).toContain("} else if (messageType === 'link_only') {");
+    });
+
+    it('41. scheduledAt is normalized before submission', () => {
+      const indexHtml = fs.readFileSync('index.html', 'utf8');
+      expect(indexHtml).toContain('scheduledAt = parsed.toISOString();');
+      expect(indexHtml).toContain('normalizedIso = parsed.toISOString();');
+    });
+
+    it('42. no Worker/runtime/send-ledger source changes', () => {
+      const runtimeVersionFile = fs.readFileSync('src/runtime-version.ts', 'utf8');
+      expect(runtimeVersionFile).toContain("export const REQUIRED_WORKER_VERSION = '28.16';");
+      expect(runtimeVersionFile).toContain('export const RUNTIME_CONTRACT_VERSION = 2;');
+
+      const workerScript = fs.readFileSync('run/LineSyncApp.js', 'utf8');
+      expect(workerScript).toContain("const WORKER_VERSION = '28.16';");
+    });
+  });
 });
-
-
