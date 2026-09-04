@@ -112,24 +112,25 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 - **Implementation Scope**: `index.html` ONLY (Dashboard-only incident visibility consuming `/api/ops/health` and `/api/ops/queue`).
 - **Prohibited Files**: `src/**`, `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), LINE/Telegram send, DB mutation all untouched.
 
-## Authorized P2-WP001-R1 Fail-Closed scheduledAt Type Validation Summary
+## Implemented P2-WP001 & P2-WP001-R1 Campaign Authoring Contract Summary
 
-- **Task**: P2-WP001-R1 (Fail-Closed scheduledAt Type Validation)
-- **Status**: CORRECTIVE_AUTHORIZED
-- **Code Baseline HEAD**: `f8b18700ac51120d42ac717514a659a2ccb97e09`
-- **Authorized Implementation Files**: `src/app.controller.ts`, `src/app.controller.spec.ts` ONLY. Explicitly DO NOT modify `index.html`.
-- **Prohibited Files**: `index.html`, `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), entities, DB schema/migrations, send plan/ledger/ARM/CONFIRM, LINE DOM/send behavior, Telegram.
-- **Objective**: Fail closed with HTTP 400 when `scheduledAt` is present with a non-string value (number, boolean, object, array, explicit null). Immediate/pending campaign allowed only when `scheduledAt` is absent, `""`, or whitespace-only string.
-- **Validation Scope**: 11 focused Jest tests + preserve existing P2-WP001 tests, `npm test -- --runInBand`, `npm run build`. Zero Live LINE sends.
+- **Task**: P2-WP001 (Campaign Authoring Contract & OA Isolation) & P2-WP001-R1 (Fail-Closed scheduledAt Type Validation)
+- **Status**: CLOSED / PASS
+- **Accepted Final HEAD**: `37b078de425e2fd3267652e142d76959f408c701`
+- **Implemented Scope**: Server-side messageType contract (`text`, `text_link`, `image_only`, `image_link`, `link_only`), HTTP/HTTPS URL validation, prohibited content fail-closed, active-OA isolated campaign reads & mutations, state-safe mutation transitions, frontend payload hardening, and fail-closed `scheduledAt` type validation (rejecting numbers, booleans, objects, arrays, explicit nulls, and past/invalid datetimes with HTTP 400).
+- **Validation Evidence**: 370 / 370 unit tests PASS (`npm test -- --runInBand`), `npm run build` PASS (0 errors), `git diff --check` PASS (0 errors). Zero Live LINE sends.
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `P2-WP001-R1`
-* **STATUS**: `CORRECTIVE_AUTHORIZED`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **STATUS**: `STANDBY`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
-* **P2-WP001-R1**: `CORRECTIVE_AUTHORIZED`
+* **P2-WP001**: `CLOSED / PASS`
+* **P2-WP001-R1**: `CLOSED / PASS`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `PENDING_CORRECTIVE_REVIEW`
-Control plane authorization complete for P2-WP001-R1. In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP001-R1 within authorized scope. Do not start next task without explicit authorization.
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_DIRECTION`
+
+Await Project Owner / Control Plane direction.
+Do not start P2-WP002 without a new explicit authorization.
