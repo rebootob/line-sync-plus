@@ -2603,5 +2603,148 @@ export class AppController {
       return { success: false, error: e.message };
     }
   }
+
+  // 🛡️ MON-WP001 OPERATIONAL HEALTH & READINESS ENDPOINT
+  @Get('ops/health')
+  async getOpsHealth(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const ip = req.socket?.remoteAddress || req.ip || '';
+    const isLoopback = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    if (!isLoopback) {
+      if (res) res.status(HttpStatus.FORBIDDEN);
+      return { success: false, message: 'Forbidden: Request must originate from local loopback' };
+    }
+
+    // 1. Database Health Check (lightweight read-only operation)
+    let dbOk = false;
+    try {
+      await this.campaignRepository.query('SELECT 1');
+      dbOk = true;
+    } catch (err) {
+      dbOk = false;
+    }
+
+    // 2. Active OA & OA Alignment
+    let activeBotId: string | null = null;
+    let oaActive = false;
+    let oaAligned: boolean | 'unknown' = 'unknown';
+
+    if (dbOk) {
+      try {
+        const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+        activeBotId = state ? state.activeBotId : null;
+        oaActive = !!activeBotId;
+      } catch (err) {
+        oaActive = false;
+      }
+    }
+
+    const workerBotId = AppController.workerBotId;
+    const workerSeenAt = AppController.workerSeenAt;
+
+    // 3. Worker Freshness (Threshold: 30000ms / 30s)
+    let workerState: 'online' | 'stale' | 'unknown' = 'unknown';
+    let ageMs: number | null = null;
+
+    if (workerSeenAt !== null) {
+      ageMs = Math.max(0, Date.now() - workerSeenAt);
+      if (ageMs <= 30000) {
+        workerState = 'online';
+      } else {
+        workerState = 'stale';
+      }
+    }
+
+    if (oaActive && workerBotId) {
+      oaAligned = (activeBotId === workerBotId);
+    } else {
+      oaAligned = 'unknown';
+    }
+
+    // 4. Queue and Campaign Counts
+    let pendingCount = 0;
+    let processingCount = 0;
+    let reconcileRequiredCount = 0;
+    let pausedReconcileCount = 0;
+    let stoppedErrorCount = 0;
+
+    if (dbOk) {
+      try {
+        const jobWhere: any = activeBotId ? { botId: activeBotId } : {};
+        const campWhere: any = activeBotId ? { botId: activeBotId } : {};
+
+        const [pCount, procCount, recCount, prCount, seCount] = await Promise.all([
+          this.campaignJobRepository.count({ where: { ...jobWhere, status: 'pending' } }),
+          this.campaignJobRepository.count({ where: { ...jobWhere, status: 'processing' } }),
+          this.campaignJobRepository.count({ where: { ...jobWhere, status: 'reconcile_required' } }),
+          this.campaignRepository.count({ where: { ...campWhere, status: 'paused_reconcile' } }),
+          this.campaignRepository.count({ where: { ...campWhere, status: 'stopped_error' } }),
+        ]);
+
+        pendingCount = pCount;
+        processingCount = procCount;
+        reconcileRequiredCount = recCount;
+        pausedReconcileCount = prCount;
+        stoppedErrorCount = seCount;
+      } catch (err) {
+        // Safe fallback on count query failure
+      }
+    }
+
+    // 5. System Status Calculation
+    let systemStatus: 'healthy' | 'degraded' | 'attention' = 'healthy';
+    if (!dbOk) {
+      systemStatus = 'degraded';
+    } else if (
+      reconcileRequiredCount > 0 ||
+      pausedReconcileCount > 0 ||
+      stoppedErrorCount > 0 ||
+      oaAligned === false ||
+      workerState === 'stale'
+    ) {
+      systemStatus = 'attention';
+    } else {
+      systemStatus = 'healthy';
+    }
+
+    return {
+      success: true,
+      status: systemStatus,
+      backend: {
+        ok: true,
+        uptimeSec: Math.floor(process.uptime()),
+      },
+      database: {
+        ok: dbOk,
+      },
+      runtime: {
+        runtimeContract: RUNTIME_CONTRACT_VERSION,
+        requiredWorkerVersion: REQUIRED_WORKER_VERSION,
+      },
+      masterBot: {
+        enabled: AppController.isBotEnabled,
+      },
+      oa: {
+        active: oaActive,
+        aligned: oaAligned,
+      },
+      worker: {
+        state: workerState,
+        ageMs,
+      },
+      queue: {
+        pending: pendingCount,
+        processing: processingCount,
+        reconcileRequired: reconcileRequiredCount,
+      },
+      campaigns: {
+        pausedReconcile: pausedReconcileCount,
+        stoppedError: stoppedErrorCount,
+      },
+      checkedAt: new Date().toISOString(),
+    };
+  }
 }
 

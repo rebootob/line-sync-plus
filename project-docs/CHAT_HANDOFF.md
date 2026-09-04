@@ -22,8 +22,10 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **ACTIVE_WORK_PACKAGE**: `MON-WP001`
 * **PHASE_0**: `CLOSED / PASS`
+* **PHASE_1**: `IN PROGRESS`
+* **MON-WP001 — Operational Health & Readiness**: `READY_FOR_CHATGPT_REVIEW`
 * **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -88,11 +90,19 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 9. **Operator Resolution**: `confirmed_not_sent_retry` returned `success = true`, zero physical LINE sends.
 10. **Cleanup Verification**: DB inspection verified `CAMPAIGN FOUND = 0`, `JOB FOUND = 0`, `PARTS FOUND = 0`. Clean baseline restored.
 
+## Implemented MON-WP001 Operational Health Summary
+
+- **Endpoint**: `GET /api/ops/health` (loopback only: `127.0.0.1`, `::1`, `::ffff:127.0.0.1`).
+- **Data Returned**: Overall status (`ok` / `degraded`), contract versions, database status via `SELECT 1` ping, master bot status, active OA, truthful worker status (`online` <=30s, `stale` >30s, `unknown`), OA alignment (`alignedWithActiveBot`), scoped queue counts (`pending`, `processing`, `reconcileRequired`), scoped campaign counts (`pausedReconcile`, `stoppedError`).
+- **Security & Privacy**: Zero tokens, zero credentials, zero PII, zero LINE chat data exposed. Read-only operation with zero side-effects on worker observation timestamps or heartbeats.
+- **Dashboard UI**: Compact responsive card in `index.html` polling every 6 seconds, graceful fallback to `? Unknown` on error.
+- **Worker Script**: `run/LineSyncApp.js` UNTOUCHED (v28.16).
+- **Unit Tests**: 15 new tests added, 286/286 unit tests passing cleanly.
+
 ## Exact Recommended Next Step
 
-Phase 0 (Security & Reliability Foundation) is **CLOSED / PASS**.
-* **ACTIVE_WORK_PACKAGE**: `NONE`
+* **ACTIVE_WORK_PACKAGE**: `MON-WP001`
 * **PHASE_0**: `CLOSED / PASS`
-* **Phase 1**: `NOT STARTED / OWNER AUTHORIZATION REQUIRED`
-All foundation work packages (`SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`) are CLOSED / PASS.
-Do not begin Phase 1 without explicit project owner authorization.
+* **PHASE_1**: `IN PROGRESS`
+* **MON-WP001**: `READY_FOR_CHATGPT_REVIEW`
+Submit MON-WP001 implementation, tests (286/286 passing), and documentation to ChatGPT review. Await ChatGPT review result before proceeding.

@@ -68,6 +68,7 @@ describe('AppController', () => {
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn().mockImplementation(dto => dto),
     save: jest.fn().mockResolvedValue({ id: 'c1', name: 'Test Campaign', successCount: 0, failedCount: 0, botId: 'U09d6b978fcbfb5275e533ca9b788eb22' }),
+    query: jest.fn().mockResolvedValue([{ 1: 1 }]),
   };
 
   const mockCampaignSendPartRepo = {
@@ -3848,6 +3849,176 @@ describe('AppController', () => {
       expect(afterComment).not.toContain('try {');
       expect(afterComment).toContain('await this.dataSource.query(`');
       expect(afterComment).toContain('DO $$');
+    });
+  });
+
+  describe('MON-WP001 — Operational Health & Readiness Tests', () => {
+    let mockRes: any;
+    const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+
+    beforeEach(() => {
+      AppController.isBotEnabled = true;
+      (AppController as any).workerBotId = testBotId;
+      (AppController as any).workerSeenAt = Date.now();
+      mockRes = {
+        status: jest.fn().mockImplementation((code) => {
+          mockRes.statusCode = code;
+          return mockRes;
+        }),
+        statusCode: 200,
+      };
+      mockCampaignRepo.query.mockResolvedValue([{ 1: 1 }]);
+      mockCampaignJobRepo.count.mockResolvedValue(0);
+      mockCampaignRepo.count.mockResolvedValue(0);
+      mockOaRuntimeStateRepo.findOne.mockResolvedValue({ id: 'global', activeBotId: testBotId });
+    });
+
+    it('1. loopback health request allowed', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' }, ip: '127.0.0.1' };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.success).toBe(true);
+      expect(mockRes.statusCode).toBe(200);
+    });
+
+    it('2. non-loopback rejected with 403 Forbidden', async () => {
+      const mockReq: any = { socket: { remoteAddress: '192.168.1.100' }, ip: '192.168.1.100' };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.success).toBe(false);
+      expect(mockRes.statusCode).toBe(403);
+      expect(res.message).toContain('Forbidden');
+    });
+
+    it('3. healthy DB returns database.ok = true and healthy status', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.database.ok).toBe(true);
+      expect(res.backend.ok).toBe(true);
+      expect(res.status).toBe('healthy');
+    });
+
+    it('4. DB failure returns database.ok = false and degraded status', async () => {
+      mockCampaignRepo.query.mockRejectedValueOnce(new Error('Connection lost'));
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.database.ok).toBe(false);
+      expect(res.status).toBe('degraded');
+    });
+
+    it('5. worker recent returns online', async () => {
+      (AppController as any).workerSeenAt = Date.now() - 5000;
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.worker.state).toBe('online');
+      expect(res.worker.ageMs).toBeGreaterThanOrEqual(5000);
+      expect(res.worker.ageMs).toBeLessThan(15000);
+    });
+
+    it('6. worker old returns stale and triggers attention status', async () => {
+      (AppController as any).workerSeenAt = Date.now() - 35000;
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.worker.state).toBe('stale');
+      expect(res.worker.ageMs).toBeGreaterThanOrEqual(35000);
+      expect(res.status).toBe('attention');
+    });
+
+    it('7. no worker evidence returns unknown with null ageMs', async () => {
+      (AppController as any).workerSeenAt = null;
+      (AppController as any).workerBotId = null;
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.worker.state).toBe('unknown');
+      expect(res.worker.ageMs).toBeNull();
+    });
+
+    it('8. OA aligned returns true when workerBotId equals activeBotId', async () => {
+      (AppController as any).workerBotId = testBotId;
+      mockOaRuntimeStateRepo.findOne.mockResolvedValue({ id: 'global', activeBotId: testBotId });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.oa.active).toBe(true);
+      expect(res.oa.aligned).toBe(true);
+    });
+
+    it('9. OA mismatch returns false and triggers attention status', async () => {
+      (AppController as any).workerBotId = 'U11111111222222223333333344444444';
+      mockOaRuntimeStateRepo.findOne.mockResolvedValue({ id: 'global', activeBotId: testBotId });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.oa.active).toBe(true);
+      expect(res.oa.aligned).toBe(false);
+      expect(res.status).toBe('attention');
+    });
+
+    it('10. queue counts and reconcile counts reported accurately', async () => {
+      mockCampaignJobRepo.count.mockImplementation((opts: any) => {
+        if (opts.where.status === 'pending') return Promise.resolve(5);
+        if (opts.where.status === 'processing') return Promise.resolve(2);
+        if (opts.where.status === 'reconcile_required') return Promise.resolve(1);
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.queue.pending).toBe(5);
+      expect(res.queue.processing).toBe(2);
+      expect(res.queue.reconcileRequired).toBe(1);
+      expect(res.status).toBe('attention'); // reconcileRequired > 0 causes attention
+    });
+
+    it('11. paused_reconcile campaigns report in campaigns.pausedReconcile and trigger attention status', async () => {
+      mockCampaignRepo.count.mockImplementation((opts: any) => {
+        if (opts.where.status === 'paused_reconcile') return Promise.resolve(1);
+        if (opts.where.status === 'stopped_error') return Promise.resolve(0);
+        return Promise.resolve(0);
+      });
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.campaigns.pausedReconcile).toBe(1);
+      expect(res.status).toBe('attention');
+    });
+
+    it('12. response does NOT leak any sensitive fields or PII', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      const jsonStr = JSON.stringify(res);
+
+      expect(jsonStr).not.toContain('leaseToken');
+      expect(jsonStr).not.toContain('dispatchToken');
+      expect(jsonStr).not.toContain('armRequestId');
+      expect(jsonStr).not.toContain('botToken');
+      expect(jsonStr).not.toContain('chatId');
+      expect(jsonStr).not.toContain('cookies');
+      expect(jsonStr).not.toContain('lineUserId');
+      expect(jsonStr).not.toContain('messageText');
+      expect(jsonStr).not.toContain('message');
+    });
+
+    it('13. health polling does not mutate worker heartbeat timestamp', async () => {
+      const originalSeenAt = Date.now() - 10000;
+      (AppController as any).workerSeenAt = originalSeenAt;
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+
+      await appController.getOpsHealth(mockReq, mockRes);
+
+      expect((AppController as any).workerSeenAt).toBe(originalSeenAt);
+    });
+
+    it('14. Master Bot enabled/paused state accurately reflected', async () => {
+      AppController.isBotEnabled = true;
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      let res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.masterBot.enabled).toBe(true);
+
+      AppController.isBotEnabled = false;
+      res = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.masterBot.enabled).toBe(false);
+    });
+
+    it('15. version and runtime values match 28.16 and 2', async () => {
+      const mockReq: any = { socket: { remoteAddress: '127.0.0.1' } };
+      const res: any = await appController.getOpsHealth(mockReq, mockRes);
+      expect(res.runtime.requiredWorkerVersion).toBe('28.16');
+      expect(res.runtime.runtimeContract).toBe(2);
     });
   });
 });

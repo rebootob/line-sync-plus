@@ -1,18 +1,20 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: NONE
-STATUS: CLOSED / PASS
+ACTIVE_WORK_PACKAGE: MON-WP001
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: PENDING_REVIEW
 PHASE_0: CLOSED / PASS
+PHASE_1: IN PROGRESS
 ```
 
 ---
 
 ## 📋 Work Package Status Summary
 
+- **MON-WP001 — Operational Health & Readiness**: `READY_FOR_CHATGPT_REVIEW`
 - **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
   - **REL-WP003-R1 — Critical Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
   - **REL-WP003-R2 — Final Crash-Safety Corrective**: `CORRECTIVE REQUIRED / SUPERSEDED`
@@ -34,6 +36,86 @@ PHASE_0: CLOSED / PASS
 - **Worker Version**: `28.16`
 - **Runtime Contract Version**: `2`
 - **Required Worker Version**: `28.16`
+
+---
+
+## 🩺 MON-WP001 — Operational Health & Readiness (READY_FOR_CHATGPT_REVIEW)
+
+> [!IMPORTANT]
+> **Boundary & Invariants**:
+> - **Scope**: Observability only. Read-only diagnostic endpoint and UI card.
+> - **Worker**: `run/LineSyncApp.js` is UNTOUCHED. Worker remains v28.16, Required Worker remains 28.16, Runtime Contract remains 2.
+> - **Security & Privacy**: Zero token leakage (`leaseToken`, `dispatchToken`), zero Telegram secrets, zero cookie/PII/message content exposure. Loopback-only (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`).
+> - **Zero Side-Effects**: Read-only query; reading worker presence does not mutate observation timestamps or affect worker heartbeats.
+
+### Backend Implementation (`src/app.controller.ts`)
+- **Endpoint**: `GET /api/ops/health`
+- **Security Check**: Enforces loopback client IP (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`). Returns HTTP 403 Forbidden for non-loopback requests.
+- **Payload Schema**:
+  ```json
+  {
+    "status": "ok | degraded",
+    "timestamp": "ISO-8601",
+    "service": {
+      "name": "line-sync-plus",
+      "version": "1.0.0",
+      "uptimeSeconds": 123
+    },
+    "contract": {
+      "runtimeContractVersion": 2,
+      "requiredWorkerVersion": "28.16"
+    },
+    "database": {
+      "ok": true,
+      "error": null
+    },
+    "system": {
+      "masterBotPaused": false,
+      "activeBotId": "bot123"
+    },
+    "worker": {
+      "status": "online | stale | unknown",
+      "lastSeenAt": "ISO-8601 | null",
+      "lastSeenAgeSeconds": 12,
+      "botId": "bot123",
+      "alignedWithActiveBot": true
+    },
+    "queue": {
+      "pending": 0,
+      "processing": 0,
+      "reconcileRequired": 0
+    },
+    "campaigns": {
+      "pausedReconcile": 0,
+      "stoppedError": 0
+    }
+  }
+  ```
+- **Database Connectivity**: Executes `SELECT 1`. On connection error, marks `database.ok = false`, `status = 'degraded'`, and records sanitized error message without crashing.
+- **Worker Freshness**: Truthful classification based on `AppController.workerSeenAt`:
+  - `<= 30s`: `'online'`
+  - `> 30s`: `'stale'`
+  - `null` / unrecorded: `'unknown'`
+- **OA Alignment**: `alignedWithActiveBot`: `true` if matching `activeBotId`, `false` if mismatched, `unknown` if either is not present.
+- **Scoped Queue & Campaign Counts**: Counts scoped by `activeBotId` for `pending`, `processing`, and `reconcile_required` jobs, and `paused_reconcile` and `stopped_error` campaigns.
+
+### Dashboard Implementation (`index.html`)
+- **UI Component**: Responsive `Operational Health` card placed prominently at the top of the dashboard.
+- **Metrics Displayed**: System Status, Backend, Database, Master Bot, Active OA, Worker Freshness, OA Alignment, Queue Pending, Queue Processing, Need Reconciliation.
+- **Truthful Polling**: Refreshes every 6 seconds via `GET /api/ops/health`.
+- **Graceful Fallback**: Network or server errors render badges as `? Unknown` / warning style; never masks failures as green.
+
+### Automated Unit Testing (`src/app.controller.spec.ts`)
+- 15 dedicated unit tests under `describe('MON-WP001 — Operational Health & Readiness Tests')`:
+  - Rejects non-loopback IPs with 403 Forbidden.
+  - Allows loopback IPv4 `127.0.0.1`, IPv6 `::1`, and IPv4-mapped IPv6 `::ffff:127.0.0.1`.
+  - Returns `ok` and `database.ok: true` on successful DB ping.
+  - Returns `degraded` and `database.ok: false` on DB error.
+  - Truthful worker status: `unknown` when no worker seen, `online` when seen within 30s, `stale` when seen >30s ago.
+  - OA alignment: `unknown` when workerBotId or activeBotId missing, `true` when aligned, `false` when mismatched.
+  - Scoped queue and campaign counts calculated properly.
+  - Zero sensitive fields exposed.
+- **Total Test Suite**: 286/286 unit tests PASS (0 failures).
 
 ---
 
@@ -226,8 +308,10 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ---
 
-## 🚀 Next Candidate Work Package
+## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `NONE`
+- **Active Work Package**: `MON-WP001`
 - **Phase 0 Status**: `CLOSED / PASS`
-- **Next Candidate**: `NONE` (Phase 1 planning only after owner authorization)
+- **Phase 1 Status**: `IN PROGRESS`
+- **MON-WP001 Status**: `READY_FOR_CHATGPT_REVIEW`
+- **Next Candidate**: `NONE` (Awaiting review of MON-WP001)

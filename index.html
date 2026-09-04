@@ -136,6 +136,55 @@
             </div>
         </div>
 
+        <!-- 🏥 MON-WP001 Operational Health & Readiness Section -->
+        <div id="opsHealthSection" style="margin-bottom: 15px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <strong style="font-size: 13px; color: #1e293b;">🏥 Operational Health &amp; Readiness</strong>
+                    <span id="opsOverallStatus" class="badge" style="background:#f1f5f9; color:#64748b; font-size:11px;">? Unknown</span>
+                </div>
+                <span id="opsCheckedAt" style="font-size: 11px; color: #94a3b8;">Checked: -</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); gap: 8px; font-size: 12px;">
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Backend</div>
+                    <div id="opsBackendStatus" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Database</div>
+                    <div id="opsDbStatus" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Master Bot</div>
+                    <div id="opsBotStatus" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Active OA</div>
+                    <div id="opsActiveOaStatus" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Worker</div>
+                    <div id="opsWorkerStatus" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">OA Alignment</div>
+                    <div id="opsOaAlignStatus" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Queue Pending</div>
+                    <div id="opsQueuePending" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Queue Processing</div>
+                    <div id="opsQueueProcessing" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+                <div style="background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #edf2f7;">
+                    <div style="color: #64748b; font-size: 11px;">Need Reconciliation</div>
+                    <div id="opsReconcileRequired" style="font-weight: 600; color: #334155;">? Unknown</div>
+                </div>
+            </div>
+        </div>
+
         <div class="toolbar" style="flex-wrap: wrap; gap: 10px;">
             <div class="toolbar-group" style="flex: 1; flex-wrap: wrap; gap: 8px;">
                 <input type="text" id="searchInput" class="search-box" placeholder="🔍 ค้นหาชื่อ หรือ รหัส Line ID..." oninput="handleFilters()" style="min-width: 200px;">
@@ -601,6 +650,165 @@
 
         setInterval(updateAccountProtectionTelemetryUI, 2000);
 
+        // 🏥 MON-WP001 Operational Health & Readiness UI
+        async function updateOpsHealthUI() {
+            const overallEl = document.getElementById('opsOverallStatus');
+            const checkedEl = document.getElementById('opsCheckedAt');
+            const backendEl = document.getElementById('opsBackendStatus');
+            const dbEl = document.getElementById('opsDbStatus');
+            const botEl = document.getElementById('opsBotStatus');
+            const activeOaEl = document.getElementById('opsActiveOaStatus');
+            const workerEl = document.getElementById('opsWorkerStatus');
+            const oaAlignEl = document.getElementById('opsOaAlignStatus');
+            const pendingEl = document.getElementById('opsQueuePending');
+            const procEl = document.getElementById('opsQueueProcessing');
+            const reconcileEl = document.getElementById('opsReconcileRequired');
+
+            function setOpsUnknown() {
+                if (overallEl) { overallEl.textContent = '? Unknown'; overallEl.style.background = '#f1f5f9'; overallEl.style.color = '#64748b'; }
+                if (checkedEl) checkedEl.textContent = 'Checked: error';
+                if (backendEl) backendEl.innerHTML = '<span style="color:#64748b;">? Unknown</span>';
+                if (dbEl) dbEl.innerHTML = '<span style="color:#64748b;">? Unknown</span>';
+                if (botEl) botEl.innerHTML = '<span style="color:#64748b;">? Unknown</span>';
+                if (activeOaEl) activeOaEl.innerHTML = '<span style="color:#64748b;">? Unknown</span>';
+                if (workerEl) workerEl.innerHTML = '<span style="color:#64748b;">? Unknown</span>';
+                if (oaAlignEl) oaAlignEl.innerHTML = '<span style="color:#64748b;">? Unknown</span>';
+                if (pendingEl) pendingEl.textContent = '? Unknown';
+                if (procEl) procEl.textContent = '? Unknown';
+                if (reconcileEl) reconcileEl.innerHTML = '<span style="color:#64748b;">? Unknown</span>';
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/ops/health`);
+                if (!res.ok) {
+                    setOpsUnknown();
+                    return;
+                }
+                const data = await res.json();
+                if (!data || !data.success) {
+                    setOpsUnknown();
+                    return;
+                }
+
+                // Checked At
+                if (checkedEl && data.checkedAt) {
+                    const d = new Date(data.checkedAt);
+                    checkedEl.textContent = `Checked: ${d.toLocaleTimeString()}`;
+                }
+
+                // Overall Status
+                if (overallEl) {
+                    if (data.status === 'healthy') {
+                        overallEl.textContent = '✅ Normal';
+                        overallEl.style.background = '#dcfce7';
+                        overallEl.style.color = '#15803d';
+                    } else if (data.status === 'attention') {
+                        overallEl.textContent = '⚠️ Attention';
+                        overallEl.style.background = '#fef3c7';
+                        overallEl.style.color = '#b45309';
+                    } else if (data.status === 'degraded') {
+                        overallEl.textContent = '❌ Error';
+                        overallEl.style.background = '#fee2e2';
+                        overallEl.style.color = '#b91c1c';
+                    } else {
+                        overallEl.textContent = '? Unknown';
+                        overallEl.style.background = '#f1f5f9';
+                        overallEl.style.color = '#64748b';
+                    }
+                }
+
+                // Backend
+                if (backendEl) {
+                    if (data.backend && data.backend.ok) {
+                        backendEl.innerHTML = `<span style="color:#15803d;">✅ Normal</span> <span style="font-size:10px; color:#64748b;">(${data.backend.uptimeSec}s)</span>`;
+                    } else {
+                        backendEl.innerHTML = `<span style="color:#dc2626;">❌ Error</span>`;
+                    }
+                }
+
+                // Database
+                if (dbEl) {
+                    if (data.database && data.database.ok) {
+                        dbEl.innerHTML = `<span style="color:#15803d;">✅ Normal</span>`;
+                    } else {
+                        dbEl.innerHTML = `<span style="color:#dc2626;">❌ Error</span>`;
+                    }
+                }
+
+                // Master Bot
+                if (botEl) {
+                    if (data.masterBot && data.masterBot.enabled) {
+                        botEl.innerHTML = `<span style="color:#15803d;">🟢 Enabled</span>`;
+                    } else {
+                        botEl.innerHTML = `<span style="color:#b45309;">⏸️ Paused</span>`;
+                    }
+                }
+
+                // Active OA
+                if (activeOaEl) {
+                    if (data.oa && data.oa.active) {
+                        activeOaEl.innerHTML = `<span style="color:#15803d;">✅ Selected</span>`;
+                    } else {
+                        activeOaEl.innerHTML = `<span style="color:#b45309;">⚠️ None</span>`;
+                    }
+                }
+
+                // Worker
+                if (workerEl) {
+                    if (data.worker) {
+                        if (data.worker.state === 'online') {
+                            const sec = data.worker.ageMs !== null ? Math.round(data.worker.ageMs / 1000) : 0;
+                            workerEl.innerHTML = `<span style="color:#15803d;">✅ Online</span> <span style="font-size:10px; color:#64748b;">(${sec}s)</span>`;
+                        } else if (data.worker.state === 'stale') {
+                            const sec = data.worker.ageMs !== null ? Math.round(data.worker.ageMs / 1000) : 0;
+                            workerEl.innerHTML = `<span style="color:#b45309;">⚠️ Stale</span> <span style="font-size:10px; color:#64748b;">(${sec}s)</span>`;
+                        } else {
+                            workerEl.innerHTML = `<span style="color:#64748b;">? Unknown</span>`;
+                        }
+                    } else {
+                        workerEl.innerHTML = `<span style="color:#64748b;">? Unknown</span>`;
+                    }
+                }
+
+                // OA Alignment
+                if (oaAlignEl) {
+                    if (data.oa && data.oa.aligned === true) {
+                        oaAlignEl.innerHTML = `<span style="color:#15803d;">✅ Aligned</span>`;
+                    } else if (data.oa && data.oa.aligned === false) {
+                        oaAlignEl.innerHTML = `<span style="color:#dc2626;">❌ Mismatch</span>`;
+                    } else {
+                        oaAlignEl.innerHTML = `<span style="color:#64748b;">? Unknown</span>`;
+                    }
+                }
+
+                // Queue Pending
+                if (pendingEl) {
+                    pendingEl.textContent = data.queue && typeof data.queue.pending === 'number' ? data.queue.pending : '? Unknown';
+                }
+
+                // Queue Processing
+                if (procEl) {
+                    procEl.textContent = data.queue && typeof data.queue.processing === 'number' ? data.queue.processing : '? Unknown';
+                }
+
+                // Need Reconciliation
+                if (reconcileEl) {
+                    const reqCount = data.queue?.reconcileRequired || 0;
+                    const campPausedCount = data.campaigns?.pausedReconcile || 0;
+                    const errCount = data.campaigns?.stoppedError || 0;
+                    if (reqCount > 0 || campPausedCount > 0 || errCount > 0) {
+                        reconcileEl.innerHTML = `<span style="color:#b45309; font-weight:bold;">⚠️ ${reqCount} job(s) [${campPausedCount} paused, ${errCount} err]</span>`;
+                    } else {
+                        reconcileEl.innerHTML = `<span style="color:#15803d;">✅ 0</span>`;
+                    }
+                }
+            } catch (e) {
+                setOpsUnknown();
+            }
+        }
+
+        setInterval(updateOpsHealthUI, 6000);
+
         let currentActiveBotId = null;
 
         async function loadOaContextsUI() {
@@ -720,6 +928,7 @@
                 loadRuntimeVersionUI();
                 await loadOaContextsUI();
                 fetchQuarantinedReconciliation();
+                updateOpsHealthUI();
 
                 if (!currentActiveBotId) {
                     allCustomers = [];

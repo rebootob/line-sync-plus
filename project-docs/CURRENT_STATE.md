@@ -28,6 +28,24 @@
 
 ---
 
+## 🩺 Operational Health & Readiness (MON-WP001 STATUS: READY_FOR_CHATGPT_REVIEW)
+
+- **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16 - UNTOUCHED).
+- **Backend Required Version**: `28.16` (`src/runtime-version.ts`).
+- **Runtime Contract Version**: `2` (`src/runtime-version.ts`).
+- **Scope**: Phase 1 Observability & Monitoring. Read-only diagnostic endpoint and UI card.
+- **Implemented Capabilities**:
+  - `GET /api/ops/health`: Loopback-only endpoint (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`). Returns 403 Forbidden for external IPs.
+  - Database Health Check: Performs a lightweight `SELECT 1` ping. On DB failure, reports `database.ok = false` and `status = 'degraded'` without throwing an uncaught exception.
+  - Truthful Worker Freshness: Analyzes static in-memory `AppController.workerSeenAt` without mutating observation timestamps or generating side effects. Classified as `'online'` (<=30s), `'stale'` (>30s), or `'unknown'` (null/missing).
+  - OA Context Alignment: Checks whether `workerBotId === activeBotId`. Returns `alignedWithActiveBot: true | false | "unknown"`.
+  - Scoped Metrics: Reports queue counts (`pending`, `processing`, `reconcileRequired`) and campaign states (`pausedReconcile`, `stoppedError`) scoped by `activeBotId`.
+  - Zero Secret Exposure: Excludes `leaseToken`, `dispatchToken`, Telegram credentials, cookies, customer PII, and message payloads.
+  - Dashboard UI: Added top-level responsive Operational Health card in `index.html` polling `GET /api/ops/health` every 6 seconds, rendering state gracefully with `? Unknown` fallback on communication error.
+  - Automated Unit Tests: 15 dedicated unit tests in `src/app.controller.spec.ts` bringing total test suite to 286/286 passing.
+
+---
+
 ## 🔒 Durable Job Lease + Heartbeat + Stale Worker Fencing (REL-WP002 STATUS: CLOSED / PASS; REL-WP002-R3 STATUS: CLOSED / PASS)
 
 - **Worker Version**: `28.16` (`run/LineSyncApp.js` v28.16).
@@ -123,8 +141,8 @@
 ## ✅ What Currently Works (Confirmed Working & Tested)
 
 1. **Database & Entities (`PostgreSQL` / `TypeORM`)**: Composite primary key `(botId, lineUserId)` on `Customer`. Job lease schema on `CampaignJob`. Send-part ledger entity `CampaignSendPart` with unique `(jobId, partKey)`.
-2. **NestJS REST API (`src/app.controller.ts`)**: Atomic job claim, active job lease heartbeat, fenced finalization (`/campaign/success`, `/campaign/fail`, `/campaign/stop`), queue safety pre-pass, send-part ARM+CONFIRM ledger, hard-fenced operator reconciliation.
-3. **Web Dashboard (`index.html`)**: Contract v2 badge, Required Worker v28.16, operator reconciliation view.
+2. **NestJS REST API (`src/app.controller.ts`)**: Atomic job claim, active job lease heartbeat, fenced finalization (`/campaign/success`, `/campaign/fail`, `/campaign/stop`), queue safety pre-pass, send-part ARM+CONFIRM ledger, hard-fenced operator reconciliation, loopback-only Operational Health & Readiness monitoring (`GET /api/ops/health`).
+3. **Web Dashboard (`index.html`)**: Contract v2 badge, Required Worker v28.16, operator reconciliation view, real-time Operational Health card with 6s polling.
 4. **Client Automation Userscript (`run/LineSyncApp.js` v28.16)**: Worker instance header `X-LineSync-Worker-Instance`, active job heartbeat timer, pre-send lease renewal fencing, send-part ARM+CONFIRM ledger, zero network gap DOM dispatch.
 
 ---
@@ -132,9 +150,11 @@
 ## 🚀 Work Packages Overview
 
 - **Phase 0 Status**: `CLOSED / PASS`.
+- **Phase 1 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003` (`CLOSED / PASS`).
-- **Active Work Package**: `NONE`.
+- **Active Work Package**: `MON-WP001` (`READY_FOR_CHATGPT_REVIEW`).
 - **Work Package Status**:
+  - `MON-WP001`: `READY_FOR_CHATGPT_REVIEW`.
   - `REL-WP003`: `CLOSED / PASS`.
   - `REL-WP003-R1`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP003-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
@@ -144,4 +164,4 @@
   - `REL-WP002-R1`: `CORRECTED / SUPERSEDED`.
   - `REL-WP002-R2`: `CORRECTIVE REQUIRED / SUPERSEDED`.
   - `REL-WP002-R3`: `CLOSED / PASS`.
-- **Next Candidate**: `NONE` (Phase 1 planning only after owner authorization).
+- **Next Candidate**: `NONE` (Awaiting review of MON-WP001).
