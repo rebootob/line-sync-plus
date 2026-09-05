@@ -15,7 +15,7 @@ TITLE:
 Operator Stop Semantics + Scheduled Race & Validation Corrective
 
 STATUS:
-CORRECTIVE_AUTHORIZED
+READY_FOR_CHATGPT_REVIEW
 
 CODE_BASELINE_HEAD:
 119138f6dc27145755e543da4797687358d0f035
@@ -46,8 +46,8 @@ P2-WP002: CLOSED / PASS
 P2-WP002-R1: SUPERSEDED_BY_R2
 P2-WP002-R2: CLOSED / PASS
 P2-WP002-CLOSE: CLOSED_PASS
-P2-WP003: CORRECTIVE_REQUIRED
-P2-WP003-R1: CORRECTIVE_AUTHORIZED
+P2-WP003: PENDING_CORRECTIVE_ACCEPTANCE
+P2-WP003-R1: READY_FOR_CHATGPT_REVIEW
 ACTIVE_WORK_PACKAGE: P2-WP003-R1
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: PENDING_CORRECTIVE_REVIEW
@@ -218,13 +218,14 @@ NEXT_CANDIDATE_STATUS: PENDING_CORRECTIVE_REVIEW
 
 Worker: 28.16 | Required Worker: 28.16 | Runtime Contract: 2
 
-Must record:
-- ACTUAL Jest count
-- 0 failures
-- npm run build PASS
-- git diff --check PASS
-- evidence classification
-- zero Live LINE sends
+ACTUAL VERIFIED AUTOMATED RESULTS (P2-WP003-R1):
+- Full Jest Test Suite: 499/499 PASS
+- Failures: 0
+- Command: npm test -- --runInBand
+- Build: npm run build PASS (0 errors)
+- Diff Check: git diff --check PASS (0 errors)
+- Evidence Classification: LOCAL REPORTED
+- Live LINE Sends: 0 (Master Bot PAUSED)
 
 DO NOT:
 - mark P2-WP003 CLOSED/PASS

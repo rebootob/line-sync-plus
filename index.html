@@ -1431,9 +1431,11 @@
                     fetch(`${API_BASE}/oa/active`)
                 ]);
                 const contexts = await resContexts.json();
-                const activeData = await resActive.json();
-
-                currentActiveBotId = activeData.activeBotId || null;
+                const newActiveBotId = activeData.activeBotId || null;
+                if (newActiveBotId !== currentActiveBotId) {
+                    currentActiveBotId = newActiveBotId;
+                    scheduledRequestGeneration++;
+                }
 
                 const selectEl = document.getElementById('oaSelectDropdown');
                 if (contexts.length === 0) {
@@ -1486,7 +1488,10 @@
 
                 const data = await res.json();
                 if (data.success) {
-                    currentActiveBotId = targetBotId;
+                    if (targetBotId !== currentActiveBotId) {
+                        currentActiveBotId = targetBotId;
+                        scheduledRequestGeneration++;
+                    }
                     alert(`✅ สลับไปยัง LINE OA Context [ ${targetBotId.substring(0, 10)}... ] เรียบร้อยแล้ว!`);
                     selectedUsers.clear();
                     clearCampaignTemplateState();
@@ -2391,9 +2396,39 @@
         }
 
         function localDatetimeInputToIso(localStr) {
-            if (!localStr || !localStr.trim()) return null;
-            const d = new Date(localStr.trim());
+            if (!localStr || typeof localStr !== 'string') return null;
+            const str = localStr.trim();
+            const match = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.exec(str);
+            if (!match) return null;
+
+            const [datePart, timePart] = str.split('T');
+            const [yearStr, monthStr, dayStr] = datePart.split('-');
+            const [hourStr, minuteStr] = timePart.split(':');
+
+            const year = parseInt(yearStr, 10);
+            const month = parseInt(monthStr, 10);
+            const day = parseInt(dayStr, 10);
+            const hour = parseInt(hourStr, 10);
+            const minute = parseInt(minuteStr, 10);
+
+            if (month < 1 || month > 12) return null;
+            if (day < 1 || day > 31) return null;
+            if (hour < 0 || hour > 23) return null;
+            if (minute < 0 || minute > 59) return null;
+
+            const d = new Date(year, month - 1, day, hour, minute, 0, 0);
             if (isNaN(d.getTime())) return null;
+
+            if (
+                d.getFullYear() !== year ||
+                d.getMonth() + 1 !== month ||
+                d.getDate() !== day ||
+                d.getHours() !== hour ||
+                d.getMinutes() !== minute
+            ) {
+                return null;
+            }
+
             return d.toISOString();
         }
 

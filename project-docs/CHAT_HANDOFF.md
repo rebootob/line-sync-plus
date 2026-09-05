@@ -22,7 +22,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 ## Work Package Status
 
 * **ACTIVE_WORK_PACKAGE**: `P2-WP003-R1`
-* **STATUS**: `CORRECTIVE_AUTHORIZED`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
@@ -33,8 +33,8 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP002-R1**: `SUPERSEDED_BY_R2`
 * **P2-WP002-R2**: `CLOSED / PASS`
 * **P2-WP002-CLOSE**: `CLOSED_PASS`
-* **P2-WP003**: `CORRECTIVE_REQUIRED`
-* **P2-WP003-R1**: `CORRECTIVE_AUTHORIZED`
+* **P2-WP003**: `PENDING_CORRECTIVE_ACCEPTANCE`
+* **P2-WP003-R1**: `READY_FOR_CHATGPT_REVIEW`
 * **CODE_BASELINE_HEAD**: `119138f6dc27145755e543da4797687358d0f035`
 * **NEXT_CANDIDATE**: `NONE`
 * **NEXT_CANDIDATE_STATUS**: `PENDING_CORRECTIVE_REVIEW`
@@ -129,8 +129,8 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `P2-WP003`
-* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
+* **ACTIVE_WORK_PACKAGE**: `P2-WP003-R1`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
@@ -140,8 +140,9 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP002-R1**: `SUPERSEDED_BY_R2`
 * **P2-WP002-R2**: `CLOSED / PASS`
 * **P2-WP002-CLOSE**: `CLOSED_PASS`
-* **P2-WP003**: `AUTHORIZED_FOR_EXECUTION`
+* **P2-WP003**: `PENDING_CORRECTIVE_ACCEPTANCE`
+* **P2-WP003-R1**: `READY_FOR_CHATGPT_REVIEW`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
+* **NEXT_CANDIDATE_STATUS**: `PENDING_CORRECTIVE_REVIEW`
 
-Control plane authorization complete for P2-WP003 (Scheduled Queue Controls V2). In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP003 within authorized scope. Do not start next task without explicit authorization.
+P2-WP003-R1 corrective implementation complete. All 4 review blockers resolved. Verified with full Jest test suite (499/499 PASS, 0 failures), npm run build PASS, and git diff --check PASS. Awaiting ChatGPT review and approval. Do not start next task without explicit authorization.

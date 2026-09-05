@@ -2520,8 +2520,10 @@ export class AppController {
         }
 
         let stopStatus = 'stopped_user';
-        if (body?.limitReached) stopStatus = 'stopped_limit';
-        else if (body?.errorOverflow) stopStatus = 'stopped_error';
+        if (body?.jobId) {
+          if (body?.limitReached) stopStatus = 'stopped_limit';
+          else if (body?.errorOverflow) stopStatus = 'stopped_error';
+        }
 
         campaign.status = stopStatus;
         await campRepo.save(campaign);

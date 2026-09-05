@@ -6467,37 +6467,40 @@ describe('AppController', () => {
         expect(modalFn).not.toContain('onclick="stopCampaignControl(');
       });
 
+      function getActualLocalDatetimeInputToIso() {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const code = indexHtml.substring(
+          indexHtml.indexOf('function localDatetimeInputToIso(localStr) {'),
+          indexHtml.indexOf('let scheduledRequestGeneration = 0;')
+        );
+        const body = code.substring(code.indexOf('{') + 1, code.lastIndexOf('}'));
+        return new Function('localStr', body);
+      }
+
+      function getActualIsoToLocalDatetimeInput() {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const code = indexHtml.substring(
+          indexHtml.indexOf('function isoToLocalDatetimeInput(isoStr) {'),
+          indexHtml.indexOf('function localDatetimeInputToIso')
+        );
+        const body = code.substring(code.indexOf('{') + 1, code.lastIndexOf('}'));
+        return new Function('isoStr', body);
+      }
+
       it('28. ISO -> local datetime conversion is timezone-correct', () => {
         const iso = '2026-09-05T12:34:56.789Z';
         const d = new Date(iso);
         const pad = (n: number) => String(n).padStart(2, '0');
         const expectedStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-        const indexHtml = fs.readFileSync('index.html', 'utf8');
-        expect(indexHtml).toContain('function isoToLocalDatetimeInput(isoStr) {');
-
-        function isoToLocalDatetimeInput(isoStr: string) {
-          if (!isoStr) return '';
-          const d = new Date(isoStr);
-          if (isNaN(d.getTime())) return '';
-          const pad = (n: number) => String(n).padStart(2, '0');
-          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        }
-        expect(isoToLocalDatetimeInput(iso)).toBe(expectedStr);
+        const fn = getActualIsoToLocalDatetimeInput();
+        expect(fn(iso)).toBe(expectedStr);
       });
 
       it('29. Local datetime -> ISO conversion round-trips correctly', () => {
         const localStr = '2026-09-05T14:30';
-        const indexHtml = fs.readFileSync('index.html', 'utf8');
-        expect(indexHtml).toContain('function localDatetimeInputToIso(localStr) {');
-
-        function localDatetimeInputToIso(localStr: string) {
-          if (!localStr || !localStr.trim()) return null;
-          const d = new Date(localStr.trim());
-          if (isNaN(d.getTime())) return null;
-          return d.toISOString();
-        }
-        expect(localDatetimeInputToIso(localStr)).toBe(new Date(localStr).toISOString());
+        const fn = getActualLocalDatetimeInputToIso();
+        expect(fn(localStr)).toBe(new Date(localStr).toISOString());
       });
 
       it('30. Invalid reschedule local datetime is rejected client-side', () => {
@@ -6524,6 +6527,200 @@ describe('AppController', () => {
           const fnBody = indexHtml.split(`async function ${fnName}(`)[1].split('async function')[0] || indexHtml.split(`async function ${fnName}(`)[1].split('function')[0];
           expect(fnBody).toContain("if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();");
         }
+      });
+
+      describe('P2-WP003-R1 Corrective Tests', () => {
+        it('R1-01. Operator stop with no jobId and limitReached=true still results in stopped_user', async () => {
+          const camp = { id: 'c1', botId: testBotId, status: 'processing', name: 'Operator Stop Test' };
+          mockCampaignRepo.findOne.mockResolvedValueOnce(camp as any);
+          mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+          const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId, limitReached: true }, mockRes);
+          expect(res.success).toBe(true);
+          expect(camp.status).toBe('stopped_user');
+        });
+
+        it('R1-02. Operator stop with no jobId and errorOverflow=true still results in stopped_user', async () => {
+          const camp = { id: 'c1', botId: testBotId, status: 'processing', name: 'Operator Stop Test' };
+          mockCampaignRepo.findOne.mockResolvedValueOnce(camp as any);
+          mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+          const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId, errorOverflow: true }, mockRes);
+          expect(res.success).toBe(true);
+          expect(camp.status).toBe('stopped_user');
+        });
+
+        it('R1-03. Valid Worker-driven stop semantics remain unchanged', async () => {
+          const mockCamp1 = { id: 'c1', status: 'processing', name: 'Test Camp 1' };
+          const mockCallingJob1 = {
+            id: 'j1',
+            campaignId: 'c1',
+            botId: testBotId,
+            status: 'processing',
+            leaseToken: 'tok1',
+            leaseOwner: validInstance,
+            leaseExpiresAt: new Date(Date.now() + 60000),
+          };
+          jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValueOnce({
+            setLock: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            getOne: jest.fn().mockResolvedValue(mockCallingJob1),
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue({ affected: 1 }),
+          } as any);
+          mockCampaignRepo.findOne.mockResolvedValueOnce(mockCamp1 as any);
+
+          const res1: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1', limitReached: true }, mockRes);
+          expect(res1.success).toBe(true);
+          expect(mockCamp1.status).toBe('stopped_limit');
+
+          const resMock2 = createMockRes();
+          const mockCamp2 = { id: 'c2', status: 'processing', name: 'Test Camp 2' };
+          const mockCallingJob2 = {
+            id: 'j2',
+            campaignId: 'c2',
+            botId: testBotId,
+            status: 'processing',
+            leaseToken: 'tok2',
+            leaseOwner: validInstance,
+            leaseExpiresAt: new Date(Date.now() + 60000),
+          };
+          jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValueOnce({
+            setLock: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            getOne: jest.fn().mockResolvedValue(mockCallingJob2),
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue({ affected: 1 }),
+          } as any);
+          mockCampaignRepo.findOne.mockResolvedValueOnce(mockCamp2 as any);
+
+          const res2: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j2', botId: testBotId, leaseToken: 'tok2', errorOverflow: true }, resMock2);
+          expect(res2.success).toBe(true);
+          expect(mockCamp2.status).toBe('stopped_error');
+        });
+
+        it('R1-04. A -> B -> A stale Scheduled SUCCESS response performs zero mutation', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
+          expect(modalFn).toContain('if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;');
+        });
+
+        it('R1-05. A -> B -> A stale Scheduled HTTP failure performs zero mutation', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
+          const errBlock = modalFn.substring(modalFn.indexOf('if (!res.ok)'), modalFn.indexOf('const campaigns = await res.json()'));
+          expect(errBlock).toContain('if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;');
+        });
+
+        it('R1-06. A -> B -> A stale Scheduled thrown/network/parse failure performs zero mutation', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
+          const catchBlock = modalFn.substring(modalFn.indexOf('catch (e)'));
+          expect(catchBlock).toContain('if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;');
+        });
+
+        it('R1-07. A current/latest Scheduled request still renders normally', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
+          expect(modalFn).toContain('document.createElement');
+          expect(modalFn).toContain('strongName.textContent = c.name || \'แคมเปญทั่วไป\';');
+        });
+
+        it('R1-08. Changing active OA invalidates prior Scheduled request authority', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const loadFn = indexHtml.split('async function loadOaContextsUI()')[1].split('async function switchOaContext()')[0];
+          const switchFn = indexHtml.split('async function switchOaContext()')[1].split('async function syncCustomerDirectoryUI()')[0];
+          expect(loadFn).toContain('scheduledRequestGeneration++;');
+          expect(switchFn).toContain('scheduledRequestGeneration++;');
+        });
+
+        it('R1-09. Reloading the SAME active OA does not incorrectly revive an old request or reset authority backward', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const loadFn = indexHtml.split('async function loadOaContextsUI()')[1].split('async function switchOaContext()')[0];
+          expect(loadFn).toContain('if (newActiveBotId !== currentActiveBotId)');
+        });
+
+        it('R1-10. 2026-02-31T10:00 is rejected', () => {
+          const fn = getActualLocalDatetimeInputToIso();
+          expect(fn('2026-02-31T10:00')).toBeNull();
+        });
+
+        it('R1-11. 2026-13-01T10:00 is rejected', () => {
+          const fn = getActualLocalDatetimeInputToIso();
+          expect(fn('2026-13-01T10:00')).toBeNull();
+        });
+
+        it('R1-12. 2026-09-05T25:00 is rejected', () => {
+          const fn = getActualLocalDatetimeInputToIso();
+          expect(fn('2026-09-05T25:00')).toBeNull();
+        });
+
+        it('R1-13. Malformed datetime string is rejected', () => {
+          const fn = getActualLocalDatetimeInputToIso();
+          expect(fn('invalid-string')).toBeNull();
+          expect(fn('2026-09-05')).toBeNull();
+          expect(fn('2026/09/05 10:00')).toBeNull();
+        });
+
+        it('R1-14. 2028-02-29T10:30 is accepted and converted to ISO using browser-local timezone semantics', () => {
+          const fn = getActualLocalDatetimeInputToIso();
+          const expected = new Date(2028, 1, 29, 10, 30, 0, 0).toISOString();
+          expect(fn('2028-02-29T10:30')).toBe(expected);
+        });
+
+        it('R1-15. ISO -> local -> ISO behavior executes the ACTUAL helper functions, not duplicated test-side implementations', () => {
+          const fnLocalToIso = getActualLocalDatetimeInputToIso();
+          const fnIsoToLocal = getActualIsoToLocalDatetimeInput();
+
+          const isoIn = '2026-09-05T12:34:56.789Z';
+          const localStr = fnIsoToLocal(isoIn);
+          expect(typeof localStr).toBe('string');
+          expect(localStr.length).toBeGreaterThan(0);
+
+          const isoOut = fnLocalToIso(localStr);
+          expect(typeof isoOut).toBe('string');
+          expect(new Date(isoOut).getTime()).not.toBeNaN();
+        });
+
+        it('R1-16. Pause HTTP failure executes failure path and cannot emit success UI', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const fnBody = indexHtml.split('async function pauseCampaignControl(')[1].split('async function resumeCampaignControl(')[0];
+          expect(fnBody).toContain('if (res.ok && data.success)');
+          expect(fnBody).toContain('alert(');
+        });
+
+        it('R1-17. Resume HTTP failure executes failure path and cannot emit success UI', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const fnBody = indexHtml.split('async function resumeCampaignControl(')[1].split('async function rescheduleCampaignControl(')[0];
+          expect(fnBody).toContain('if (res.ok && data.success)');
+          expect(fnBody).toContain('alert(');
+        });
+
+        it('R1-18. Reschedule HTTP failure executes failure path and cannot emit success UI', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const fnBody = indexHtml.split('async function rescheduleCampaignControl(')[1].split('async function stopCampaignControl(')[0];
+          expect(fnBody).toContain('if (res.ok && data.success)');
+          expect(fnBody).toContain('alert(');
+        });
+
+        it('R1-19. Stop HTTP failure executes failure path and cannot emit success UI', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const fnBody = indexHtml.split('async function stopCampaignControl(')[1].split('async function renderActiveCampaignBanner(')[0];
+          expect(fnBody).toContain('if (res.ok && data.success)');
+          expect(fnBody).toContain('alert(');
+        });
+
+        it('R1-20. Failed Scheduled control action refreshes Scheduled UI when the modal is open', () => {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          for (const fnName of ['pauseCampaignControl', 'resumeCampaignControl', 'rescheduleCampaignControl', 'stopCampaignControl']) {
+            const fnBody = indexHtml.split(`async function ${fnName}(`)[1].split('async function')[0] || indexHtml.split(`async function ${fnName}(`)[1].split('function')[0];
+            expect(fnBody).toContain("if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();");
+          }
+        });
       });
     });
   });
