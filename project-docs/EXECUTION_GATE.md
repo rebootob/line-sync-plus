@@ -1,12 +1,15 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 16
+CONTROL_VERSION: 17
 
 TASK_ID:
 P2-WP003-R1
 
 PARENT_TASK:
 P2-WP003
+
+AUTHORIZATION_REVISION:
+P2-WP003-R1-AUTH-FIX
 
 TITLE:
 Operator Stop Semantics + Scheduled Race & Validation Corrective
@@ -86,10 +89,31 @@ Execute P2-WP003-R1 corrective changes resolving 4 specific blockers:
    - Preserve dynamic Scheduled table safe DOM rendering (createElement, textContent, addEventListener).
 
 --------------------------------------------------
+LAST ACCEPTED VERIFIED AUTOMATED BASELINE
+--------------------------------------------------
+
+LAST ACCEPTED VERIFIED AUTOMATED BASELINE:
+447/447 PASS
+0 failures
+Evidence: LOCAL REPORTED
+
+P2-WP003 implementation HEAD:
+119138f6dc27145755e543da4797687358d0f035
+
+That implementation added 32 P2-WP003 scenarios, but its ACTUAL final full Jest count was NOT independently accepted during ChatGPT review.
+
+Therefore:
+- DO NOT state 479/479 as an accepted baseline.
+- DO NOT infer 447 + 32.
+- DO NOT estimate the corrective final count.
+- P2-WP003-R1 implementation MUST obtain and report the ACTUAL full Jest count from a new: npm test -- --runInBand
+
+Preserve all original 32 P2-WP003 acceptance scenarios and all R1-01 through R1-20 corrective scenarios.
+
+--------------------------------------------------
 MANDATORY TEST & ACCEPTANCE CONTRACT
 --------------------------------------------------
 
-Existing accepted baseline: 479/479 PASS (0 failures, LOCAL REPORTED).
 Add focused P2-WP003-R1 coverage proving at least these 20 corrective scenarios (plus 32 original P2-WP003 scenarios):
 
 R1-01. Operator stop with no jobId and limitReached=true still results in stopped_user.
@@ -114,6 +138,22 @@ R1-19. Stop HTTP failure executes failure path and cannot emit success UI.
 R1-20. Failed Scheduled control action refreshes Scheduled UI when the modal is open.
 
 --------------------------------------------------
+TEST QUALITY CONTRACT
+--------------------------------------------------
+
+1. Race/safety behavior must be proven through meaningful control-flow tests.
+2. Do NOT satisfy behavior-critical requirements only by checking string presence/source ordering.
+3. Required behavioral areas include:
+   - A -> B -> A stale Scheduled response
+   - operator stop authority
+   - strict local datetime validation
+   - HTTP failure handling
+   - Scheduled UI refresh behavior
+4. Tests for actual index.html functions must execute the ACTUAL implementation where required by R1 scenarios.
+5. Do not duplicate helper implementation inside tests and then test the copied implementation.
+6. No new dependency is authorized. If another dependency or unauthorized file becomes necessary: STOP and report.
+
+--------------------------------------------------
 MANDATORY IMPLEMENTATION VERIFICATION
 --------------------------------------------------
 
@@ -129,23 +169,73 @@ For Jest:
 - Record ACTUAL failure count (0).
 - DO NOT infer or estimate test counts.
 
+Evidence classification remains: LOCAL REPORTED unless independent GitHub CI/check/workflow evidence actually exists.
+
 --------------------------------------------------
-EXPECTED IMPLEMENTATION COMMIT
+VERIFICATION FAILURE EXIT
 --------------------------------------------------
 
-fix: enforce operator stop user status scheduled oa epoch and strict local date validation
+If focused corrective coverage, full Jest, build, diff-check, or authorized-file validation fails:
 
-Authorized implementation files ONLY:
+DO NOT mark READY_FOR_CHATGPT_REVIEW.
+
+Use truthful state:
+P2-WP003: CORRECTIVE_REQUIRED
+P2-WP003-R1: BLOCKED / VERIFICATION_FAILED
+ACTIVE_WORK_PACKAGE: P2-WP003-R1
+STATUS: BLOCKED
+
+Do not start another task.
+
+--------------------------------------------------
+EXPECTED CORRECTIVE IMPLEMENTATION COMMIT
+--------------------------------------------------
+
+fix: close P2-WP003 scheduled control review blockers
+
+Authorized corrective source files remain ONLY:
 - src/app.controller.ts
 - src/app.controller.spec.ts
 - index.html
 
-Supporting control documents for evidence/status sync:
-- project-docs/EXECUTION_GATE.md
-- project-docs/ACTIVE_TASK.md
-- project-docs/CHAT_HANDOFF.md
-- project-docs/CURRENT_STATE.md
-- project-docs/PROJECT_STATUS_ROADMAP.md
+Post-implementation evidence/status synchronization remains allowed ONLY in the five existing control docs.
+
+Do not expand source scope.
+
+--------------------------------------------------
+EXPECTED POST-IMPLEMENTATION STATE
+--------------------------------------------------
+
+If P2-WP003-R1 implementation and all verification pass:
+
+P2-WP003: PENDING_CORRECTIVE_ACCEPTANCE
+P2-WP003-R1: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: P2-WP003-R1
+STATUS: READY_FOR_CHATGPT_REVIEW
+PHASE_2: IN PROGRESS
+NEXT_CANDIDATE: NONE
+NEXT_CANDIDATE_STATUS: PENDING_CORRECTIVE_REVIEW
+
+Worker: 28.16 | Required Worker: 28.16 | Runtime Contract: 2
+
+Must record:
+- ACTUAL Jest count
+- 0 failures
+- npm run build PASS
+- git diff --check PASS
+- evidence classification
+- zero Live LINE sends
+
+DO NOT:
+- mark P2-WP003 CLOSED/PASS
+- mark P2-WP003-R1 CLOSED/PASS
+- close Phase 2
+- start P2-WP004 or any next work package
+- start Phase 3+
+- perform Live LINE send UAT
+- test Telegram
+
+Final acceptance remains ChatGPT / Project Owner authority.
 
 --------------------------------------------------
 VERIFICATION & SAFETY
