@@ -6529,7 +6529,148 @@ describe('AppController', () => {
         }
       });
 
-      describe('P2-WP003-R1 Corrective Tests', () => {
+      describe('P2-WP003-R2 Corrective Tests', () => {
+        function createFrontendVmContext(options: { initialActiveBotId?: string | null } = {}) {
+          const indexHtml = fs.readFileSync('index.html', 'utf8');
+          const scriptContent = indexHtml.split('<script>')[1].split('</script>')[0];
+
+          const elementsMap = new Map<string, any>();
+          const alertsList: string[] = [];
+          const promptsList: any[] = [];
+          const confirmsList: any[] = [];
+          let promptReturnVal: any = null;
+          let confirmReturnVal: boolean = true;
+
+          const createMockElement = (id = '', tagName = 'div') => {
+            const childrenList: any[] = [];
+            const eventListeners: Record<string, Function> = {};
+            const styleObj: Record<string, string> = {};
+            let innerHTMLValue = '';
+            let textContentValue = '';
+            let valueValue = '';
+
+            const el: any = {
+              id,
+              tagName: tagName.toUpperCase(),
+              className: '',
+              title: '',
+              colSpan: 1,
+              children: childrenList,
+              style: new Proxy(styleObj, {
+                get: (target, prop: string) => target[prop] || '',
+                set: (target, prop: string, val: string) => { target[prop] = val; return true; }
+              }),
+              get innerHTML() { return innerHTMLValue; },
+              set innerHTML(val: string) {
+                innerHTMLValue = val;
+                childrenList.length = 0;
+              },
+              get textContent() { return textContentValue; },
+              set textContent(val: string) { textContentValue = val; },
+              get value() { return valueValue; },
+              set value(val: string) { valueValue = val; },
+              appendChild: (child: any) => {
+                childrenList.push(child);
+                return child;
+              },
+              addEventListener: (event: string, handler: Function) => {
+                eventListeners[event] = handler;
+              },
+              click: () => {
+                if (eventListeners['click']) eventListeners['click']();
+              },
+              querySelector: () => null,
+              querySelectorAll: () => []
+            };
+            return el;
+          };
+
+          const mockDocument = {
+            getElementById: (id: string) => {
+              if (!elementsMap.has(id)) {
+                elementsMap.set(id, createMockElement(id));
+              }
+              return elementsMap.get(id);
+            },
+            createElement: (tag: string) => createMockElement('', tag),
+            createTextNode: (text: string) => {
+              const el = createMockElement('', '#text');
+              el.textContent = text;
+              return el;
+            }
+          };
+
+          const fetchMock = jest.fn();
+
+          const sandbox: any = {
+            console: {
+              log: () => {},
+              error: () => {},
+              warn: () => {},
+            },
+            document: mockDocument,
+            window: {},
+            setInterval: () => {},
+            clearInterval: () => {},
+            encodeURIComponent: global.encodeURIComponent,
+            parseInt: global.parseInt,
+            isNaN: global.isNaN,
+            Date: global.Date,
+            JSON: global.JSON,
+            Array: global.Array,
+            Set: global.Set,
+            String: global.String,
+            RegExp: global.RegExp,
+            alert: (msg: string) => alertsList.push(msg),
+            prompt: (msg: string, defaultVal: string) => {
+              promptsList.push({ msg, defaultVal });
+              return promptReturnVal;
+            },
+            confirm: (msg: string) => {
+              confirmsList.push(msg);
+              return confirmReturnVal;
+            },
+            fetch: fetchMock,
+            openModal: jest.fn(),
+            closeModal: jest.fn(),
+            loadData: jest.fn(),
+            openHistoryModal: jest.fn(),
+            openCampaignDetailModal: jest.fn(),
+            clearCampaignTemplateState: jest.fn(),
+            invalidateCampaignPreview: jest.fn()
+          };
+
+          sandbox.window = sandbox;
+
+          const vmModule = require('node:vm');
+          const vmContext = vmModule.createContext(sandbox);
+          vmModule.runInContext(scriptContent, vmContext);
+
+          if (options.initialActiveBotId !== undefined && options.initialActiveBotId !== null) {
+            vmModule.runInContext(`currentActiveBotId = '${options.initialActiveBotId}'`, vmContext);
+          }
+
+          return {
+            vmContext,
+            elementsMap,
+            alertsList,
+            promptsList,
+            confirmsList,
+            fetchMock,
+            setPromptReturn: (val: any) => { promptReturnVal = val; },
+            setConfirmReturn: (val: boolean) => { confirmReturnVal = val; },
+            getElementById: (id: string) => mockDocument.getElementById(id),
+            getCurrentActiveBotId: () => vmModule.runInContext('currentActiveBotId', vmContext),
+            setCurrentActiveBotId: (val: string | null) => {
+              vmModule.runInContext(`currentActiveBotId = ${val ? `'${val}'` : 'null'}`, vmContext);
+            },
+            getScheduledRequestGeneration: () => vmModule.runInContext('scheduledRequestGeneration', vmContext),
+            setScheduledRequestGeneration: (val: number) => {
+              vmModule.runInContext(`scheduledRequestGeneration = ${val}`, vmContext);
+            }
+          };
+        }
+
         it('R1-01. Operator stop with no jobId and limitReached=true still results in stopped_user', async () => {
           const camp = { id: 'c1', botId: testBotId, status: 'processing', name: 'Operator Stop Test' };
           mockCampaignRepo.findOne.mockResolvedValueOnce(camp as any);
@@ -6603,47 +6744,6 @@ describe('AppController', () => {
           expect(mockCamp2.status).toBe('stopped_error');
         });
 
-        it('R1-04. A -> B -> A stale Scheduled SUCCESS response performs zero mutation', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
-          expect(modalFn).toContain('if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;');
-        });
-
-        it('R1-05. A -> B -> A stale Scheduled HTTP failure performs zero mutation', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
-          const errBlock = modalFn.substring(modalFn.indexOf('if (!res.ok)'), modalFn.indexOf('const campaigns = await res.json()'));
-          expect(errBlock).toContain('if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;');
-        });
-
-        it('R1-06. A -> B -> A stale Scheduled thrown/network/parse failure performs zero mutation', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
-          const catchBlock = modalFn.substring(modalFn.indexOf('catch (e)'));
-          expect(catchBlock).toContain('if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;');
-        });
-
-        it('R1-07. A current/latest Scheduled request still renders normally', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
-          expect(modalFn).toContain('document.createElement');
-          expect(modalFn).toContain('strongName.textContent = c.name || \'แคมเปญทั่วไป\';');
-        });
-
-        it('R1-08. Changing active OA invalidates prior Scheduled request authority', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          const loadFn = indexHtml.split('async function loadOaContextsUI()')[1].split('async function switchOaContext()')[0];
-          const switchFn = indexHtml.split('async function switchOaContext()')[1].split('async function syncCustomerDirectoryUI()')[0];
-          expect(loadFn).toContain('scheduledRequestGeneration++;');
-          expect(switchFn).toContain('scheduledRequestGeneration++;');
-        });
-
-        it('R1-09. Reloading the SAME active OA does not incorrectly revive an old request or reset authority backward', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          const loadFn = indexHtml.split('async function loadOaContextsUI()')[1].split('async function switchOaContext()')[0];
-          expect(loadFn).toContain('if (newActiveBotId !== currentActiveBotId)');
-        });
-
         it('R1-10. 2026-02-31T10:00 is rejected', () => {
           const fn = getActualLocalDatetimeInputToIso();
           expect(fn('2026-02-31T10:00')).toBeNull();
@@ -6686,40 +6786,349 @@ describe('AppController', () => {
           expect(new Date(isoOut).getTime()).not.toBeNaN();
         });
 
-        it('R1-16. Pause HTTP failure executes failure path and cannot emit success UI', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          const fnBody = indexHtml.split('async function pauseCampaignControl(')[1].split('async function resumeCampaignControl(')[0];
-          expect(fnBody).toContain('if (res.ok && data.success)');
-          expect(fnBody).toContain('alert(');
+        it('R2-01. Executing ACTUAL loadOaContextsUI() with valid contexts + active responses completes without ReferenceError and consumes resActive.json()', async () => {
+          const { vmContext, fetchMock, alertsList, getCurrentActiveBotId } = createFrontendVmContext();
+
+          const contextsJson = jest.fn().mockResolvedValue([{ botId: 'OA-1', total: 100 }]);
+          const activeJson = jest.fn().mockResolvedValue({ success: true, activeBotId: 'OA-1' });
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.endsWith('/oa/contexts')) {
+              return Promise.resolve({ ok: true, json: contextsJson });
+            }
+            if (url.endsWith('/oa/active')) {
+              return Promise.resolve({ ok: true, json: activeJson });
+            }
+            return Promise.reject(new Error('Unknown URL'));
+          });
+
+          await vmContext.loadOaContextsUI();
+
+          expect(activeJson).toHaveBeenCalled();
+          expect(getCurrentActiveBotId()).toBe('OA-1');
+          expect(alertsList.length).toBe(0);
         });
 
-        it('R1-17. Resume HTTP failure executes failure path and cannot emit success UI', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          const fnBody = indexHtml.split('async function resumeCampaignControl(')[1].split('async function rescheduleCampaignControl(')[0];
-          expect(fnBody).toContain('if (res.ok && data.success)');
-          expect(fnBody).toContain('alert(');
+        it('R2-02. When loadOaContextsUI() observes OA-A -> OA-B: currentActiveBotId becomes OA-B and scheduledRequestGeneration advances', async () => {
+          const { vmContext, fetchMock, getCurrentActiveBotId, getScheduledRequestGeneration } = createFrontendVmContext({ initialActiveBotId: 'OA-A' });
+          const initialGen = getScheduledRequestGeneration();
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.endsWith('/oa/contexts')) {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve([{ botId: 'OA-A' }, { botId: 'OA-B' }]) });
+            }
+            if (url.endsWith('/oa/active')) {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, activeBotId: 'OA-B' }) });
+            }
+            return Promise.reject(new Error('Unknown URL'));
+          });
+
+          await vmContext.loadOaContextsUI();
+
+          expect(getCurrentActiveBotId()).toBe('OA-B');
+          expect(getScheduledRequestGeneration()).toBe(initialGen + 1);
         });
 
-        it('R1-18. Reschedule HTTP failure executes failure path and cannot emit success UI', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          const fnBody = indexHtml.split('async function rescheduleCampaignControl(')[1].split('async function stopCampaignControl(')[0];
-          expect(fnBody).toContain('if (res.ok && data.success)');
-          expect(fnBody).toContain('alert(');
+        it('R2-03. Reloading the SAME active OA does not increment scheduledRequestGeneration', async () => {
+          const { vmContext, fetchMock, getCurrentActiveBotId, getScheduledRequestGeneration } = createFrontendVmContext({ initialActiveBotId: 'OA-A' });
+          const initialGen = getScheduledRequestGeneration();
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.endsWith('/oa/contexts')) {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve([{ botId: 'OA-A' }]) });
+            }
+            if (url.endsWith('/oa/active')) {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, activeBotId: 'OA-A' }) });
+            }
+            return Promise.reject(new Error('Unknown URL'));
+          });
+
+          await vmContext.loadOaContextsUI();
+
+          expect(getCurrentActiveBotId()).toBe('OA-A');
+          expect(getScheduledRequestGeneration()).toBe(initialGen);
         });
 
-        it('R1-19. Stop HTTP failure executes failure path and cannot emit success UI', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          const fnBody = indexHtml.split('async function stopCampaignControl(')[1].split('async function renderActiveCampaignBanner(')[0];
-          expect(fnBody).toContain('if (res.ok && data.success)');
-          expect(fnBody).toContain('alert(');
+        it('R2-04. Actual switchOaContext() changing OA invalidates previously issued Scheduled request authority', async () => {
+          const { vmContext, fetchMock, getElementById, getCurrentActiveBotId, getScheduledRequestGeneration } = createFrontendVmContext({ initialActiveBotId: 'OA-A' });
+          const selectEl = getElementById('oaSelectDropdown');
+          selectEl.value = 'OA-B';
+
+          const initialGen = getScheduledRequestGeneration();
+
+          fetchMock.mockImplementation((url: string, opts: any) => {
+            if (url.endsWith('/oa/active') && opts?.method === 'POST') {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          await vmContext.switchOaContext();
+
+          expect(getCurrentActiveBotId()).toBe('OA-B');
+          expect(getScheduledRequestGeneration()).toBe(initialGen + 1);
         });
 
-        it('R1-20. Failed Scheduled control action refreshes Scheduled UI when the modal is open', () => {
-          const indexHtml = fs.readFileSync('index.html', 'utf8');
-          for (const fnName of ['pauseCampaignControl', 'resumeCampaignControl', 'rescheduleCampaignControl', 'stopCampaignControl']) {
-            const fnBody = indexHtml.split(`async function ${fnName}(`)[1].split('async function')[0] || indexHtml.split(`async function ${fnName}(`)[1].split('function')[0];
-            expect(fnBody).toContain("if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();");
-          }
+        it('R2-05. A Scheduled request issued for OA-A, then context changes A -> B -> A, then old OA-A SUCCESS response resolves: old response performs ZERO current Scheduled UI mutation', async () => {
+          const { vmContext, fetchMock, getElementById, setCurrentActiveBotId, getScheduledRequestGeneration, setScheduledRequestGeneration } = createFrontendVmContext({ initialActiveBotId: 'OA-A' });
+          const tbody = getElementById('scheduledTableBody');
+
+          let resolveScheduledFetch: any;
+          const deferredPromise = new Promise((resolve) => {
+            resolveScheduledFetch = resolve;
+          });
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/campaigns/scheduled')) {
+              return deferredPromise;
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          const modalPromise = vmContext.openScheduledModal();
+          expect(tbody.innerHTML).toContain('กำลังดึงรายการตารางส่ง');
+
+          setCurrentActiveBotId('OA-B');
+          setScheduledRequestGeneration(getScheduledRequestGeneration() + 1);
+          setCurrentActiveBotId('OA-A');
+          setScheduledRequestGeneration(getScheduledRequestGeneration() + 1);
+
+          resolveScheduledFetch({
+            ok: true,
+            json: () => Promise.resolve([{ id: 'stale-1', name: 'Stale Scheduled Campaign', status: 'scheduled' }])
+          });
+
+          await modalPromise;
+
+          expect(tbody.innerHTML).not.toContain('Stale Scheduled Campaign');
+        });
+
+        it('R2-06. Same A -> B -> A sequence with stale HTTP failure: ZERO current Scheduled UI mutation and no stale error UI', async () => {
+          const { vmContext, fetchMock, getElementById, setCurrentActiveBotId, getScheduledRequestGeneration, setScheduledRequestGeneration } = createFrontendVmContext({ initialActiveBotId: 'OA-A' });
+          const tbody = getElementById('scheduledTableBody');
+
+          let resolveScheduledFetch: any;
+          const deferredPromise = new Promise((resolve) => {
+            resolveScheduledFetch = resolve;
+          });
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/campaigns/scheduled')) {
+              return deferredPromise;
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          const modalPromise = vmContext.openScheduledModal();
+
+          setCurrentActiveBotId('OA-B');
+          setScheduledRequestGeneration(getScheduledRequestGeneration() + 1);
+          setCurrentActiveBotId('OA-A');
+          setScheduledRequestGeneration(getScheduledRequestGeneration() + 1);
+
+          resolveScheduledFetch({
+            ok: false,
+            json: () => Promise.resolve({ message: 'Stale HTTP Error Message' })
+          });
+
+          await modalPromise;
+
+          expect(tbody.innerHTML).not.toContain('Stale HTTP Error Message');
+        });
+
+        it('R2-07. Same A -> B -> A sequence with stale thrown/network/JSON failure: ZERO current Scheduled UI mutation and no stale error UI', async () => {
+          const { vmContext, fetchMock, getElementById, setCurrentActiveBotId, getScheduledRequestGeneration, setScheduledRequestGeneration } = createFrontendVmContext({ initialActiveBotId: 'OA-A' });
+          const tbody = getElementById('scheduledTableBody');
+
+          let rejectScheduledFetch: any;
+          const deferredPromise = new Promise((_, reject) => {
+            rejectScheduledFetch = reject;
+          });
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/campaigns/scheduled')) {
+              return deferredPromise;
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          const modalPromise = vmContext.openScheduledModal();
+
+          setCurrentActiveBotId('OA-B');
+          setScheduledRequestGeneration(getScheduledRequestGeneration() + 1);
+          setCurrentActiveBotId('OA-A');
+          setScheduledRequestGeneration(getScheduledRequestGeneration() + 1);
+
+          rejectScheduledFetch(new Error('Network connection crashed'));
+
+          await modalPromise;
+
+          expect(tbody.innerHTML).not.toContain('ไม่สามารถโหลดรายการตารางส่งได้');
+        });
+
+        it('R2-08. A current/latest Scheduled SUCCESS request still renders normally using the safe DOM implementation', async () => {
+          const { vmContext, fetchMock, getElementById } = createFrontendVmContext({ initialActiveBotId: 'OA-1' });
+          const tbody = getElementById('scheduledTableBody');
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/campaigns/scheduled')) {
+              return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve([
+                  {
+                    id: 'c1',
+                    name: 'Valid Safe Campaign',
+                    status: 'scheduled',
+                    totalTargets: 15,
+                    messageType: 'text',
+                    scheduledAt: '2028-10-01T10:00:00.000Z',
+                    createdAt: '2026-09-01T10:00:00.000Z'
+                  }
+                ])
+              });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          await vmContext.openScheduledModal();
+
+          expect(tbody.children.length).toBeGreaterThan(0);
+          const nameSpan = tbody.children[0].children[1].children[0];
+          expect(nameSpan.textContent).toBe('Valid Safe Campaign');
+        });
+
+        it('R2-09. Execute ACTUAL pauseCampaignControl() HTTP/API failure path: must not emit success UI and must refresh Scheduled UI when modal open', async () => {
+          const { vmContext, fetchMock, alertsList, getElementById } = createFrontendVmContext({ initialActiveBotId: 'OA-1' });
+          getElementById('scheduledModal').style.display = 'flex';
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/campaign/pause')) {
+              return Promise.resolve({ ok: false, json: () => Promise.resolve({ success: false, message: 'Pause Failure Reason' }) });
+            }
+            if (url.includes('/campaigns/scheduled')) {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          await vmContext.pauseCampaignControl('c1');
+
+          expect(alertsList.some(a => a.includes('Pause Failure Reason'))).toBe(true);
+          expect(alertsList.some(a => a.includes('เรียบร้อยแล้ว'))).toBe(false);
+          expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/campaigns/scheduled'));
+        });
+
+        it('R2-10. Execute ACTUAL resumeCampaignControl() HTTP/API failure path: must not emit success UI and must refresh Scheduled UI when modal open', async () => {
+          const { vmContext, fetchMock, alertsList, getElementById } = createFrontendVmContext({ initialActiveBotId: 'OA-1' });
+          getElementById('scheduledModal').style.display = 'flex';
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/campaign/resume')) {
+              return Promise.resolve({ ok: false, json: () => Promise.resolve({ success: false, message: 'Resume Failure Reason' }) });
+            }
+            if (url.includes('/campaigns/scheduled')) {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          await vmContext.resumeCampaignControl('c1');
+
+          expect(alertsList.some(a => a.includes('Resume Failure Reason'))).toBe(true);
+          expect(alertsList.some(a => a.includes('เรียบร้อยแล้ว'))).toBe(false);
+          expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/campaigns/scheduled'));
+        });
+
+        it('R2-11. Execute ACTUAL rescheduleCampaignControl() HTTP/API failure path: must not emit success UI and must refresh Scheduled UI when modal open', async () => {
+          const { vmContext, fetchMock, alertsList, getElementById, setPromptReturn } = createFrontendVmContext({ initialActiveBotId: 'OA-1' });
+          getElementById('scheduledModal').style.display = 'flex';
+          setPromptReturn('2028-02-29T10:30');
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/campaign/reschedule')) {
+              return Promise.resolve({ ok: false, json: () => Promise.resolve({ success: false, message: 'Reschedule Failure Reason' }) });
+            }
+            if (url.includes('/campaigns/scheduled')) {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          await vmContext.rescheduleCampaignControl('c1', '2026-10-01T10:00:00.000Z');
+
+          expect(alertsList.some(a => a.includes('Reschedule Failure Reason'))).toBe(true);
+          expect(alertsList.some(a => a.includes('เรียบร้อยแล้ว'))).toBe(false);
+          expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/campaigns/scheduled'));
+        });
+
+        it('R2-12. Execute ACTUAL stopCampaignControl() HTTP/API failure path: must not emit success UI and must refresh Scheduled UI when modal open', async () => {
+          const { vmContext, fetchMock, alertsList, getElementById, setConfirmReturn } = createFrontendVmContext({ initialActiveBotId: 'OA-1' });
+          getElementById('scheduledModal').style.display = 'flex';
+          setConfirmReturn(true);
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/campaign/stop')) {
+              return Promise.resolve({ ok: false, json: () => Promise.resolve({ success: false, message: 'Stop Failure Reason' }) });
+            }
+            if (url.includes('/campaigns/scheduled')) {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          await vmContext.stopCampaignControl('c1');
+
+          expect(alertsList.some(a => a.includes('Stop Failure Reason'))).toBe(true);
+          expect(alertsList.some(a => a.includes('เรียบร้อยแล้ว'))).toBe(false);
+          expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/campaigns/scheduled'));
+        });
+
+        it('R2-13. Network/thrown failure for at least one Scheduled control action executes its actual catch path and does not report success', async () => {
+          const { vmContext, fetchMock, alertsList } = createFrontendVmContext({ initialActiveBotId: 'OA-1' });
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/campaign/pause')) {
+              return Promise.reject(new Error('Network error during pause'));
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          await vmContext.pauseCampaignControl('c1');
+
+          expect(alertsList.some(a => a.includes('ไม่สามารถหยุดแคมเปญชั่วคราวได้'))).toBe(true);
+          expect(alertsList.some(a => a.includes('เรียบร้อยแล้ว'))).toBe(false);
+        });
+
+        it('R2-14. Preserve safe Scheduled rendering: dynamic campaign name/status/backend values remain textContent / safe DOM and are not executable HTML', async () => {
+          const { vmContext, fetchMock, getElementById } = createFrontendVmContext({ initialActiveBotId: 'OA-1' });
+          const tbody = getElementById('scheduledTableBody');
+
+          const xssPayload = '<img src=x onerror=alert(1)>';
+
+          fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/campaigns/scheduled')) {
+              return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve([
+                  {
+                    id: 'c-xss',
+                    name: xssPayload,
+                    status: 'scheduled',
+                    totalTargets: 1,
+                    messageType: 'text',
+                    scheduledAt: '2028-10-01T10:00:00.000Z'
+                  }
+                ])
+              });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+          });
+
+          await vmContext.openScheduledModal();
+
+          const nameCell = tbody.children[0].children[1].children[0];
+          expect(nameCell.textContent).toBe(xssPayload);
+          expect(nameCell.innerHTML).not.toContain('<img');
         });
       });
     });

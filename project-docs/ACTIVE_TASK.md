@@ -3,7 +3,7 @@
 ```yaml
 ACTIVE_WORK_PACKAGE: P2-WP003-R2
 AUTHORIZATION_REVISION: P2-WP003-R2
-STATUS: CORRECTIVE_AUTHORIZED
+STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: PENDING_CORRECTIVE_REVIEW
@@ -17,9 +17,9 @@ P2-WP002: CLOSED / PASS
 P2-WP002-R1: SUPERSEDED_BY_R2
 P2-WP002-R2: CLOSED / PASS
 P2-WP002-CLOSE: CLOSED_PASS
-P2-WP003: CORRECTIVE_REQUIRED
+P2-WP003: PENDING_CORRECTIVE_ACCEPTANCE
 P2-WP003-R1: SUPERSEDED_BY_R2
-P2-WP003-R2: CORRECTIVE_AUTHORIZED
+P2-WP003-R2: READY_FOR_CHATGPT_REVIEW
 CODE_BASELINE_HEAD: 06020bf0adbb072ef067e143f2924e154fc6609c
 ```
 
@@ -27,9 +27,9 @@ CODE_BASELINE_HEAD: 06020bf0adbb072ef067e143f2924e154fc6609c
 
 ## 📋 Work Package Status Summary
 
-- **P2-WP003-R2 — Active OA Runtime Fix + Behavioral Proof**: `CORRECTIVE_AUTHORIZED`
+- **P2-WP003-R2 — Active OA Runtime Fix + Behavioral Proof**: `READY_FOR_CHATGPT_REVIEW`
 - **P2-WP003-R1 — Operator Stop Semantics + Scheduled Race & Validation Corrective**: `SUPERSEDED_BY_R2`
-- **P2-WP003 — Scheduled Queue Controls V2**: `CORRECTIVE_REQUIRED`
+- **P2-WP003 — Scheduled Queue Controls V2**: `PENDING_CORRECTIVE_ACCEPTANCE`
 - **P2-WP002-CLOSE — P2-WP002 Final Acceptance & Evidence Sync**: `CLOSED_PASS`
 - **P2-WP002-R2 — Non-Destructive Stale Response Discard**: `CLOSED / PASS`
 - **P2-WP002-R1 — Stale Preview Race & OA Template Cache Fencing**: `SUPERSEDED_BY_R2`
@@ -478,7 +478,7 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 ## 🚀 Work Package Execution Status
 
 - **Active Work Package**: `P2-WP003-R2`
-- **Status**: `CORRECTIVE_AUTHORIZED`
+- **Status**: `READY_FOR_CHATGPT_REVIEW`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `CLOSED / PASS`
 - **Phase 2 Status**: `IN PROGRESS`
@@ -488,9 +488,9 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 - **P2-WP002-R1 Status**: `SUPERSEDED_BY_R2`
 - **P2-WP002-R2 Status**: `CLOSED / PASS`
 - **P2-WP002-CLOSE Status**: `CLOSED_PASS`
-- **P2-WP003 Status**: `CORRECTIVE_REQUIRED`
+- **P2-WP003 Status**: `PENDING_CORRECTIVE_ACCEPTANCE`
 - **P2-WP003-R1 Status**: `SUPERSEDED_BY_R2`
-- **P2-WP003-R2 Status**: `CORRECTIVE_AUTHORIZED`
+- **P2-WP003-R2 Status**: `READY_FOR_CHATGPT_REVIEW`
 - **CODE_BASELINE_HEAD**: `06020bf0adbb072ef067e143f2924e154fc6609c`
 - **MON-WP001 Status**: `CLOSED / PASS`
 - **MON-WP001-R1 Status**: `CLOSED / PASS`

@@ -1431,6 +1431,7 @@
                     fetch(`${API_BASE}/oa/active`)
                 ]);
                 const contexts = await resContexts.json();
+                const activeData = await resActive.json();
                 const newActiveBotId = activeData.activeBotId || null;
                 if (newActiveBotId !== currentActiveBotId) {
                     currentActiveBotId = newActiveBotId;

@@ -22,7 +22,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 ## Work Package Status
 
 * **ACTIVE_WORK_PACKAGE**: `P2-WP003-R2`
-* **STATUS**: `CORRECTIVE_AUTHORIZED`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
@@ -33,9 +33,9 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP002-R1**: `SUPERSEDED_BY_R2`
 * **P2-WP002-R2**: `CLOSED / PASS`
 * **P2-WP002-CLOSE**: `CLOSED_PASS`
-* **P2-WP003**: `CORRECTIVE_REQUIRED`
+* **P2-WP003**: `PENDING_CORRECTIVE_ACCEPTANCE`
 * **P2-WP003-R1**: `SUPERSEDED_BY_R2`
-* **P2-WP003-R2**: `CORRECTIVE_AUTHORIZED`
+* **P2-WP003-R2**: `READY_FOR_CHATGPT_REVIEW`
 * **CODE_BASELINE_HEAD**: `06020bf0adbb072ef067e143f2924e154fc6609c`
 * **NEXT_CANDIDATE**: `NONE`
 * **NEXT_CANDIDATE_STATUS**: `PENDING_CORRECTIVE_REVIEW`
@@ -131,7 +131,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 ## Exact Recommended Next Step
 
 * **ACTIVE_WORK_PACKAGE**: `P2-WP003-R2`
-* **STATUS**: `CORRECTIVE_AUTHORIZED`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
@@ -141,10 +141,10 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP002-R1**: `SUPERSEDED_BY_R2`
 * **P2-WP002-R2**: `CLOSED / PASS`
 * **P2-WP002-CLOSE**: `CLOSED_PASS`
-* **P2-WP003**: `CORRECTIVE_REQUIRED`
+* **P2-WP003**: `PENDING_CORRECTIVE_ACCEPTANCE`
 * **P2-WP003-R1**: `SUPERSEDED_BY_R2`
-* **P2-WP003-R2**: `CORRECTIVE_AUTHORIZED`
+* **P2-WP003-R2**: `READY_FOR_CHATGPT_REVIEW`
 * **NEXT_CANDIDATE**: `NONE`
 * **NEXT_CANDIDATE_STATUS**: `PENDING_CORRECTIVE_REVIEW`
 
-Control plane authorization complete for P2-WP003-R2 (Active OA Runtime Fix + Behavioral Proof). In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP003-R2 within authorized scope (`index.html` and `src/app.controller.spec.ts`). Do not start next task without explicit authorization.
+P2-WP003-R2 corrective implementation complete. Active OA response parse restored in loadOaContextsUI(). All 14 mandatory R2 behavioral scenarios implemented and passing via VM frontend execution in app.controller.spec.ts. Verified with full Jest test suite (502/502 PASS, 0 failures), npm run build PASS, and git diff --check PASS. Awaiting ChatGPT review and approval. Do not start next task without explicit authorization.
