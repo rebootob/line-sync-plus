@@ -1,12 +1,12 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 14
+CONTROL_VERSION: 15
 
 TASK_ID:
 P2-WP003
 
 AUTHORIZATION_REVISION:
-P2-WP003-AUTH-R1
+P2-WP003-AUTH-R2
 
 TITLE:
 Scheduled Queue Controls V2
@@ -46,7 +46,7 @@ NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: PENDING_REVIEW
 
 --------------------------------------------------
-OBJECTIVE
+OBJECTIVE — PRESERVE EXISTING SYSTEM
 --------------------------------------------------
 
 Harden the EXISTING Scheduled Campaign control surface for P2-WP003 (Scheduled Queue Controls V2).
@@ -105,6 +105,119 @@ FRONTEND / CONTROL FLOW
 30. Invalid reschedule local datetime is rejected client-side.
 31. Pause/Resume/Reschedule/Stop HTTP failure cannot display success.
 32. Failed control action refreshes Scheduled UI when modal is open.
+
+--------------------------------------------------
+TEST QUALITY REQUIREMENT
+--------------------------------------------------
+
+1. Preserve ALL existing tests.
+2. The 32 mandatory scenarios present in this gate are minimum acceptance coverage, not merely documentation checks.
+3. Race / stale-response tests must prove actual control-flow behavior: an obsolete response must be unable to mutate current/newer UI state.
+4. OA fencing tests must prove actual lookup/mutation authority, not just coexisting strings in source.
+5. State-transition tests must verify resulting campaign state and no-mutation behavior for rejected transitions.
+6. Safe DOM tests must meaningfully prove dynamic Scheduled values are not interpolated into executable HTML or inline onclick handlers.
+7. HTTP failure tests must prove success UI is not displayed after !res.ok or data.success !== true.
+8. Do NOT satisfy safety/race requirements only with unrelated string-presence or source-order assertions.
+9. Existing extracted/static tests may be used where appropriate, but behavior-critical requirements must have meaningful control-flow assertions.
+10. No new dependency is authorized. If another dependency or source file becomes necessary: STOP and report. Do NOT expand scope.
+
+--------------------------------------------------
+MANDATORY IMPLEMENTATION VERIFICATION
+--------------------------------------------------
+
+After P2-WP003 implementation, Antigravity MUST run:
+- npm test -- --runInBand
+- npm run build
+- git diff --check
+
+All three must PASS before marking the task READY_FOR_CHATGPT_REVIEW.
+
+For Jest:
+- Record the ACTUAL test count produced by the command.
+- Record ACTUAL failure count.
+- DO NOT infer final count from 447 + 32.
+- DO NOT reuse a stale count.
+- DO NOT round or estimate the result (e.g. "Expected approximately 479 tests" is forbidden).
+
+--------------------------------------------------
+VERIFICATION FAILURE RULE
+--------------------------------------------------
+
+If ANY of the following fails:
+- focused required coverage
+- full npm test
+- npm run build
+- git diff --check
+- authorized-file scope validation
+
+then:
+DO NOT mark READY_FOR_CHATGPT_REVIEW.
+
+Set truthful state:
+P2-WP003: BLOCKED / VERIFICATION_FAILED
+STATUS: BLOCKED
+
+Record the failed command/check and concise evidence.
+Do not silently repair outside authorized scope. Do not start another task.
+
+--------------------------------------------------
+EVIDENCE CLASSIFICATION
+--------------------------------------------------
+
+Default evidence classification: LOCAL REPORTED.
+Only claim independent GitHub CI/check evidence if such a GitHub check/workflow actually exists for the implementation commit. Do NOT convert local output into "CI PASS".
+
+Record separately:
+- focused test evidence if run
+- full Jest result
+- build result
+- diff-check result
+- GitHub CI/check status if independently present
+- zero Live LINE sends
+
+--------------------------------------------------
+EXPECTED IMPLEMENTATION COMMIT
+--------------------------------------------------
+
+feat: harden scheduled queue controls
+
+The implementation commit may modify ONLY:
+- src/app.controller.ts
+- src/app.controller.spec.ts
+- index.html
+plus the authorized five supporting control documents for post-implementation evidence/status synchronization.
+
+--------------------------------------------------
+EXPECTED POST-IMPLEMENTATION STATE
+--------------------------------------------------
+
+If implementation and all verification pass:
+
+P2-WP003: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: P2-WP003
+STATUS: READY_FOR_CHATGPT_REVIEW
+PHASE_2: IN PROGRESS
+NEXT_CANDIDATE: NONE
+NEXT_CANDIDATE_STATUS: PENDING_REVIEW
+
+Worker: 28.16 | Required Worker: 28.16 | Runtime Contract: 2
+
+Evidence must include:
+- ACTUAL Jest test count
+- 0 failures
+- npm run build PASS
+- git diff --check PASS
+- evidence classification
+- zero Live LINE sends
+
+Do NOT:
+- mark P2-WP003 CLOSED/PASS
+- close Phase 2
+- start another work package
+- authorize Phase 3
+- perform Live LINE send UAT
+
+Final acceptance remains ChatGPT / Project Owner authority.
 
 --------------------------------------------------
 AUTHORIZED IMPLEMENTATION FILES
