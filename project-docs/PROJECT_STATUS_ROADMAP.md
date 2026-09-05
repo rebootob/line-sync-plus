@@ -260,7 +260,8 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `P2-WP002-R1 — Stale Preview Race & OA Template Cache Fencing`: **SUPERSEDED_BY_R2**
   - `P2-WP002-R2 — Non-Destructive Stale Response Discard`: **CLOSED / PASS**
   - `P2-WP002-CLOSE — P2-WP002 Final Acceptance & Evidence Sync`: **CLOSED_PASS**
-  - `P2-WP003 — Scheduled Queue Controls V2`: **READY_FOR_CHATGPT_REVIEW**
+  - `P2-WP003 — Scheduled Queue Controls V2`: **CORRECTIVE_REQUIRED**
+  - `P2-WP003-R1 — Operator Stop Semantics + Scheduled Race & Validation Corrective`: **CORRECTIVE_AUTHORIZED**
   - Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -286,10 +287,11 @@ P2-WP002 is **CLOSED / PASS** (Accepted Final Code HEAD: `b6103e9c322ff257dcfda4
 P2-WP002-R1 is **SUPERSEDED_BY_R2**.
 P2-WP002-R2 is **CLOSED / PASS**.
 P2-WP002-CLOSE is **CLOSED_PASS**.
-P2-WP003 is **READY_FOR_CHATGPT_REVIEW** (Revision: `P2-WP003-AUTH-R2`, Code Baseline HEAD: `ef5d5b47e33e1e63648dd33dde40c35a638c2de2`).
-Active Work Package: **P2-WP003**.
-Status: **READY_FOR_CHATGPT_REVIEW**.
-Next Candidate: **NONE** (Status: **PENDING_REVIEW**).
+P2-WP003 is **CORRECTIVE_REQUIRED**.
+P2-WP003-R1 is **CORRECTIVE_AUTHORIZED** (Code Baseline HEAD: `119138f6dc27145755e543da4797687358d0f035`).
+Active Work Package: **P2-WP003-R1**.
+Status: **CORRECTIVE_AUTHORIZED**.
+Next Candidate: **NONE** (Status: **PENDING_CORRECTIVE_REVIEW**).
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-Implementation and verification complete for P2-WP003 (Scheduled Queue Controls V2 - Revision P2-WP003-AUTH-R2). Status set to READY_FOR_CHATGPT_REVIEW. Awaiting control plane final review.
+Control plane authorization complete for P2-WP003-R1 (Operator Stop Semantics + Scheduled Race & Validation Corrective). In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP003-R1 within authorized scope.
