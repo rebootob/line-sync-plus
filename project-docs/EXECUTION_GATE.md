@@ -1,9 +1,12 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 13
+CONTROL_VERSION: 14
 
 TASK_ID:
 P2-WP003
+
+AUTHORIZATION_REVISION:
+P2-WP003-AUTH-R1
 
 TITLE:
 Scheduled Queue Controls V2
@@ -13,9 +16,6 @@ AUTHORIZED_FOR_EXECUTION
 
 CODE_BASELINE_HEAD:
 ef5d5b47e33e1e63648dd33dde40c35a638c2de2
-
-PARENT_TASK:
-P2-WP003
 
 AUTHORIZED_BY:
 Project Owner
@@ -51,7 +51,7 @@ OBJECTIVE
 
 Harden the EXISTING Scheduled Campaign control surface for P2-WP003 (Scheduled Queue Controls V2).
 
-P2-WP003 Scope:
+Authorized Objectives:
 1. Operator Stop OA fencing (require botId matching activeBotId; HTTP 400 if missing/invalid, HTTP 409 if active-OA mismatch; scoped lookup by campaignId + botId).
 2. Preserve Worker-Driven Stop contract (when body.jobId is present, preserve active job lease fencing, pessimistic locks, stopped_limit/error, and worker lease checks untouched).
 3. State-Safe Operator Stop (accept stop only for scheduled, paused, pending, processing => stopped_user; reject completed, failed, stopped_*, paused_reconcile without mutation).
@@ -62,6 +62,49 @@ P2-WP003 Scope:
 8. Truthful Action Failure Behavior (treat HTTP !ok or data.success !== true as failure, show backend error message, do not display success, refresh Scheduled list if open).
 9. Preserve Existing State Transitions (pause => paused; resume => scheduled if future, pending if due/past; reschedule => allowed only for scheduled/paused with valid future datetime).
 10. Permanent Security & Safety Invariants (wrong-recipient fencing, recipient verification, OA isolation, single-worker lock, SAFE protection, durable lease, heartbeat, pre-send renewal, ARM/CONFIRM ledger, reconciliation fencing, ambiguous-send quarantine).
+
+--------------------------------------------------
+MANDATORY TEST & ACCEPTANCE CONTRACT
+--------------------------------------------------
+
+Existing accepted baseline: 447/447 PASS (0 failures, LOCAL REPORTED).
+Add focused P2-WP003 coverage proving at least these 32 scenarios:
+
+BACKEND
+1. Operator stop missing botId fails closed.
+2. Operator stop invalid botId fails closed.
+3. Operator stop active-OA mismatch fails closed.
+4. Cross-OA campaign cannot be operator-stopped.
+5. scheduled -> stopped_user succeeds.
+6. paused -> stopped_user succeeds.
+7. pending -> stopped_user succeeds.
+8. processing -> stopped_user succeeds using existing safe cleanup.
+9. completed operator stop rejected.
+10. failed operator stop rejected.
+11. stopped_user/stopped_limit/stopped_error operator stop rejected.
+12. paused_reconcile operator stop rejected.
+13. Valid Worker-driven stop contract remains accepted.
+14. Stale/invalid Worker lease remains rejected.
+15. Scheduled list remains active-OA scoped.
+16. Scheduled DTO excludes authored/private/safety-sensitive fields.
+17. Existing Pause transition remains intact.
+18. Resume + future scheduledAt -> scheduled.
+19. Resume + due/past scheduledAt -> pending.
+20. Reschedule remains restricted to scheduled/paused + future time.
+
+FRONTEND / CONTROL FLOW
+21. stopCampaignControl sends current botId.
+22. Scheduled loader captures botId + request generation.
+23. Stale Scheduled success response cannot render.
+24. Stale Scheduled failure cannot clear/replace newer OA state.
+25. Current Scheduled failure displays truthful error.
+26. User-controlled Scheduled values use safe DOM/textContent.
+27. Dynamic Scheduled action buttons use addEventListener, not interpolated inline onclick.
+28. ISO -> local datetime conversion is timezone-correct.
+29. Local datetime -> ISO conversion round-trips correctly.
+30. Invalid reschedule local datetime is rejected client-side.
+31. Pause/Resume/Reschedule/Stop HTTP failure cannot display success.
+32. Failed control action refreshes Scheduled UI when modal is open.
 
 --------------------------------------------------
 AUTHORIZED IMPLEMENTATION FILES

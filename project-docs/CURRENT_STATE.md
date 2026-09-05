@@ -243,10 +243,11 @@
 - **Phase 1 Status**: `CLOSED / PASS`.
 - **Phase 2 Status**: `IN PROGRESS`.
 - **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003`, `P2-WP001`, `P2-WP001-R1`, `P2-WP002`, `P2-WP002-R2`, `P2-WP002-CLOSE` (`CLOSED / PASS`).
-- **Active Work Package**: `P2-WP003`.
+- **Active Work Package**: `P2-WP003` (`P2-WP003-AUTH-R1`).
 - **Status**: `AUTHORIZED_FOR_EXECUTION`.
+- **Code Baseline HEAD**: `ef5d5b47e33e1e63648dd33dde40c35a638c2de2`.
 - **Work Package Status**:
-  - `P2-WP003`: `AUTHORIZED_FOR_EXECUTION`.
+  - `P2-WP003`: `AUTHORIZED_FOR_EXECUTION` (Revision: `P2-WP003-AUTH-R1`).
   - `P2-WP002-CLOSE`: `CLOSED_PASS`.
   - `P2-WP002-R2`: `CLOSED / PASS`.
   - `P2-WP002-R1`: `SUPERSEDED_BY_R2`.

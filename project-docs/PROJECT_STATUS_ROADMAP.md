@@ -286,10 +286,10 @@ P2-WP002 is **CLOSED / PASS** (Accepted Final Code HEAD: `b6103e9c322ff257dcfda4
 P2-WP002-R1 is **SUPERSEDED_BY_R2**.
 P2-WP002-R2 is **CLOSED / PASS**.
 P2-WP002-CLOSE is **CLOSED_PASS**.
-P2-WP003 is **AUTHORIZED_FOR_EXECUTION**.
+P2-WP003 is **AUTHORIZED_FOR_EXECUTION** (Revision: `P2-WP003-AUTH-R1`, Code Baseline HEAD: `ef5d5b47e33e1e63648dd33dde40c35a638c2de2`).
 Active Work Package: **P2-WP003**.
 Status: **AUTHORIZED_FOR_EXECUTION**.
 Next Candidate: **NONE** (Status: **PENDING_REVIEW**).
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-Control plane authorization complete for P2-WP003 (Scheduled Queue Controls V2). In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP003 within authorized scope.
+Control plane authorization complete for P2-WP003 (Scheduled Queue Controls V2 - Revision P2-WP003-AUTH-R1). In next run, read AGENT_START_HERE.md and EXECUTION_GATE.md to implement P2-WP003 within authorized scope.
