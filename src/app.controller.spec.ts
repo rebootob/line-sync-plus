@@ -2572,7 +2572,7 @@ describe('AppController', () => {
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
       } as any);
 
-      const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', reason: 'Operator stop' }, mockRes);
+      const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId, reason: 'Operator stop' }, mockRes);
       expect(res.success).toBe(true);
       expect(mockCamp.status).toBe('stopped_user');
     });
@@ -5399,7 +5399,7 @@ describe('AppController', () => {
     it('41. scheduledAt is normalized before submission', () => {
       const indexHtml = fs.readFileSync('index.html', 'utf8');
       expect(indexHtml).toContain('scheduledAt = parsed.toISOString();');
-      expect(indexHtml).toContain('normalizedIso = parsed.toISOString();');
+      expect(indexHtml).toContain('normalizedIso = localDatetimeInputToIso(newTime);');
     });
 
     it('42. no Worker/runtime/send-ledger source changes', () => {
@@ -6159,6 +6159,371 @@ describe('AppController', () => {
         const indexHtml = fs.readFileSync('index.html', 'utf8');
         const applyFn = indexHtml.split('function applyTemplatePreset()')[1].split('async function generateCampaignPreview()')[0];
         expect(applyFn).toContain('invalidateCampaignPreview();');
+      });
+    });
+
+    describe('P2-WP003 — Scheduled Queue Controls V2 Tests', () => {
+      const fs = require('fs');
+      const testBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+      const foreignBotId = 'U11111111222222223333333344444444';
+      const validInstance = 'ts_1788392185170_tab1';
+      let mockRes: any;
+
+      beforeEach(() => {
+        appController.toggleBotStatus({ enabled: true });
+        mockRes = createMockRes();
+      });
+
+      // BACKEND SCENARIOS (1 - 20)
+
+      it('1. Operator stop missing botId fails closed', async () => {
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1' }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('2. Operator stop invalid botId fails closed', async () => {
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: 'invalid-bot-id' }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('3. Operator stop active-OA mismatch fails closed', async () => {
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: foreignBotId }, mockRes);
+        expect(mockRes.statusCode).toBe(409);
+        expect(res.success).toBe(false);
+      });
+
+      it('4. Cross-OA campaign cannot be operator-stopped', async () => {
+        mockCampaignRepo.findOne.mockResolvedValueOnce(null);
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c_foreign', botId: testBotId }, mockRes);
+        expect(mockRes.statusCode).toBe(404);
+        expect(res.success).toBe(false);
+      });
+
+      it('5. scheduled -> stopped_user succeeds', async () => {
+        const camp = { id: 'c1', botId: testBotId, status: 'scheduled', name: 'Scheduled Camp' };
+        mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+        mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(res.success).toBe(true);
+        expect(camp.status).toBe('stopped_user');
+      });
+
+      it('6. paused -> stopped_user succeeds', async () => {
+        const camp = { id: 'c1', botId: testBotId, status: 'paused', name: 'Paused Camp' };
+        mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+        mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(res.success).toBe(true);
+        expect(camp.status).toBe('stopped_user');
+      });
+
+      it('7. pending -> stopped_user succeeds', async () => {
+        const camp = { id: 'c1', botId: testBotId, status: 'pending', name: 'Pending Camp' };
+        mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+        mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(res.success).toBe(true);
+        expect(camp.status).toBe('stopped_user');
+      });
+
+      it('8. processing -> stopped_user succeeds using existing safe cleanup', async () => {
+        const camp = { id: 'c1', botId: testBotId, status: 'processing', name: 'Processing Camp' };
+        mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+        mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(res.success).toBe(true);
+        expect(camp.status).toBe('stopped_user');
+      });
+
+      it('9. completed operator stop rejected', async () => {
+        mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: 'completed' });
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('10. failed operator stop rejected', async () => {
+        mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: 'failed' });
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('11. stopped_user/stopped_limit/stopped_error operator stop rejected', async () => {
+        for (const st of ['stopped_user', 'stopped_limit', 'stopped_error']) {
+          const resMock = createMockRes();
+          mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: st });
+          const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId }, resMock);
+          expect(resMock.statusCode).toBe(400);
+          expect(res.success).toBe(false);
+        }
+      });
+
+      it('12. paused_reconcile operator stop rejected', async () => {
+        mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: 'paused_reconcile' });
+        const res: any = await appController.stopCampaign(undefined, undefined, undefined, { campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+        expect(res.success).toBe(false);
+      });
+
+      it('13. Valid Worker-driven stop contract remains accepted', async () => {
+        const mockCamp = { id: 'c1', status: 'processing', name: 'Test Camp' };
+        const mockCallingJob = {
+          id: 'j1',
+          campaignId: 'c1',
+          botId: testBotId,
+          status: 'processing',
+          leaseToken: 'tok1',
+          leaseOwner: validInstance,
+          leaseExpiresAt: new Date(Date.now() + 60000),
+        };
+        jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValueOnce({
+          setLock: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          getOne: jest.fn().mockResolvedValue(mockCallingJob),
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue({ affected: 1 }),
+        } as any);
+        mockCampaignRepo.findOne.mockResolvedValueOnce(mockCamp as any);
+
+        const res: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'tok1' }, mockRes);
+        expect(res.success).toBe(true);
+        expect(mockCamp.status).toBe('stopped_user');
+      });
+
+      it('14. Stale/invalid Worker lease remains rejected', async () => {
+        jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValueOnce({
+          setLock: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          getOne: jest.fn().mockResolvedValue(null),
+        } as any);
+
+        const res: any = await appController.stopCampaign('28.16', testBotId, validInstance, { jobId: 'j1', botId: testBotId, leaseToken: 'stale_tok' }, mockRes);
+        expect(mockRes.statusCode).toBe(409);
+        expect(res.status).toBe('lease_lost');
+      });
+
+      it('15. Scheduled list remains active-OA scoped', async () => {
+        const r1: any = await appController.getScheduledCampaigns(foreignBotId, mockRes);
+        expect(mockRes.statusCode).toBe(409);
+        expect(r1.success).toBe(false);
+
+        const okRes = createMockRes();
+        mockCampaignRepo.find.mockResolvedValueOnce([{ id: 'c1', botId: testBotId, status: 'scheduled' }]);
+        await appController.getScheduledCampaigns(testBotId, okRes);
+        expect(mockCampaignRepo.find).toHaveBeenCalledWith(expect.objectContaining({
+          where: expect.objectContaining({ botId: testBotId }),
+        }));
+      });
+
+      it('16. Scheduled DTO excludes authored/private/safety-sensitive fields', async () => {
+        const fullCamp = {
+          id: 'c1',
+          name: 'Scheduled DTO Test',
+          messageType: 'text',
+          status: 'scheduled',
+          scheduledAt: new Date(),
+          totalTargets: 5,
+          successCount: 0,
+          failedCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          startedAt: null,
+          message: 'PRIVATE MESSAGE BODY',
+          imageUrl: 'https://secret.com/img.jpg',
+          targetIds: ['U111', 'U222'],
+          botId: testBotId,
+          leaseToken: 'secret_token',
+          leaseOwner: 'secret_owner',
+        };
+        mockCampaignRepo.find.mockResolvedValueOnce([fullCamp]);
+        const res: any = await appController.getScheduledCampaigns(testBotId, mockRes);
+        expect(Array.isArray(res)).toBe(true);
+        expect(res.length).toBe(1);
+        const dto = res[0];
+        expect(dto.id).toBe('c1');
+        expect(dto.name).toBe('Scheduled DTO Test');
+        expect(dto.message).toBeUndefined();
+        expect(dto.imageUrl).toBeUndefined();
+        expect(dto.targetIds).toBeUndefined();
+        expect(dto.leaseToken).toBeUndefined();
+        expect(dto.leaseOwner).toBeUndefined();
+        expect(dto.botId).toBeUndefined();
+      });
+
+      it('17. Existing Pause transition remains intact', async () => {
+        const camp = { id: 'c1', botId: testBotId, status: 'scheduled', name: 'Pause Test' };
+        mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+        mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+        const res: any = await appController.pauseCampaign({ campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(res.success).toBe(true);
+        expect(camp.status).toBe('paused');
+      });
+
+      it('18. Resume + future scheduledAt -> scheduled', async () => {
+        const futureDate = new Date(Date.now() + 3600000);
+        const camp = { id: 'c1', botId: testBotId, status: 'paused', scheduledAt: futureDate, name: 'Resume Future' };
+        mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+        mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+        const res: any = await appController.resumeCampaign({ campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(res.success).toBe(true);
+        expect(camp.status).toBe('scheduled');
+      });
+
+      it('19. Resume + due/past scheduledAt -> pending', async () => {
+        const pastDate = new Date(Date.now() - 60000);
+        const camp = { id: 'c1', botId: testBotId, status: 'paused', scheduledAt: pastDate, name: 'Resume Past' };
+        mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+        mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+
+        const res: any = await appController.resumeCampaign({ campaignId: 'c1', botId: testBotId }, mockRes);
+        expect(res.success).toBe(true);
+        expect(camp.status).toBe('pending');
+      });
+
+      it('20. Reschedule remains restricted to scheduled/paused + future time', async () => {
+        const pastDate = new Date(Date.now() - 60000).toISOString();
+        const futureDate = new Date(Date.now() + 3600000).toISOString();
+
+        // Rejects past date
+        mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: 'scheduled' });
+        const rPast: any = await appController.rescheduleCampaign({ campaignId: 'c1', botId: testBotId, scheduledAt: pastDate }, mockRes);
+        expect(mockRes.statusCode).toBe(400);
+
+        // Rejects invalid status (e.g. completed)
+        const resMock2 = createMockRes();
+        mockCampaignRepo.findOne.mockResolvedValueOnce({ id: 'c1', botId: testBotId, status: 'completed' });
+        const rCompleted: any = await appController.rescheduleCampaign({ campaignId: 'c1', botId: testBotId, scheduledAt: futureDate }, resMock2);
+        expect(resMock2.statusCode).toBe(400);
+
+        // Accepts scheduled + future
+        const resMock3 = createMockRes();
+        const camp = { id: 'c1', botId: testBotId, status: 'scheduled', scheduledAt: new Date() };
+        mockCampaignRepo.findOne.mockResolvedValueOnce(camp);
+        mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
+        const rOk: any = await appController.rescheduleCampaign({ campaignId: 'c1', botId: testBotId, scheduledAt: futureDate }, resMock3);
+        expect(rOk.success).toBe(true);
+        expect(camp.status).toBe('scheduled');
+      });
+
+      // FRONTEND / CONTROL FLOW SCENARIOS (21 - 32)
+
+      it('21. stopCampaignControl sends current botId', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const stopFn = indexHtml.split('async function stopCampaignControl(')[1].split('async function renderActiveCampaignBanner(')[0];
+        expect(stopFn).toContain('botId: currentActiveBotId');
+      });
+
+      it('22. Scheduled loader captures botId + request generation', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
+        expect(modalFn).toContain('const currentGen = ++scheduledRequestGeneration;');
+        expect(modalFn).toContain('const requestedBotId = currentActiveBotId;');
+      });
+
+      it('23. Stale Scheduled success response cannot render', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
+        expect(modalFn).toContain('if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;');
+      });
+
+      it('24. Stale Scheduled failure cannot clear/replace newer OA state', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
+        const catchBlock = modalFn.substring(modalFn.indexOf('catch (e)'));
+        expect(catchBlock).toContain('if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;');
+      });
+
+      it('25. Current Scheduled failure displays truthful error', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
+        const errBlock = modalFn.substring(modalFn.indexOf('if (!res.ok)'), modalFn.indexOf('const campaigns = await res.json()'));
+        expect(errBlock).toContain('td.textContent = `❌ ${errData.message || \'ไม่สามารถโหลดรายการตารางส่งได้\'}`;');
+      });
+
+      it('26. User-controlled Scheduled values use safe DOM/textContent', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
+        expect(modalFn).toContain('document.createElement');
+        expect(modalFn).toContain('strongName.textContent = c.name || \'แคมเปญทั่วไป\';');
+        expect(modalFn).not.toContain('innerHTML = `<tr><td>${c.name}</td>');
+      });
+
+      it('27. Dynamic Scheduled action buttons use addEventListener, not interpolated inline onclick', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const modalFn = indexHtml.split('async function openScheduledModal()')[1].split('async function rescheduleCampaignControl(')[0];
+        expect(modalFn).toContain('btnResume.addEventListener(\'click\', () => resumeCampaignControl(c.id));');
+        expect(modalFn).toContain('btnPause.addEventListener(\'click\', () => pauseCampaignControl(c.id));');
+        expect(modalFn).toContain('btnResched.addEventListener(\'click\', () => rescheduleCampaignControl(c.id, c.scheduledAt));');
+        expect(modalFn).toContain('btnDetail.addEventListener(\'click\', () => openCampaignDetailModal(c.id));');
+        expect(modalFn).toContain('btnStop.addEventListener(\'click\', () => stopCampaignControl(c.id));');
+        expect(modalFn).not.toContain('onclick="stopCampaignControl(');
+      });
+
+      it('28. ISO -> local datetime conversion is timezone-correct', () => {
+        const iso = '2026-09-05T12:34:56.789Z';
+        const d = new Date(iso);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const expectedStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('function isoToLocalDatetimeInput(isoStr) {');
+
+        function isoToLocalDatetimeInput(isoStr: string) {
+          if (!isoStr) return '';
+          const d = new Date(isoStr);
+          if (isNaN(d.getTime())) return '';
+          const pad = (n: number) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+        expect(isoToLocalDatetimeInput(iso)).toBe(expectedStr);
+      });
+
+      it('29. Local datetime -> ISO conversion round-trips correctly', () => {
+        const localStr = '2026-09-05T14:30';
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        expect(indexHtml).toContain('function localDatetimeInputToIso(localStr) {');
+
+        function localDatetimeInputToIso(localStr: string) {
+          if (!localStr || !localStr.trim()) return null;
+          const d = new Date(localStr.trim());
+          if (isNaN(d.getTime())) return null;
+          return d.toISOString();
+        }
+        expect(localDatetimeInputToIso(localStr)).toBe(new Date(localStr).toISOString());
+      });
+
+      it('30. Invalid reschedule local datetime is rejected client-side', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        const reschedFn = indexHtml.split('async function rescheduleCampaignControl(')[1].split('async function stopCampaignControl(')[0];
+        expect(reschedFn).toContain('const normalizedIso = localDatetimeInputToIso(newTime);');
+        expect(reschedFn).toContain('if (!normalizedIso) {');
+        expect(reschedFn).toContain('alert(\'❌ วัน-เวลาที่ระบุไม่ถูกต้อง\');');
+        expect(reschedFn).toContain('return;');
+      });
+
+      it('31. Pause/Resume/Reschedule/Stop HTTP failure cannot display success', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        for (const fnName of ['pauseCampaignControl', 'resumeCampaignControl', 'rescheduleCampaignControl', 'stopCampaignControl']) {
+          const fnBody = indexHtml.split(`async function ${fnName}(`)[1].split('async function')[0] || indexHtml.split(`async function ${fnName}(`)[1].split('function')[0];
+          expect(fnBody).toContain('if (res.ok && data.success)');
+          expect(fnBody).toContain('alert(');
+        }
+      });
+
+      it('32. Failed control action refreshes Scheduled UI when modal is open', () => {
+        const indexHtml = fs.readFileSync('index.html', 'utf8');
+        for (const fnName of ['pauseCampaignControl', 'resumeCampaignControl', 'rescheduleCampaignControl', 'stopCampaignControl']) {
+          const fnBody = indexHtml.split(`async function ${fnName}(`)[1].split('async function')[0] || indexHtml.split(`async function ${fnName}(`)[1].split('function')[0];
+          expect(fnBody).toContain("if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();");
+        }
       });
     });
   });

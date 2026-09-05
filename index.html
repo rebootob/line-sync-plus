@@ -2267,15 +2267,21 @@
                     body: JSON.stringify({ campaignId, botId: currentActiveBotId })
                 });
                 const data = await res.json();
-                if (data.success) {
+                if (res.ok && data.success) {
                     alert('⏸️ สั่งหยุดส่งแคมเปญชั่วคราวเรียบร้อยแล้ว (บอทจะไม่ดึงคิวไปรันชั่วคราว)');
                     loadData();
                     if (document.getElementById('historyModal').style.display === 'flex') openHistoryModal();
                     if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
                 } else {
                     alert(`❌ ${data.message || 'ไม่สามารถหยุดแคมเปญชั่วคราวได้'}`);
+                    loadData();
+                    if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
                 }
-            } catch(e) { alert('❌ ไม่สามารถหยุดแคมเปญชั่วคราวได้'); }
+            } catch(e) {
+                alert('❌ ไม่สามารถหยุดแคมเปญชั่วคราวได้');
+                loadData();
+                if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+            }
         }
 
         async function resumeCampaignControl(campaignId) {
@@ -2286,15 +2292,21 @@
                     body: JSON.stringify({ campaignId, botId: currentActiveBotId })
                 });
                 const data = await res.json();
-                if (data.success) {
+                if (res.ok && data.success) {
                     alert('▶️ สั่งให้แคมเปญกลับมาส่งต่อเรียบร้อยแล้ว');
                     loadData();
                     if (document.getElementById('historyModal').style.display === 'flex') openHistoryModal();
                     if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
                 } else {
                     alert(`❌ ${data.message || 'ไม่สามารถสั่งทำงานต่อได้'}`);
+                    loadData();
+                    if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
                 }
-            } catch(e) { alert('❌ ไม่สามารถสั่งทำงานต่อได้'); }
+            } catch(e) {
+                alert('❌ ไม่สามารถสั่งทำงานต่อได้');
+                loadData();
+                if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+            }
         }
 
         async function openTelegramModal() {
@@ -2370,129 +2382,327 @@
             }
         }
 
+        function isoToLocalDatetimeInput(isoStr) {
+            if (!isoStr) return '';
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return '';
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        function localDatetimeInputToIso(localStr) {
+            if (!localStr || !localStr.trim()) return null;
+            const d = new Date(localStr.trim());
+            if (isNaN(d.getTime())) return null;
+            return d.toISOString();
+        }
+
+        let scheduledRequestGeneration = 0;
+
         async function openScheduledModal() {
             openModal('scheduledModal');
             const tbody = document.getElementById('scheduledTableBody');
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">⏳ กำลังดึงรายการตารางส่ง...</td></tr>';
 
-            try {
-                const res = await fetch(`${API_BASE}/campaigns/scheduled?botId=${encodeURIComponent(currentActiveBotId)}`);
-                const campaigns = await res.json();
+            const currentGen = ++scheduledRequestGeneration;
+            const requestedBotId = currentActiveBotId;
 
-                if (campaigns.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">📅 ไม่มีรายการแคมเปญที่ตั้งเวลาส่งล่วงหน้า</td></tr>';
+            try {
+                const res = await fetch(`${API_BASE}/campaigns/scheduled?botId=${encodeURIComponent(requestedBotId || '')}`);
+                if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;
+                    tbody.innerHTML = '';
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 6;
+                    td.style.textAlign = 'center';
+                    td.style.color = 'red';
+                    td.style.padding = '20px';
+                    td.textContent = `❌ ${errData.message || 'ไม่สามารถโหลดรายการตารางส่งได้'}`;
+                    tr.appendChild(td);
+                    tbody.appendChild(tr);
+                    return;
+                }
+
+                const campaigns = await res.json();
+                if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;
+
+                tbody.innerHTML = '';
+
+                if (!Array.isArray(campaigns) || campaigns.length === 0) {
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 6;
+                    td.style.textAlign = 'center';
+                    td.style.padding = '20px';
+                    td.style.color = '#64748b';
+                    td.textContent = '📅 ไม่มีรายการแคมเปญที่ตั้งเวลาส่งล่วงหน้า';
+                    tr.appendChild(td);
+                    tbody.appendChild(tr);
                     return;
                 }
 
                 const nowMs = Date.now();
 
-                tbody.innerHTML = campaigns.map(c => {
+                campaigns.forEach(c => {
+                    const tr = document.createElement('tr');
+
+                    // Col 1: Scheduled Time
+                    const tdTime = document.createElement('td');
+                    const strongTime = document.createElement('strong');
+                    strongTime.style.color = '#6b21a8';
                     const schedTime = c.scheduledAt ? new Date(c.scheduledAt) : null;
                     const schedDt = schedTime ? schedTime.toLocaleString('th-TH') : '-';
+                    strongTime.textContent = `📅 ${schedDt}`;
+                    tdTime.appendChild(strongTime);
+                    tr.appendChild(tdTime);
+
+                    // Col 2: Name & Type
+                    const tdName = document.createElement('td');
+                    const strongName = document.createElement('strong');
+                    strongName.textContent = c.name || 'แคมเปญทั่วไป';
+                    const divType = document.createElement('div');
+                    const badgeType = document.createElement('span');
+                    badgeType.className = 'badge';
+                    badgeType.style.background = '#e2e8f0';
+                    badgeType.style.color = '#334155';
+                    badgeType.style.fontSize = '10px';
+                    badgeType.textContent = getThaiMessageTypeLabel(c.messageType);
+                    divType.appendChild(badgeType);
+                    tdName.appendChild(strongName);
+                    tdName.appendChild(divType);
+                    tr.appendChild(tdName);
+
+                    // Col 3: Targets & Counts
+                    const tdTargets = document.createElement('td');
+                    const divTargets = document.createElement('div');
+                    divTargets.style.fontWeight = 'bold';
+                    divTargets.style.color = '#334155';
+                    divTargets.textContent = `เป้าหมาย ${c.totalTargets || 0} คน`;
+                    const divCounts = document.createElement('div');
+                    divCounts.style.fontSize = '11px';
+                    const spanSuccess = document.createElement('span');
+                    spanSuccess.style.color = '#16a34a';
+                    spanSuccess.textContent = `✅ ${c.successCount || 0}`;
+                    const spanFailed = document.createElement('span');
+                    spanFailed.style.color = '#dc2626';
+                    spanFailed.textContent = `❌ ${c.failedCount || 0}`;
+                    divCounts.appendChild(spanSuccess);
+                    divCounts.appendChild(document.createTextNode(' / '));
+                    divCounts.appendChild(spanFailed);
+                    tdTargets.appendChild(divTargets);
+                    tdTargets.appendChild(divCounts);
+                    tr.appendChild(tdTargets);
+
+                    // Col 4: Status Badge
+                    const tdBadge = document.createElement('td');
                     const createdDt = c.createdAt ? new Date(c.createdAt).toLocaleTimeString('th-TH') : '-';
                     const updatedDt = c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString('th-TH') : '-';
-
                     let startTimeObj = c.startedAt ? new Date(c.startedAt) : (schedTime && schedTime.getTime() <= nowMs ? schedTime : null);
                     let updateTimeObj = c.updatedAt ? new Date(c.updatedAt) : null;
-
-                    // ป้องกันกรณี Record เก่าที่มีเวลาเริ่มรันมากกว่าเวลาเสร็จสิ้น ให้ปรับเวลาเริ่มให้ก่อนเวลาเสร็จสิ้นเสมอ
                     if (startTimeObj && updateTimeObj && startTimeObj.getTime() > updateTimeObj.getTime()) {
-                        startTimeObj = schedTime && schedTime.getTime() <= updateTimeObj.getTime() 
-                            ? schedTime 
+                        startTimeObj = schedTime && schedTime.getTime() <= updateTimeObj.getTime()
+                            ? schedTime
                             : new Date(updateTimeObj.getTime() - 15 * 1000);
                     }
-
                     const startDt = startTimeObj ? startTimeObj.toLocaleTimeString('th-TH') : createdDt;
 
-                    let statusBadge = `<span class="badge" style="background:#f3e8ff; color:#7e22ce; border:1px solid #d8b4fe;">⏰ รอเริ่มรัน</span>`;
-                    let startFinishText = `<div style="font-size:11px; color:#64748b;">⚡ รัน: ⏳ ยังไม่ถึงเวลา</div>`;
+                    const statusBadgeSpan = document.createElement('span');
+                    statusBadgeSpan.className = 'badge';
+                    if (c.status === 'processing') {
+                        statusBadgeSpan.className = 'badge badge-processing';
+                        statusBadgeSpan.textContent = '⚡ กำลังส่งข้อความ';
+                    } else if (c.status === 'completed') {
+                        statusBadgeSpan.className = 'badge badge-completed';
+                        statusBadgeSpan.textContent = '✅ ส่งสำเร็จครบถ้วน';
+                    } else if (c.status === 'paused') {
+                        statusBadgeSpan.style.background = '#fefce8';
+                        statusBadgeSpan.style.color = '#a16207';
+                        statusBadgeSpan.style.border = '1px solid #fef08a';
+                        statusBadgeSpan.textContent = '⏸️ Hold พักรายการ';
+                    } else if (c.status === 'stopped_limit') {
+                        statusBadgeSpan.style.background = '#fff7ed';
+                        statusBadgeSpan.style.color = '#c2410c';
+                        statusBadgeSpan.style.border = '1px solid #ffedd5';
+                        statusBadgeSpan.textContent = '🛑 หยุด: โควต้าเต็ม';
+                    } else if (c.status === 'stopped_error') {
+                        statusBadgeSpan.style.background = '#fef2f2';
+                        statusBadgeSpan.style.color = '#b91c1c';
+                        statusBadgeSpan.style.border = '1px solid #fee2e2';
+                        statusBadgeSpan.textContent = '🚨 หยุด: Error 10 ครั้ง';
+                    } else if (c.status === 'stopped_user') {
+                        statusBadgeSpan.style.background = '#f3f4f6';
+                        statusBadgeSpan.style.color = '#4b5563';
+                        statusBadgeSpan.style.border = '1px solid #d1d5db';
+                        statusBadgeSpan.textContent = '⏹️ ผู้ใช้สั่งหยุด';
+                    } else if (c.status === 'failed') {
+                        statusBadgeSpan.className = 'badge badge-failed';
+                        statusBadgeSpan.textContent = '❌ ล้มเหลว';
+                    } else if (schedTime && schedTime.getTime() <= nowMs) {
+                        statusBadgeSpan.className = 'badge badge-processing';
+                        statusBadgeSpan.textContent = '⚡ ถึงเวลากำลังเข้าคิว';
+                    } else {
+                        statusBadgeSpan.style.background = '#f3e8ff';
+                        statusBadgeSpan.style.color = '#7e22ce';
+                        statusBadgeSpan.style.border = '1px solid #d8b4fe';
+                        statusBadgeSpan.textContent = '⏰ รอเริ่มรัน';
+                    }
+                    tdBadge.appendChild(statusBadgeSpan);
+                    tr.appendChild(tdBadge);
+
+                    // Col 5: Start / Finish Text
+                    const tdStart = document.createElement('td');
+                    const divStart1 = document.createElement('div');
+                    divStart1.style.fontSize = '11px';
+                    const divStart2 = document.createElement('div');
+                    divStart2.style.fontSize = '11px';
 
                     if (c.status === 'processing') {
-                        statusBadge = '<span class="badge badge-processing">⚡ กำลังส่งข้อความ</span>';
-                        startFinishText = `
-                            <div style="font-size:11px; color:#0284c7;">⚡ เริ่มรัน: ${startDt}</div>
-                            <div style="font-size:11px; color:#16a34a;">⏳ กำลังส่ง (${c.successCount}/${c.totalTargets})</div>
-                        `;
+                        divStart1.style.color = '#0284c7';
+                        divStart1.textContent = `⚡ เริ่มรัน: ${startDt}`;
+                        divStart2.style.color = '#16a34a';
+                        divStart2.textContent = `⏳ กำลังส่ง (${c.successCount}/${c.totalTargets})`;
+                        tdStart.appendChild(divStart1);
+                        tdStart.appendChild(divStart2);
                     } else if (c.status === 'completed') {
-                        statusBadge = '<span class="badge badge-completed">✅ ส่งสำเร็จครบถ้วน</span>';
-                        startFinishText = `
-                            <div style="font-size:11px; color:#15803d;">⚡ เริ่มรัน: ${startDt}</div>
-                            <div style="font-size:11px; color:#16a34a;">🏁 เสร็จเมื่อ: ${updatedDt}</div>
-                        `;
+                        divStart1.style.color = '#15803d';
+                        divStart1.textContent = `⚡ เริ่มรัน: ${startDt}`;
+                        divStart2.style.color = '#16a34a';
+                        divStart2.textContent = `🏁 เสร็จเมื่อ: ${updatedDt}`;
+                        tdStart.appendChild(divStart1);
+                        tdStart.appendChild(divStart2);
                     } else if (c.status === 'paused') {
-                        statusBadge = '<span class="badge" style="background:#fefce8; color:#a16207; border:1px solid #fef08a;">⏸️ Hold พักรายการ</span>';
-                        startFinishText = `<div style="font-size:11px; color:#a16207;">⏸️ ผู้ใช้พักรายการไว้</div>`;
+                        divStart1.style.color = '#a16207';
+                        divStart1.textContent = '⏸️ ผู้ใช้พักรายการไว้';
+                        tdStart.appendChild(divStart1);
                     } else if (c.status === 'stopped_limit') {
-                        statusBadge = '<span class="badge" style="background:#fff7ed; color:#c2410c; border:1px solid #ffedd5;">🛑 หยุด: โควต้าเต็ม</span>';
-                        startFinishText = `
-                            <div style="font-size:11px; color:#0284c7;">⚡ เริ่มรัน: ${startDt}</div>
-                            <div style="font-size:11px; color:#c2410c;">🛑 หยุดเมื่อ: ${updatedDt}</div>
-                        `;
+                        divStart1.style.color = '#0284c7';
+                        divStart1.textContent = `⚡ เริ่มรัน: ${startDt}`;
+                        divStart2.style.color = '#c2410c';
+                        divStart2.textContent = `🛑 หยุดเมื่อ: ${updatedDt}`;
+                        tdStart.appendChild(divStart1);
+                        tdStart.appendChild(divStart2);
                     } else if (c.status === 'stopped_error') {
-                        statusBadge = '<span class="badge" style="background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2;">🚨 หยุด: Error 10 ครั้ง</span>';
-                        startFinishText = `
-                            <div style="font-size:11px; color:#0284c7;">⚡ เริ่มรัน: ${startDt}</div>
-                            <div style="font-size:11px; color:#b91c1c;">🚨 หยุดเมื่อ: ${updatedDt}</div>
-                        `;
+                        divStart1.style.color = '#0284c7';
+                        divStart1.textContent = `⚡ เริ่มรัน: ${startDt}`;
+                        divStart2.style.color = '#b91c1c';
+                        divStart2.textContent = `🚨 หยุดเมื่อ: ${updatedDt}`;
+                        tdStart.appendChild(divStart1);
+                        tdStart.appendChild(divStart2);
                     } else if (c.status === 'stopped_user') {
-                        statusBadge = '<span class="badge" style="background:#f3f4f6; color:#4b5563; border:1px solid #d1d5db;">⏹️ ผู้ใช้สั่งหยุด</span>';
-                        startFinishText = `
-                            <div style="font-size:11px; color:#0284c7;">⚡ เริ่มรัน: ${startDt}</div>
-                            <div style="font-size:11px; color:#4b5563;">⏹️ หยุดเมื่อ: ${updatedDt}</div>
-                        `;
+                        divStart1.style.color = '#0284c7';
+                        divStart1.textContent = `⚡ เริ่มรัน: ${startDt}`;
+                        divStart2.style.color = '#4b5563';
+                        divStart2.textContent = `⏹️ หยุดเมื่อ: ${updatedDt}`;
+                        tdStart.appendChild(divStart1);
+                        tdStart.appendChild(divStart2);
                     } else if (c.status === 'failed') {
-                        statusBadge = '<span class="badge badge-failed">❌ ล้มเหลว</span>';
-                        startFinishText = `
-                            <div style="font-size:11px; color:#0284c7;">⚡ เริ่มรัน: ${startDt}</div>
-                            <div style="font-size:11px; color:#dc2626;">❌ สิ้นสุดเมื่อ: ${updatedDt}</div>
-                        `;
-                    } else if (schedTime && schedTime.getTime() <= nowMs) {
-                        statusBadge = '<span class="badge badge-processing">⚡ ถึงเวลากำลังเข้าคิว</span>';
+                        divStart1.style.color = '#0284c7';
+                        divStart1.textContent = `⚡ เริ่มรัน: ${startDt}`;
+                        divStart2.style.color = '#dc2626';
+                        divStart2.textContent = `❌ สิ้นสุดเมื่อ: ${updatedDt}`;
+                        tdStart.appendChild(divStart1);
+                        tdStart.appendChild(divStart2);
+                    } else {
+                        divStart1.style.color = '#64748b';
+                        divStart1.textContent = '⚡ รัน: ⏳ ยังไม่ถึงเวลา';
+                        tdStart.appendChild(divStart1);
                     }
+                    tr.appendChild(tdStart);
 
+                    // Col 6: Action Buttons using addEventListener
+                    const tdActions = document.createElement('td');
                     const isEditable = c.status === 'scheduled' || c.status === 'paused';
 
-                    return `
-                        <tr>
-                            <td><strong style="color:#6b21a8;">📅 ${schedDt}</strong></td>
-                            <td>
-                                <strong>${c.name || 'แคมเปญทั่วไป'}</strong>
-                                <div><span class="badge" style="background:#e2e8f0; color:#334155; font-size:10px;">${getThaiMessageTypeLabel(c.messageType)}</span></div>
-                            </td>
-                            <td>
-                                <div style="font-weight:bold; color:#334155;">เป้าหมาย ${c.totalTargets} คน</div>
-                                <div style="font-size:11px;"><span style="color:#16a34a;">✅ ${c.successCount}</span> / <span style="color:#dc2626;">❌ ${c.failedCount}</span></div>
-                            </td>
-                            <td>${statusBadge}</td>
-                            <td>${startFinishText}</td>
-                            <td>
-                                ${isEditable ? (
-                                    c.status === 'paused' 
-                                        ? `<button class="action-btn" style="padding:3px 6px; font-size:11px; margin-right:2px; background:#16a34a;" onclick='resumeCampaignControl("${c.id}")' title="ปลด Hold">▶️</button>`
-                                        : `<button class="action-btn-secondary" style="padding:3px 6px; font-size:11px; margin-right:2px; background:#eab308; color:white; border:none;" onclick='pauseCampaignControl("${c.id}")' title="Hold พักรายการ">⏸️</button>`
-                                ) : ''}
-                                ${isEditable ? `<button class="action-btn-outline" style="padding:3px 6px; font-size:11px; margin-right:2px;" onclick='rescheduleCampaignControl("${c.id}", "${c.scheduledAt}")' title="เปลี่ยนเวลาส่ง">✏️</button>` : ''}
-                                <button class="action-btn-outline" style="padding:3px 6px; font-size:11px; margin-right:2px;" onclick='openCampaignDetailModal("${c.id}")' title="ดูรายชื่อผู้รับ">🔍</button>
-                                ${isEditable ? `<button class="action-btn-danger" style="padding:3px 6px; font-size:11px;" onclick='stopCampaignControl("${c.id}")' title="ยกเลิกตารางส่ง">⏹️</button>` : ''}
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
+                    if (isEditable) {
+                        if (c.status === 'paused') {
+                            const btnResume = document.createElement('button');
+                            btnResume.className = 'action-btn';
+                            btnResume.style.padding = '3px 6px';
+                            btnResume.style.fontSize = '11px';
+                            btnResume.style.marginRight = '2px';
+                            btnResume.style.background = '#16a34a';
+                            btnResume.title = 'ปลด Hold';
+                            btnResume.textContent = '▶️';
+                            btnResume.addEventListener('click', () => resumeCampaignControl(c.id));
+                            tdActions.appendChild(btnResume);
+                        } else {
+                            const btnPause = document.createElement('button');
+                            btnPause.className = 'action-btn-secondary';
+                            btnPause.style.padding = '3px 6px';
+                            btnPause.style.fontSize = '11px';
+                            btnPause.style.marginRight = '2px';
+                            btnPause.style.background = '#eab308';
+                            btnPause.style.color = 'white';
+                            btnPause.style.border = 'none';
+                            btnPause.title = 'Hold พักรายการ';
+                            btnPause.textContent = '⏸️';
+                            btnPause.addEventListener('click', () => pauseCampaignControl(c.id));
+                            tdActions.appendChild(btnPause);
+                        }
 
+                        const btnResched = document.createElement('button');
+                        btnResched.className = 'action-btn-outline';
+                        btnResched.style.padding = '3px 6px';
+                        btnResched.style.fontSize = '11px';
+                        btnResched.style.marginRight = '2px';
+                        btnResched.title = 'เปลี่ยนเวลาส่ง';
+                        btnResched.textContent = '✏️';
+                        btnResched.addEventListener('click', () => rescheduleCampaignControl(c.id, c.scheduledAt));
+                        tdActions.appendChild(btnResched);
+                    }
+
+                    const btnDetail = document.createElement('button');
+                    btnDetail.className = 'action-btn-outline';
+                    btnDetail.style.padding = '3px 6px';
+                    btnDetail.style.fontSize = '11px';
+                    btnDetail.style.marginRight = '2px';
+                    btnDetail.title = 'ดูรายชื่อผู้รับ';
+                    btnDetail.textContent = '🔍';
+                    btnDetail.addEventListener('click', () => openCampaignDetailModal(c.id));
+                    tdActions.appendChild(btnDetail);
+
+                    if (isEditable) {
+                        const btnStop = document.createElement('button');
+                        btnStop.className = 'action-btn-danger';
+                        btnStop.style.padding = '3px 6px';
+                        btnStop.style.fontSize = '11px';
+                        btnStop.title = 'ยกเลิกตารางส่ง';
+                        btnStop.textContent = '⏹️';
+                        btnStop.addEventListener('click', () => stopCampaignControl(c.id));
+                        tdActions.appendChild(btnStop);
+                    }
+
+                    tr.appendChild(tdActions);
+                    tbody.appendChild(tr);
+                });
             } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red; padding:20px;">❌ ไม่สามารถโหลดรายการตารางส่งได้</td></tr>';
+                if (requestedBotId !== currentActiveBotId || currentGen !== scheduledRequestGeneration) return;
+                tbody.innerHTML = '';
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 6;
+                td.style.textAlign = 'center';
+                td.style.color = 'red';
+                td.style.padding = '20px';
+                td.textContent = '❌ ไม่สามารถโหลดรายการตารางส่งได้';
+                tr.appendChild(td);
+                tbody.appendChild(tr);
             }
         }
 
         async function rescheduleCampaignControl(campaignId, currentIso) {
-            const currentDtStr = currentIso ? new Date(currentIso).toISOString().slice(0, 16) : '';
+            const currentDtStr = isoToLocalDatetimeInput(currentIso);
             const newTime = prompt('📅 ระบุวันและเวลาส่งล่วงหน้าใหม่ (รูปแบบ: YYYY-MM-DDTHH:mm เช่น 2026-08-21T21:00):', currentDtStr);
             if (!newTime) return;
 
-            let normalizedIso = newTime;
-            const parsed = new Date(newTime);
-            if (!isNaN(parsed.getTime())) {
-                normalizedIso = parsed.toISOString();
+            const normalizedIso = localDatetimeInputToIso(newTime);
+            if (!normalizedIso) {
+                alert('❌ วัน-เวลาที่ระบุไม่ถูกต้อง');
+                return;
             }
 
             try {
@@ -2502,15 +2712,19 @@
                     body: JSON.stringify({ campaignId, botId: currentActiveBotId, scheduledAt: normalizedIso })
                 });
                 const data = await res.json();
-                if (data.success) {
-                    alert(`✅ เปลี่ยนวัน-เวลาส่งล่วงหน้าเรียบร้อยแล้ว: ${new Date(data.scheduledAt).toLocaleString('th-TH')}`);
-                    openScheduledModal();
+                if (res.ok && data.success) {
+                    alert(`✅ เปลี่ยนวัน-เวลาส่งล่วงหน้าเรียบร้อยแล้ว: ${new Date(data.scheduledAt || normalizedIso).toLocaleString('th-TH')}`);
+                    if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
                     loadData();
                 } else {
                     alert(`❌ ${data.message || 'ไม่สามารถเปลี่ยนเวลาได้'}`);
+                    if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+                    loadData();
                 }
             } catch(e) {
                 alert('❌ เกิดข้อผิดพลาดในการเปลี่ยนเวลาส่ง');
+                if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+                loadData();
             }
         }
 
@@ -2522,15 +2736,24 @@
                 const res = await fetch(`${API_BASE}/campaign/stop`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ campaignId, reason: '🛑 ผู้ใช้สั่งหยุดทำงานถาวรผ่านหน้า Dashboard' })
+                    body: JSON.stringify({ campaignId, botId: currentActiveBotId, reason: '🛑 ผู้ใช้สั่งหยุดทำงานถาวรผ่านหน้า Dashboard' })
                 });
                 const data = await res.json();
-                if (data.success) {
+                if (res.ok && data.success) {
                     alert('⏹️ สั่งหยุดการทำงานแคมเปญถาวรเรียบร้อยแล้ว');
                     loadData();
                     if (document.getElementById('historyModal').style.display === 'flex') openHistoryModal();
+                    if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+                } else {
+                    alert(`❌ ${data.message || 'ไม่สามารถสั่งหยุดแคมเปญได้'}`);
+                    if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+                    loadData();
                 }
-            } catch(e) { alert('❌ ไม่สามารถสั่งหยุดแคมเปญได้'); }
+            } catch(e) {
+                alert('❌ ไม่สามารถสั่งหยุดแคมเปญได้');
+                if (document.getElementById('scheduledModal').style.display === 'flex') openScheduledModal();
+                loadData();
+            }
         }
 
         function renderActiveCampaignBanner(campaigns) {

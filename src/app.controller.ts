@@ -2444,6 +2444,18 @@ export class AppController {
         if (res) res.status(HttpStatus.CONFLICT);
         return { success: false, status: 'lease_lost', message: 'Worker-driven stop requires valid active job lease' };
       }
+    } else {
+      if (!body?.campaignId || !body?.botId || !/^U[0-9a-fA-F]{32}$/.test(body.botId.trim())) {
+        if (res) res.status(HttpStatus.BAD_REQUEST);
+        return { success: false, message: 'Missing or invalid campaignId or botId parameter' };
+      }
+
+      const cleanBotId = body.botId.trim();
+      const state = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+      if (!state || !state.activeBotId || state.activeBotId !== cleanBotId) {
+        if (res) res.status(HttpStatus.CONFLICT);
+        return { success: false, message: `Requested botId ${cleanBotId} does not match active OA context` };
+      }
     }
 
     const txResult = await this.campaignJobRepository.manager.transaction(async (manager) => {
@@ -2479,42 +2491,63 @@ export class AppController {
       }
 
       if (targetCampaignId) {
+        const whereClause: any = { id: targetCampaignId };
+        if (!body?.jobId && body?.botId) {
+          whereClause.botId = body.botId.trim();
+        }
+
         // C. Lock Campaign row with pessimistic_write
         const campaign = await campRepo.findOne({
-          where: { id: targetCampaignId },
+          where: whereClause,
           lock: { mode: 'pessimistic_write' },
         });
 
-        if (campaign) {
-          let stopStatus = 'stopped_user';
-          if (body?.limitReached) stopStatus = 'stopped_limit';
-          else if (body?.errorOverflow) stopStatus = 'stopped_error';
-
-          campaign.status = stopStatus;
-          await campRepo.save(campaign);
-
-          // D. Only then stop campaign / clear remaining leases and mark remaining pending/processing jobs failed
-          await jobRepo
-            .createQueryBuilder()
-            .update(CampaignJob)
-            .set({
-              status: 'failed',
-              errorReason: body?.reason || 'ผู้ใช้สั่งหยุดการส่งแคมเปญ',
-              leaseToken: null,
-              leaseOwner: null,
-              leaseExpiresAt: null,
-              leaseHeartbeatAt: null,
-            })
-            .where('campaignId = :campaignId', { campaignId: targetCampaignId })
-            .andWhere('status IN (:...statuses)', { statuses: ['pending', 'processing'] })
-            .execute();
-
-          console.log(`🛑 สั่งหยุดแคมเปญ "${campaign.name}": สถานะ ${stopStatus} (เหตุผล: ${body?.reason || 'ผู้ใช้สั่งหยุด'})`);
-          return { success: true, stoppedCampaign: campaign };
+        if (!campaign) {
+          if (res) res.status(HttpStatus.NOT_FOUND);
+          return { success: false, message: 'ไม่พบแคมเปญที่ระบุ' };
         }
+
+        if (!body?.jobId) {
+          const allowedStatuses = ['scheduled', 'paused', 'pending', 'processing'];
+          if (!allowedStatuses.includes(campaign.status)) {
+            if (res) res.status(HttpStatus.BAD_REQUEST);
+            return {
+              success: false,
+              status: 'invalid_status_transition',
+              message: `Campaign in status '${campaign.status}' cannot be stopped by operator`,
+            };
+          }
+        }
+
+        let stopStatus = 'stopped_user';
+        if (body?.limitReached) stopStatus = 'stopped_limit';
+        else if (body?.errorOverflow) stopStatus = 'stopped_error';
+
+        campaign.status = stopStatus;
+        await campRepo.save(campaign);
+
+        // D. Only then stop campaign / clear remaining leases and mark remaining pending/processing jobs failed
+        await jobRepo
+          .createQueryBuilder()
+          .update(CampaignJob)
+          .set({
+            status: 'failed',
+            errorReason: body?.reason || 'ผู้ใช้สั่งหยุดการส่งแคมเปญ',
+            leaseToken: null,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            leaseHeartbeatAt: null,
+          })
+          .where('campaignId = :campaignId', { campaignId: targetCampaignId })
+          .andWhere('status IN (:...statuses)', { statuses: ['pending', 'processing'] })
+          .execute();
+
+        console.log(`🛑 สั่งหยุดแคมเปญ "${campaign.name}": สถานะ ${stopStatus} (เหตุผล: ${body?.reason || 'ผู้ใช้สั่งหยุด'})`);
+        return { success: true, stoppedCampaign: campaign };
       }
 
-      return { success: true };
+      if (res) res.status(HttpStatus.BAD_REQUEST);
+      return { success: false, message: 'Missing campaignId' };
     });
 
     if (txResult && txResult.success && (txResult as any).stoppedCampaign) {
@@ -2669,7 +2702,21 @@ export class AppController {
       order: { scheduledAt: 'DESC' },
     });
 
-    return campaigns.filter(c => c.scheduledAt !== null);
+    const scheduledList = campaigns.filter(c => c.scheduledAt !== null);
+
+    return scheduledList.map(c => ({
+      id: c.id,
+      name: c.name,
+      messageType: c.messageType,
+      status: c.status,
+      scheduledAt: c.scheduledAt,
+      totalTargets: c.totalTargets,
+      successCount: c.successCount,
+      failedCount: c.failedCount,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+      startedAt: (c as any).startedAt || null,
+    }));
   }
 
   // ปรับเปลี่ยนวัน-เวลาส่งล่วงหน้า (Reschedule Campaign Time)

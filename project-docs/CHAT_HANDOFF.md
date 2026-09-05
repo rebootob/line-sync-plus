@@ -22,7 +22,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 ## Work Package Status
 
 * **ACTIVE_WORK_PACKAGE**: `P2-WP003`
-* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `IN PROGRESS`
@@ -33,7 +33,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP002-R1**: `SUPERSEDED_BY_R2`
 * **P2-WP002-R2**: `CLOSED / PASS`
 * **P2-WP002-CLOSE**: `CLOSED_PASS`
-* **P2-WP003**: `AUTHORIZED_FOR_EXECUTION`
+* **P2-WP003**: `READY_FOR_CHATGPT_REVIEW`
 * **CODE_BASELINE_HEAD**: `ef5d5b47e33e1e63648dd33dde40c35a638c2de2`
 * **NEXT_CANDIDATE**: `NONE`
 * **NEXT_CANDIDATE_STATUS**: `PENDING_REVIEW`
