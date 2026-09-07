@@ -262,22 +262,6 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `P2-WP002-CLOSE — P2-WP002 Final Acceptance & Evidence Sync`: **CLOSED_PASS**
   - `P2-WP003 — Scheduled Queue Controls V2`: **CLOSED / PASS**
   - `P2-WP003-R1 — Operator Stop Semantics + Scheduled Race & Validation Corrective`: **SUPERSEDED_BY_R2**
-|  - Adaptive System-Error Backoff Schedule (30s / 60s / 120s / max 300s)           |
-|  - LINE OA Directory Sync (/chats Endpoint Source) (SYNC-WP001 CLOSED / PASS)     |
-|  - Multi-OA Context Isolation & Identity Fencing (OA-WP001 / R1 CLOSED / PASS)     |
-|  - Single Worker Multi-Tab Lock (REL-WP001 / R1 / R2 CLOSED / PASS)               |
-|  - Document-Lifetime Tab Identity Lock & Clone Defense (ensureTabIdentity)        |
-|  - Fail-Closed Lease Persistence (writeAndVerifyLeaderRecord)                     |
-|  - Complete Navigation Hold (navigateAsLeader: NAVIGATION_LEASE_MS = 45000)       |
-|  - Atomic Pre-Send Fencing (confirmWorkerLeadershipForSend under Web Locks)       |
-|  - Fail-Closed Runtime Version Gate (X-LineSync-Worker-Version: 28.16)            |
-|  - Strict OA Context Validator (isValidChatContextId)                             |
-|  - Full-Lifecycle Execution Lock (isExecutingJob)                                 |
-|  - Same-Job Safe Recovery & Preservation (handleSafeRecovery)                     |
-|  - Zero-Tolerance Pre-Send Recipient Verification Guard                           |
-|  - Atomic Navigation-Safe Diagnostic Spooling (linesync_pending_diagnostics)      |
-+-----------------------------------------------------------------------------------+
-```
 
 ---
 
@@ -467,8 +451,8 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `P3-WP001-R1-C1 — Final Control-Document Truth Corrective`: **CLOSED_PASS**
   - `P3-WP001-CLOSE — P3-WP001 Final Control Closure`: **CLOSED_PASS**
   - `P3-WP001-CLOSE-C1 — Final Idle-State Control Sync`: **CLOSED_PASS**
-  - `P3-WP002 — Outbound Activity Intelligence`: **CORRECTIVE REQUIRED / R1 AUTHORIZED**
-  - `P3-WP002-R1 — Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective`: **CORRECTIVE_AUTHORIZED**
+  - `P3-WP002 — Outbound Activity Intelligence`: **CORRECTIVE REQUIRED / AWAITING_R1_REVIEW**
+  - `P3-WP002-R1 — Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective`: **READY_FOR_CHATGPT_REVIEW** (Candidate HEAD: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`)
   - `P3-WP003 — Persistent Tags & Advanced Segmentation`: **FUTURE / NOT AUTHORIZED**
   - Safe customer identity/display normalization, outbound customer activity intelligence, and persistent tagging/segmentation.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -479,7 +463,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
 ## 11. Technical Evolution
 
 - **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003 CLOSED / PASS).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), dashboard-only Incident Visibility card (`index.html`) with in-memory session lifecycle, authoritative campaign authoring contract, authoritative campaign preview API (`POST /api/campaign/preview`), safe template reuse DTO and content-only copy, non-destructive stale preview discard, OA template cache fencing, operator stop semantics fix, monotonic OA identity epoch fencing, strict local datetime validation, deterministic display-name normalization (`normalizeDisplayName`), active-OA customer endpoint context fencing & DTO, safe customer/group DOM construction, compact Outbound Activity presentation & activity filters, and 549 passing local unit tests (LOCAL REPORTED).
+- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), dashboard-only Incident Visibility card (`index.html`) with in-memory session lifecycle, authoritative campaign authoring contract, authoritative campaign preview API (`POST /api/campaign/preview`), safe template reuse DTO and content-only copy, non-destructive stale preview discard, OA template cache fencing, operator stop semantics fix, monotonic OA identity epoch fencing, strict local datetime validation, deterministic display-name normalization (`normalizeDisplayName`), active-OA customer endpoint context fencing & DTO, safe customer/group DOM construction, compact Outbound Activity presentation & activity filters, single DB-side QueryBuilder aggregate query (`getRawMany`), strict 7-day and 30-day activity time-window filter bounds, and 572 passing local unit tests (LOCAL REPORTED).
 
 ---
 
@@ -506,15 +490,15 @@ P3-WP001-R1 is **CORRECTED / SUPERSEDED_BY_C1**.
 P3-WP001-R1-C1 is **CLOSED_PASS**.
 P3-WP001-CLOSE is **CLOSED_PASS**.
 P3-WP001-CLOSE-C1 is **CLOSED_PASS**.
-P3-WP002 is **CORRECTIVE REQUIRED / R1 AUTHORIZED**.
-P3-WP002-R1 is **CORRECTIVE_AUTHORIZED**.
+P3-WP002 is **CORRECTIVE REQUIRED / AWAITING_R1_REVIEW**.
+P3-WP002-R1 is **READY_FOR_CHATGPT_REVIEW**.
 P3-WP003 is **FUTURE / NOT AUTHORIZED**.
 Active Work Package: **P3-WP002-R1**.
-Status: **CORRECTIVE_AUTHORIZED**.
+Status: **READY_FOR_CHATGPT_REVIEW**.
 CODE_BASELINE_HEAD: **80a9f2dcafdb81e84f990e5593009091ab83bb4e**.
-IMPLEMENTATION_CANDIDATE_HEAD: **NONE / PENDING_CORRECTIVE_EXECUTION**.
-Next Candidate: **NONE** (Status: **AWAITING_CORRECTIVE_EXECUTION**).
-AUTHORIZE_EXECUTION: **TRUE**.
+IMPLEMENTATION_CANDIDATE_HEAD: **03dd35a5d6b29c6394f93f16061bfaddb5f10174**.
+Next Candidate: **NONE** (Status: **AWAITING_REVIEW**).
+AUTHORIZE_EXECUTION: **FALSE**.
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-P3-WP001 (Customer Intelligence Foundation) is CLOSED / PASS. Accepted implementation HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`. R1 test evidence HEAD: `ced2292d8e6c7f5f569b96e8e84af0c587fd80df` (533/533 PASS). C1 control corrective HEAD: `4f7503e48fbadcd7e6346d77d7ed9086f1401086`. Closure HEAD: `d9cf8a6f6480311cc1d0a044902309434b6b1ebf`. P3-WP002-R1 corrective execution authorized on baseline `80a9f2dcafdb81e84f990e5593009091ab83bb4e`. P3-WP003 remains FUTURE / NOT AUTHORIZED.
+P3-WP001 (Customer Intelligence Foundation) is CLOSED / PASS. Accepted implementation HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`. R1 test evidence HEAD: `ced2292d8e6c7f5f569b96e8e84af0c587fd80df` (533/533 PASS). C1 control corrective HEAD: `4f7503e48fbadcd7e6346d77d7ed9086f1401086`. Closure HEAD: `d9cf8a6f6480311cc1d0a044902309434b6b1ebf`. P3-WP002-R1 implementation candidate HEAD is `03dd35a5d6b29c6394f93f16061bfaddb5f10174` (572/572 PASS). P3-WP003 remains FUTURE / NOT AUTHORIZED.
