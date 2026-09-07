@@ -1,18 +1,18 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 19
+CONTROL_VERSION: 20
 
 TASK_ID:
-P2-WP003-R2-CLOSE
+P2-WP003-CLOSE
 
 PARENT_TASK:
 P2-WP003
 
 AUTHORIZATION_REVISION:
-P2-WP003-R2-CLOSE
+P2-WP003-CLOSE
 
 TITLE:
-P2-WP003-R2 Closure & Control Sync
+P2-WP003 Final Parent Closure & Control Sync
 
 STATUS:
 CLOSED_PASS
@@ -27,7 +27,7 @@ ACCEPTED_IMPLEMENTATION_HEAD:
 23f98b0e7c3fd232d63bc94533da6eae262b32fc
 
 AUTHORIZATION_REF:
-P2-WP003-R2 closure/control-document sync
+P2-WP003 final closure/control-document sync
 
 AUTHORIZE_EXECUTION:
 FALSE
@@ -55,23 +55,31 @@ P2-WP002: CLOSED / PASS
 P2-WP002-R1: SUPERSEDED_BY_R2
 P2-WP002-R2: CLOSED / PASS
 P2-WP002-CLOSE: CLOSED_PASS
-P2-WP003: AWAITING_OWNER_FINAL_CLOSURE
+P2-WP003: CLOSED / PASS
 P2-WP003-R1: SUPERSEDED_BY_R2
 P2-WP003-R2: CLOSED / PASS
 P2-WP003-R2-CLOSE: CLOSED_PASS
+P2-WP003-CLOSE: CLOSED_PASS
 ACTIVE_WORK_PACKAGE: NONE
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: AWAITING_OWNER_AUTHORIZATION
 
 --------------------------------------------------
-OBJECTIVE — P2-WP003-R2 CLOSURE & CONTROL SYNC
+OBJECTIVE — P2-WP003 FINAL PARENT CLOSURE
 --------------------------------------------------
 
-Synchronize repository control state following ChatGPT independent review acceptance of P2-WP003-R2 implementation and Owner-validated SAFE Preview-Only UAT.
+Perform final repository control closure for parent work package P2-WP003 following Project Owner authorization, ChatGPT independent review acceptance of P2-WP003-R2, Owner-validated SAFE Preview-only UAT, and accepted documentation consistency correctives.
 
 --------------------------------------------------
-ACCEPTED REVIEW & IMPLEMENTATION TRUTH
+CLOSURE BASIS & REVIEW TRUTH
 --------------------------------------------------
+
+Closure Basis:
+- P2-WP003 implementation completed.
+- P2-WP003-R1 superseded by R2.
+- P2-WP003-R2 independently reviewed and accepted by ChatGPT.
+- SAFE Preview-only UAT PASS (Owner-validated).
+- Documentation consistency corrective (P2-WP003-R2-CLOSE-R1) accepted.
 
 ChatGPT Independent Review Result:
 P2-WP003-R2: PASS / ACCEPTED
@@ -84,10 +92,6 @@ fix: restore active OA loader and scheduled behavioral tests
 
 Historical Pre-R2 Code Baseline HEAD:
 06020bf0adbb072ef067e143f2924e154fc6609c
-
-Authorized Source Scope (R2 Corrective):
-- index.html
-- src/app.controller.spec.ts
 
 --------------------------------------------------
 ACCEPTED AUTOMATED TEST EVIDENCE

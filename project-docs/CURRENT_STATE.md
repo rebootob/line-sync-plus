@@ -242,17 +242,18 @@
 - **Phase 0 Status**: `CLOSED / PASS`.
 - **Phase 1 Status**: `CLOSED / PASS`.
 - **Phase 2 Status**: `IN PROGRESS`.
-- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003`, `P2-WP001`, `P2-WP001-R1`, `P2-WP002`, `P2-WP002-R2`, `P2-WP002-CLOSE`, `P2-WP003-R2`, `P2-WP003-R2-CLOSE` (`CLOSED / PASS`).
+- **Closed Work Packages**: `BUG-WP001`, `BUG-WP002`, `SEC-WP001`, `OPS-WP001`, `REL-WP001`, `OA-WP001`, `SYNC-WP001`, `SAFE-WP001`, `REL-WP002`, `REL-WP003`, `MON-WP001`, `MON-WP001-R1`, `MON-WP002`, `MON-WP003`, `P2-WP001`, `P2-WP001-R1`, `P2-WP002`, `P2-WP002-R2`, `P2-WP002-CLOSE`, `P2-WP003`, `P2-WP003-R2`, `P2-WP003-R2-CLOSE`, `P2-WP003-CLOSE` (`CLOSED / PASS`).
 - **Active Work Package**: `NONE`.
 - **Status**: `CLOSED_PASS`.
 - **Code Baseline HEAD**: `06020bf0adbb072ef067e143f2924e154fc6609c`.
 - **Reviewed Implementation HEAD**: `23f98b0e7c3fd232d63bc94533da6eae262b32fc`.
 - **Accepted Implementation HEAD**: `23f98b0e7c3fd232d63bc94533da6eae262b32fc`.
 - **Work Package Status**:
+  - `P2-WP003-CLOSE`: `CLOSED_PASS`.
   - `P2-WP003-R2-CLOSE`: `CLOSED_PASS`.
   - `P2-WP003-R2`: `CLOSED / PASS` (Accepted Implementation HEAD: `23f98b0e7c3fd232d63bc94533da6eae262b32fc`).
   - `P2-WP003-R1`: `SUPERSEDED_BY_R2`.
-  - `P2-WP003`: `AWAITING_OWNER_FINAL_CLOSURE`.
+  - `P2-WP003`: `CLOSED / PASS`.
   - `P2-WP002-CLOSE`: `CLOSED_PASS`.
   - `P2-WP002-R2`: `CLOSED / PASS`.
   - `P2-WP002-R1`: `SUPERSEDED_BY_R2`.
