@@ -1,39 +1,39 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 21
+CONTROL_VERSION: 22
 
 TASK_ID:
-PHASE-2-CLOSE
+P3-WP001
 
 PARENT_TASK:
-PHASE-2
+PHASE-3
 
 AUTHORIZATION_REVISION:
-PHASE-2-CLOSE
+PHASE-3-INIT-P3-WP001-AUTH
 
 TITLE:
-Phase 2 — Campaign Builder v2 Final Closure
+P3-WP001 — Customer Intelligence Foundation
 
 STATUS:
-CLOSED_PASS
+DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION
 
 CODE_BASELINE_HEAD:
-06020bf0adbb072ef067e143f2924e154fc6609c
+40902875d29d212cd0f1f47ae37a5b591f98f04d
 
 REVIEWED_IMPLEMENTATION_HEAD:
-23f98b0e7c3fd232d63bc94533da6eae262b32fc
+NONE
 
 ACCEPTED_IMPLEMENTATION_HEAD:
-23f98b0e7c3fd232d63bc94533da6eae262b32fc
+NONE
 
 AUTHORIZATION_REF:
-Phase 2 final closure/control-document sync
+Phase 3 initiation and P3-WP001 control-document definition authorization
 
 AUTHORIZE_EXECUTION:
 FALSE
 
 AUTHORIZED_BY:
-Project Owner
+Project Owner (Phase 3 initiation & control-document definition ONLY; source implementation NOT authorized)
 
 CONTROL_PLANE:
 ChatGPT
@@ -48,95 +48,78 @@ PROJECT_STATE:
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: CLOSED / PASS
-PHASE_2_TITLE: Campaign Builder v2
 PHASE-2-CLOSE: CLOSED_PASS
-P2-WP001: CLOSED / PASS
-P2-WP001-R1: CLOSED / PASS
-P2-WP002: CLOSED / PASS
-P2-WP002-R1: SUPERSEDED_BY_R2
-P2-WP002-R2: CLOSED / PASS
-P2-WP002-CLOSE: CLOSED_PASS
-P2-WP003: CLOSED / PASS
-P2-WP003-R1: SUPERSEDED_BY_R2
-P2-WP003-R2: CLOSED / PASS
-P2-WP003-R2-CLOSE: CLOSED_PASS
-P2-WP003-CLOSE: CLOSED_PASS
-ACTIVE_WORK_PACKAGE: NONE
-NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_OWNER_AUTHORIZATION
+PHASE_3: IN PROGRESS
+PHASE_3_TITLE: Audience & Customer Intelligence
+ACTIVE_WORK_PACKAGE: P3-WP001
+P3-WP001: DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION
+P3-WP002: FUTURE / NOT AUTHORIZED
+P3-WP003: FUTURE / NOT AUTHORIZED
+NEXT_CANDIDATE: P3-WP001
+NEXT_CANDIDATE_STATUS: AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION
 
 --------------------------------------------------
-OBJECTIVE — PHASE 2 FINAL CLOSURE
+OBJECTIVE — PHASE 3 INITIATION & P3-WP001 DEFINITION
 --------------------------------------------------
 
-Perform final repository control closure for Phase 2 — Campaign Builder v2 following explicit Project Owner authorization, ChatGPT independent evidence-only closure readiness review (READY_TO_CLOSE_PHASE_2), and complete acceptance of all Phase 2 work packages (P2-WP001, P2-WP002, P2-WP003).
+Initiate Phase 3 — Audience & Customer Intelligence in control documentation and establish the definition and scope for P3-WP001 (Customer Intelligence Foundation).
+
+IMPORTANT: This gate is NON-EXECUTABLE (AUTHORIZE_EXECUTION: FALSE). Project Owner has authorized Phase 3 initiation and control-document definition ONLY. Source implementation of P3-WP001 is NOT authorized in this run.
 
 --------------------------------------------------
-CLOSURE BASIS & REVIEW TRUTH
+PHASE 3 OBJECTIVE & PLANNED CAPABILITIES
 --------------------------------------------------
 
-Closure Basis:
-1. P2-WP001 closed/pass: Authoritative Campaign Authoring Contract & OA Isolation.
-2. P2-WP002 closed/pass: Authoritative Campaign Preview & Safe Template Reuse V2.
-3. P2-WP003 closed/pass: Scheduled Queue Controls V2.
-4. All required corrective work accepted or superseded correctly.
-5. SAFE Preview-only UAT for final P2-WP003 acceptance: PASS.
-6. ChatGPT independently performed final Phase 2 EVIDENCE-ONLY closure readiness review and concluded: READY_TO_CLOSE_PHASE_2.
-7. No material Phase 2 gap identified requiring P2-WP004.
+Objective:
+Improve audience understanding and selection using only authoritative OA-scoped customer and existing outbound campaign data, while preserving privacy and all accepted delivery-safety invariants.
 
-ChatGPT Independent Readiness Review:
-PHASE 2 CLOSURE: READY_TO_CLOSE_PHASE_2
-
-Accepted Review HEADs:
-- P2-WP001 Accepted Final HEAD: 37b078de425e2fd3267652e142d76959f408c701
-- P2-WP002 Accepted Final Code HEAD: b6103e9c322ff257dcfda475217186e740e4893a
-- P2-WP003-R2 Accepted Implementation HEAD: 23f98b0e7c3fd232d63bc94533da6eae262b32fc
-- P2-WP003 Historical Pre-R2 Baseline HEAD: 06020bf0adbb072ef067e143f2924e154fc6609c
+Planned Work Packages:
+- P3-WP001 — Customer Intelligence Foundation (DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION)
+- P3-WP002 — Outbound Activity Intelligence (FUTURE / NOT AUTHORIZED)
+- P3-WP003 — Persistent Tags & Advanced Segmentation (FUTURE / NOT AUTHORIZED)
 
 --------------------------------------------------
-ACCEPTED AUTOMATED TEST EVIDENCE
+P3-WP001 DEFINITION & SCOPE
+--------------------------------------------------
+
+1. Display Name Normalization:
+- Preserve raw Customer.displayName unchanged (do NOT overwrite raw LINE display name).
+- Derive cleanedDisplayName deterministically without blindly removing the first whitespace-delimited token.
+- Preserve legitimate multi-word names. Avoid AI/LLM-based inference or probabilistic guessing.
+
+2. OA-Scoped Customer Intelligence Contract:
+- Scoped strictly by botId, preserving existing botId + lineUserId identity boundary.
+- No cross-OA aggregation. Fail closed on mismatched OA context.
+
+3. Safe Customer / Group DOM Rendering:
+- Move dynamic customer/group/profile-derived text affected by P3-WP001 to safe DOM construction (createElement, textContent, safe attribute assignment).
+- Do NOT interpolate untrusted displayName, cleanedDisplayName, lineUserId, group name, group description, or blockReason into executable HTML strings.
+- Do NOT perform broad unrelated frontend refactoring.
+
+4. Existing Filter Compatibility:
+- Preserve keyword filtering, Active/Blocked, Named/Unnamed, selected customer behavior, static customer groups, and Phase 2 campaign builder behavior.
+
+P3-WP001 Explicit Non-Scope:
+- NO DB schema change, migration, new entity/table, persistent customer tags, activity table, Worker modification, LINE send-path modification, customer sync behavior expansion, inbound LINE conversation scraping, message body storage, read-receipt tracking, online-status tracking, AI profiling/scoring, Telegram changes, Phase 4 work, or Phase 5 work.
+
+--------------------------------------------------
+FUTURE WORK PACKAGES (NOT AUTHORIZED)
+--------------------------------------------------
+
+- P3-WP002 — Outbound Activity Intelligence: Derive customer activity metrics (last send, attempt, counts, status) from existing campaign_jobs without creating a new activity table initially. OA-scoped. FUTURE / NOT AUTHORIZED.
+- P3-WP003 — Persistent Tags & Advanced Segmentation: Additive schema for tags and customer-tag assignments. Requires separate explicit Owner authorization. FUTURE / NOT AUTHORIZED.
+
+--------------------------------------------------
+ACCEPTED AUTOMATED TEST EVIDENCE & INVARIANTS
 --------------------------------------------------
 
 - Full Jest Test Suite: 502/502 PASS
 - Failures: 0
-- Command: npm test -- --runInBand
-- Build: npm run build PASS (0 errors)
-- Diff Check: git diff --check PASS (0 errors)
 - Evidence Classification: LOCAL REPORTED
 - GitHub CI / Status Workflow Evidence: NONE
-
---------------------------------------------------
-ACCEPTED SAFE PREVIEW UAT EVIDENCE
---------------------------------------------------
-
-ChatGPT reviewed Owner-provided live UI screenshot.
-
-SAFE Preview-Only UAT: PASS
-
-Observed Behavior:
-- Exactly 1 target selected.
-- Message Type: text_link / ข้อความ + ลิงก์
-- Message: "ทดสอบระบบ Preview เท่านั้น"
-- URL: "https://example.com"
-- Scheduled Broadcast: OFF
-- Preview displayed: target count = 1, text + link message type.
-- Outbound Payload Preview showed entered text and target URL.
-- Outbound Parts Order rendered safely.
-- Immediate Campaign warning displayed.
-- Start Campaign button became enabled after successful Preview.
-
-Preview Boundary & Safety Invariants:
-- NO authorization to start/send campaign.
-- NO Live LINE send was part of this UAT (0 physical LINE sends).
-- Master Bot remains PAUSED.
-- Invariant preserved: Never automatically resend an ambiguous physical send.
-- Do NOT claim true exactly-once physical LINE delivery across LINE Web UI boundary.
-
---------------------------------------------------
-VERSION & CONTRACT INVARIANTS
---------------------------------------------------
-
-Worker Version: 28.16
-Required Worker Version: 28.16
-Runtime Contract Version: 2
-All source files, Worker script, DB schema, and Telegram integration remain UNTOUCHED.
+- Worker Version: 28.16
+- Required Worker Version: 28.16
+- Runtime Contract Version: 2
+- All source files, Worker script, DB schema, and Telegram integration remain UNTOUCHED.
+- Privacy & Safety Boundary: Customer intelligence uses existing directory metadata and campaign execution metadata only. No LINE chat content or private message semantics collected or inferred.
+- Safety Policy: Never automatically resend an ambiguous physical send. True exactly-once physical LINE delivery across LINE Web UI boundary is NOT guaranteed.

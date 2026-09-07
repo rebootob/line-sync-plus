@@ -267,7 +267,11 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `P2-WP003-CLOSE — P2-WP003 Final Parent Closure & Control Sync`: **CLOSED_PASS**
   - `PHASE-2-CLOSE — Phase 2 — Campaign Builder v2 Final Closure`: **CLOSED_PASS**
   - Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
-- **Phase 3 — Audience & Customer Intelligence**: Advanced customer segment tagging, automated display name cleanup, and activity tracking.
+- **Phase 3 — Audience & Customer Intelligence**: **IN PROGRESS**
+  - `P3-WP001 — Customer Intelligence Foundation`: **DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION**
+  - `P3-WP002 — Outbound Activity Intelligence`: **FUTURE / NOT AUTHORIZED**
+  - `P3-WP003 — Persistent Tags & Advanced Segmentation`: **FUTURE / NOT AUTHORIZED**
+  - Safe customer identity/display normalization, outbound customer activity intelligence, and persistent tagging/segmentation.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
 - **Phase 5 — Analytics & Optimization**: Performance reporting, delivery throughput metrics, and campaign success analytics.
 
@@ -297,9 +301,14 @@ P2-WP003-R2 is **CLOSED / PASS** (Accepted Implementation HEAD: `23f98b0e7c3fd23
 P2-WP003-R2-CLOSE is **CLOSED_PASS**.
 P2-WP003-CLOSE is **CLOSED_PASS**.
 PHASE-2-CLOSE is **CLOSED_PASS**.
-Active Work Package: **NONE**.
-Status: **CLOSED_PASS**.
-Next Candidate: **NONE** (Status: **AWAITING_OWNER_AUTHORIZATION**).
+Phase 3 (Audience & Customer Intelligence) is **IN PROGRESS**.
+P3-WP001 is **DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION**.
+P3-WP002 is **FUTURE / NOT AUTHORIZED**.
+P3-WP003 is **FUTURE / NOT AUTHORIZED**.
+Active Work Package: **P3-WP001**.
+Status: **DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION**.
+Next Candidate: **P3-WP001** (Status: **AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION**).
+AUTHORIZE_EXECUTION: **FALSE**.
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-Final closure complete for Phase 2 — Campaign Builder v2. Phase 2 accepted by ChatGPT independent review and authorized for closure by Project Owner. All source files, Worker script, and DB schema untouched. Phase 3 is NOT started. Awaiting Project Owner authorization for next work package.
+Phase 3 — Audience & Customer Intelligence initiated in control documentation under explicit Project Owner authorization. P3-WP001 (Customer Intelligence Foundation) is defined and awaiting explicit Project Owner implementation authorization. P3-WP002 and P3-WP003 are FUTURE / NOT AUTHORIZED. Code implementation is NOT authorized in this run. All source files, Worker script, and DB schema untouched. Awaiting Project Owner explicit implementation authorization for P3-WP001.

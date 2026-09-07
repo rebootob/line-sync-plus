@@ -21,13 +21,18 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **STATUS**: `CLOSED_PASS`
+* **ACTIVE_WORK_PACKAGE**: `P3-WP001`
+* **STATUS**: `DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `CLOSED / PASS`
 * **PHASE_2_TITLE**: `Campaign Builder v2`
 * **PHASE-2-CLOSE**: `CLOSED_PASS`
+* **PHASE_3**: `IN PROGRESS`
+* **PHASE_3_TITLE**: `Audience & Customer Intelligence`
+* **P3-WP001**: `DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION`
+* **P3-WP002**: `FUTURE / NOT AUTHORIZED`
+* **P3-WP003**: `FUTURE / NOT AUTHORIZED`
 * **P2-WP001**: `CLOSED / PASS`
 * **P2-WP001-R1**: `CLOSED / PASS`
 * **P2-WP002**: `CLOSED / PASS`
@@ -39,11 +44,11 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP003-R2**: `CLOSED / PASS`
 * **P2-WP003-R2-CLOSE**: `CLOSED_PASS`
 * **P2-WP003-CLOSE**: `CLOSED_PASS`
-* **CODE_BASELINE_HEAD**: `06020bf0adbb072ef067e143f2924e154fc6609c`
-* **REVIEWED_IMPLEMENTATION_HEAD**: `23f98b0e7c3fd232d63bc94533da6eae262b32fc`
-* **ACCEPTED_IMPLEMENTATION_HEAD**: `23f98b0e7c3fd232d63bc94533da6eae262b32fc`
-* **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_AUTHORIZATION`
+* **CODE_BASELINE_HEAD**: `40902875d29d212cd0f1f47ae37a5b591f98f04d`
+* **REVIEWED_IMPLEMENTATION_HEAD**: `NONE`
+* **ACCEPTED_IMPLEMENTATION_HEAD**: `NONE`
+* **NEXT_CANDIDATE**: `P3-WP001`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
@@ -135,25 +140,18 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **STATUS**: `CLOSED_PASS`
+* **ACTIVE_WORK_PACKAGE**: `P3-WP001`
+* **STATUS**: `DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `CLOSED / PASS`
-* **PHASE_2_TITLE**: `Campaign Builder v2`
 * **PHASE-2-CLOSE**: `CLOSED_PASS`
-* **P2-WP001**: `CLOSED / PASS`
-* **P2-WP001-R1**: `CLOSED / PASS`
-* **P2-WP002**: `CLOSED / PASS`
-* **P2-WP002-R1**: `SUPERSEDED_BY_R2`
-* **P2-WP002-R2**: `CLOSED / PASS`
-* **P2-WP002-CLOSE**: `CLOSED_PASS`
-* **P2-WP003**: `CLOSED / PASS`
-* **P2-WP003-R1**: `SUPERSEDED_BY_R2`
-* **P2-WP003-R2**: `CLOSED / PASS`
-* **P2-WP003-R2-CLOSE**: `CLOSED_PASS`
-* **P2-WP003-CLOSE**: `CLOSED_PASS`
-* **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_AUTHORIZATION`
+* **PHASE_3**: `IN PROGRESS` (`Audience & Customer Intelligence`)
+* **P3-WP001**: `DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION`
+* **P3-WP002**: `FUTURE / NOT AUTHORIZED`
+* **P3-WP003**: `FUTURE / NOT AUTHORIZED`
+* **NEXT_CANDIDATE**: `P3-WP001`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION`
+* **AUTHORIZE_EXECUTION**: `FALSE`
 
-Phase 2 — Campaign Builder v2 is CLOSED / PASS following explicit Project Owner authorization, ChatGPT independent evidence-only closure readiness review (READY_TO_CLOSE_PHASE_2), and complete acceptance of all Phase 2 work packages (P2-WP001, P2-WP002, P2-WP003). Phase 3 is NOT started. All 502 automated tests PASS (LOCAL REPORTED), build PASS, diff check PASS. Master Bot remains PAUSED with 0 physical LINE sends. Awaiting Project Owner authorization for future work. Do not auto-start any task.
+Phase 3 — Audience & Customer Intelligence is IN PROGRESS in control documentation. Work package P3-WP001 (Customer Intelligence Foundation) is defined and awaiting explicit Project Owner implementation authorization. P3-WP002 and P3-WP003 are FUTURE / NOT AUTHORIZED. Code implementation is NOT authorized in this run. All source files, Worker script, and DB schema remain untouched. Master Bot remains PAUSED. Awaiting Project Owner explicit implementation authorization for P3-WP001. Do not self-authorize or auto-start code execution.
