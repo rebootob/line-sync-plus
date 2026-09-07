@@ -21,7 +21,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `P3-WP001-R1`
+* **ACTIVE_WORK_PACKAGE**: `P3-WP001-R1-C1`
 * **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
@@ -30,8 +30,9 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **PHASE-2-CLOSE**: `CLOSED_PASS`
 * **PHASE_3**: `IN PROGRESS`
 * **PHASE_3_TITLE**: `Audience & Customer Intelligence`
-* **P3-WP001**: `CORRECTIVE REQUIRED / AWAITING_R1_REVIEW`
-* **P3-WP001-R1**: `READY_FOR_CHATGPT_REVIEW`
+* **P3-WP001**: `CORRECTIVE REQUIRED / AWAITING_C1_REVIEW`
+* **P3-WP001-R1**: `CORRECTIVE REQUIRED / SUPERSEDED_BY_C1`
+* **P3-WP001-R1-C1**: `READY_FOR_CHATGPT_REVIEW`
 * **P3-WP002**: `FUTURE / NOT AUTHORIZED`
 * **P3-WP003**: `FUTURE / NOT AUTHORIZED`
 * **P2-WP001**: `CLOSED / PASS`
@@ -45,12 +46,12 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP003-R2**: `CLOSED / PASS`
 * **P2-WP003-R2-CLOSE**: `CLOSED_PASS`
 * **P2-WP003-CLOSE**: `CLOSED_PASS`
-* **CODE_BASELINE_HEAD**: `f9a097a7579c1a357506816656b10c01f68be6ac`
+* **CODE_BASELINE_HEAD**: `c58d7e41c340590e5db9171305dbd8d9b16a4c2c`
 * **IMPLEMENTATION_CANDIDATE_HEAD**: `f9a097a7579c1a357506816656b10c01f68be6ac`
-* **REVIEWED_IMPLEMENTATION_HEAD**: `PENDING_CHATGPT_REVIEW`
+* **REVIEWED_IMPLEMENTATION_HEAD**: `f9a097a7579c1a357506816656b10c01f68be6ac`
 * **ACCEPTED_IMPLEMENTATION_HEAD**: `NONE`
-* **NEXT_CANDIDATE**: `P3-WP001-R1`
-* **NEXT_CANDIDATE_STATUS**: `READY_FOR_CHATGPT_REVIEW`
+* **NEXT_CANDIDATE**: `NONE`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_CHATGPT_REVIEW`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
@@ -142,18 +143,20 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `P3-WP001`
-* **STATUS**: `DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION`
+* **ACTIVE_WORK_PACKAGE**: `P3-WP001-R1-C1`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `CLOSED / PASS`
 * **PHASE-2-CLOSE**: `CLOSED_PASS`
 * **PHASE_3**: `IN PROGRESS` (`Audience & Customer Intelligence`)
-* **P3-WP001**: `DEFINED / AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION`
+* **P3-WP001**: `CORRECTIVE REQUIRED / AWAITING_C1_REVIEW`
+* **P3-WP001-R1**: `CORRECTIVE REQUIRED / SUPERSEDED_BY_C1`
+* **P3-WP001-R1-C1**: `READY_FOR_CHATGPT_REVIEW`
 * **P3-WP002**: `FUTURE / NOT AUTHORIZED`
 * **P3-WP003**: `FUTURE / NOT AUTHORIZED`
-* **NEXT_CANDIDATE**: `P3-WP001`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_IMPLEMENTATION_AUTHORIZATION`
+* **NEXT_CANDIDATE**: `NONE`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_CHATGPT_REVIEW`
 * **AUTHORIZE_EXECUTION**: `FALSE`
 
-Phase 3 — Audience & Customer Intelligence is IN PROGRESS in control documentation. Work package P3-WP001 (Customer Intelligence Foundation) is defined and awaiting explicit Project Owner implementation authorization. P3-WP002 and P3-WP003 are FUTURE / NOT AUTHORIZED. Code implementation is NOT authorized in this run. All source files, Worker script, and DB schema remain untouched. Master Bot remains PAUSED. Awaiting Project Owner explicit implementation authorization for P3-WP001. Do not self-authorize or auto-start code execution.
+Phase 3 — Audience & Customer Intelligence is IN PROGRESS. P3-WP001 source implementation (candidate HEAD `f9a097a7579c1a357506816656b10c01f68be6ac`) and behavioral test evidence (`ced2292d8e6c7f5f569b96e8e84af0c587fd80df`) have both passed ChatGPT review. Task P3-WP001-R1-C1 provides the final control-document truth corrective. Worker script, DB/schema, runtime-version contract and Telegram integration remained untouched by P3-WP001 implementation and correctives. P3-WP001 implementation changed `app.controller.ts`, `app.controller.spec.ts` and `index.html` within authorized scope. R1 changed tests/control docs only. C1 is documentation-only. Master Bot remains PAUSED. Ready for ChatGPT final review.
