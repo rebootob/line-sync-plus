@@ -1820,14 +1820,14 @@
                 } else if (actFilter === 'success_7d') {
                     if (succCount > 0 && cust.lastSuccessfulSendAt) {
                         const sendTime = new Date(cust.lastSuccessfulSendAt).getTime();
-                        matchActivity = !isNaN(sendTime) && (now - sendTime) <= SEVEN_DAYS_MS;
+                        matchActivity = !isNaN(sendTime) && sendTime <= now && sendTime >= (now - SEVEN_DAYS_MS);
                     } else {
                         matchActivity = false;
                     }
                 } else if (actFilter === 'success_30d') {
                     if (succCount > 0 && cust.lastSuccessfulSendAt) {
                         const sendTime = new Date(cust.lastSuccessfulSendAt).getTime();
-                        matchActivity = !isNaN(sendTime) && (now - sendTime) <= THIRTY_DAYS_MS;
+                        matchActivity = !isNaN(sendTime) && sendTime <= now && sendTime >= (now - THIRTY_DAYS_MS);
                     } else {
                         matchActivity = false;
                     }

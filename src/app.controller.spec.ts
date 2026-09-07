@@ -99,10 +99,14 @@ describe('AppController', () => {
       setLock: jest.fn().mockReturnThis(),
       update: jest.fn().mockReturnThis(),
       set: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
       execute: jest.fn().mockResolvedValue({ affected: 1 }),
       getOne: jest.fn().mockResolvedValue(null),
+      getRawMany: jest.fn().mockResolvedValue([]),
     }),
     manager: {
       transaction: jest.fn().mockImplementation(async (callback) => {
@@ -150,6 +154,23 @@ describe('AppController', () => {
     }).compile();
 
     appController = module.get<AppController>(AppController);
+    mockCampaignJobRepo.createQueryBuilder.mockImplementation(() => ({
+      setLock: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      getOne: jest.fn().mockResolvedValue(null),
+      getRawMany: jest.fn().mockResolvedValue([]),
+    }));
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('getAllCustomers', () => {
@@ -7237,6 +7258,10 @@ describe('AppController', () => {
         });
 
         describe('OA-Scoped Customer Intelligence & GET /api/customers', () => {
+          beforeEach(() => {
+            jest.restoreAllMocks();
+          });
+
           it('P3-10. GET /api/customers without botId parameter returns HTTP 400', async () => {
             const resMock = createMockRes();
             await appController.getAllCustomers(undefined, resMock);
@@ -7380,21 +7405,58 @@ describe('AppController', () => {
           });
         });
 
-        describe('P3-WP002 — Outbound Activity Intelligence Behavioral Proof Tests', () => {
-          it('P3-WP002-01. GET /api/customers correctly derives successfulJobCount and lastSuccessfulSendAt ISO string', async () => {
+        describe('P3-WP002-R1 — Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective Behavioral Proof Tests', () => {
+          // DB-Side Aggregation Tests (R1-01 to R1-10)
+          it('P3-WP002-R1-01. Single DB-side QueryBuilder aggregate query is executed with exact botId filter and groupBy', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([]);
+
+            const qb: any = {
+              select: jest.fn().mockReturnThis(),
+              addSelect: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([]),
+            };
+            const qbSpy = jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
+
+            await appController.getAllCustomers(targetBotId, resMock);
+
+            expect(qbSpy).toHaveBeenCalledWith('job');
+            expect(qb.where).toHaveBeenCalledWith('job.botId = :cleanBotId', { cleanBotId: targetBotId });
+            expect(qb.groupBy).toHaveBeenCalledWith('job.lineUserId');
+            expect(qb.getRawMany).toHaveBeenCalled();
+          });
+
+          it('P3-WP002-R1-02. getRawMany() results are mapped correctly per customer lineUserId', async () => {
             const resMock = createMockRes();
             const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
             mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
             mockCustomerRepo.find.mockResolvedValueOnce([
-              { botId: targetBotId, lineUserId: 'U101', displayName: 'Customer 1', isBlocked: false }
+              { botId: targetBotId, lineUserId: 'U101', displayName: 'Customer 1' }
             ]);
-            const d1 = new Date('2026-09-01T10:00:00Z');
+
             const d2 = new Date('2026-09-05T14:30:00Z');
-            mockCampaignJobRepo.find.mockResolvedValueOnce([
-              { id: 'j1', botId: targetBotId, lineUserId: 'U101', status: 'success', sentAt: d1, createdAt: d1 },
-              { id: 'j2', botId: targetBotId, lineUserId: 'U101', status: 'success', sentAt: d2, createdAt: d2 },
-              { id: 'j3', botId: targetBotId, lineUserId: 'U101', status: 'failed', sentAt: null, createdAt: new Date('2026-09-06T10:00:00Z') }
-            ]);
+            const qb: any = {
+              select: jest.fn().mockReturnThis(),
+              addSelect: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([
+                {
+                  lineUserId: 'U101',
+                  successfulJobCount: '2',
+                  lastSuccessfulSendAt: d2,
+                  failedJobCount: '1',
+                  reconcileRequiredCount: '0',
+                  latestJobStatus: 'failed',
+                  latestJobCreatedAt: '2026-09-06T10:00:00.000Z',
+                }
+              ]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
 
             const result: any = await appController.getAllCustomers(targetBotId, resMock);
             expect(result[0].successfulJobCount).toBe(2);
@@ -7404,209 +7466,150 @@ describe('AppController', () => {
             expect(result[0].latestJobStatus).toBe('failed');
           });
 
-          it('P3-WP002-02. GET /api/customers derives failedJobCount and reconcileRequiredCount accurately', async () => {
+          it('P3-WP002-R1-03. successfulJobCount is parsed safely as integer from DB count output', async () => {
             const resMock = createMockRes();
             const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
             mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
             mockCustomerRepo.find.mockResolvedValueOnce([
-              { botId: targetBotId, lineUserId: 'U102', displayName: 'Customer 2', isBlocked: false }
+              { botId: targetBotId, lineUserId: 'U101', displayName: 'C1' }
             ]);
-            mockCampaignJobRepo.find.mockResolvedValueOnce([
-              { id: 'j1', botId: targetBotId, lineUserId: 'U102', status: 'failed', createdAt: new Date('2026-09-01T10:00:00Z') },
-              { id: 'j2', botId: targetBotId, lineUserId: 'U102', status: 'failed', createdAt: new Date('2026-09-02T10:00:00Z') },
-              { id: 'j3', botId: targetBotId, lineUserId: 'U102', status: 'reconcile_required', createdAt: new Date('2026-09-03T10:00:00Z') }
-            ]);
+            const qb: any = {
+              select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([{ lineUserId: 'U101', successfulJobCount: '5' }]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
 
             const result: any = await appController.getAllCustomers(targetBotId, resMock);
-            expect(result[0].successfulJobCount).toBe(0);
-            expect(result[0].lastSuccessfulSendAt).toBeNull();
-            expect(result[0].failedJobCount).toBe(2);
-            expect(result[0].reconcileRequiredCount).toBe(1);
+            expect(result[0].successfulJobCount).toBe(5);
+          });
+
+          it('P3-WP002-R1-04. lastSuccessfulSendAt formatted as ISO string', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U101', displayName: 'C1' }
+            ]);
+            const iso = '2026-09-02T12:00:00.000Z';
+            const qb: any = {
+              select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([{ lineUserId: 'U101', lastSuccessfulSendAt: new Date(iso) }]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+            expect(result[0].lastSuccessfulSendAt).toBe(iso);
+          });
+
+          it('P3-WP002-R1-05. failedJobCount parsed safely as integer', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U101', displayName: 'C1' }
+            ]);
+            const qb: any = {
+              select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([{ lineUserId: 'U101', failedJobCount: '3' }]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+            expect(result[0].failedJobCount).toBe(3);
+          });
+
+          it('P3-WP002-R1-06. reconcileRequiredCount parsed safely as integer', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U101', displayName: 'C1' }
+            ]);
+            const qb: any = {
+              select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([{ lineUserId: 'U101', reconcileRequiredCount: '2' }]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+            expect(result[0].reconcileRequiredCount).toBe(2);
+          });
+
+          it('P3-WP002-R1-07. latestJobStatus derived from DB aggregate result', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U101', displayName: 'C1' }
+            ]);
+            const qb: any = {
+              select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([{ lineUserId: 'U101', latestJobStatus: 'reconcile_required' }]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
             expect(result[0].latestJobStatus).toBe('reconcile_required');
           });
 
-          it('P3-WP002-03. latestJobStatus and latestJobCreatedAt correctly tie-break by createdAt DESC, id DESC', async () => {
+          it('P3-WP002-R1-08. latestJobCreatedAt formatted as ISO string', async () => {
             const resMock = createMockRes();
             const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
             mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
             mockCustomerRepo.find.mockResolvedValueOnce([
-              { botId: targetBotId, lineUserId: 'U103', displayName: 'Customer 3' }
+              { botId: targetBotId, lineUserId: 'U101', displayName: 'C1' }
             ]);
-            const sameDate = new Date('2026-09-05T12:00:00Z');
-            mockCampaignJobRepo.find.mockResolvedValueOnce([
-              { id: 'job_a', botId: targetBotId, lineUserId: 'U103', status: 'success', createdAt: sameDate },
-              { id: 'job_z', botId: targetBotId, lineUserId: 'U103', status: 'failed', createdAt: sameDate }
-            ]);
+            const iso = '2026-09-03T15:00:00.000Z';
+            const qb: any = {
+              select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([{ lineUserId: 'U101', latestJobCreatedAt: new Date(iso) }]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
 
             const result: any = await appController.getAllCustomers(targetBotId, resMock);
-            expect(result[0].latestJobStatus).toBe('failed');
-            expect(result[0].latestJobCreatedAt).toBe(sameDate.toISOString());
+            expect(result[0].latestJobCreatedAt).toBe(iso);
           });
 
-          it('P3-WP002-04. Jobs belonging to foreign botId or with botId NULL are NOT counted for target botId', async () => {
+          it('P3-WP002-R1-09. Customer without jobs defaults to zero counts and null dates/statuses', async () => {
             const resMock = createMockRes();
             const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
             mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
             mockCustomerRepo.find.mockResolvedValueOnce([
               { botId: targetBotId, lineUserId: 'U104', displayName: 'Customer 4' }
             ]);
-            mockCampaignJobRepo.find.mockResolvedValueOnce([]);
+            const qb: any = {
+              select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
 
             const result: any = await appController.getAllCustomers(targetBotId, resMock);
             expect(result[0].successfulJobCount).toBe(0);
+            expect(result[0].lastSuccessfulSendAt).toBeNull();
             expect(result[0].failedJobCount).toBe(0);
             expect(result[0].reconcileRequiredCount).toBe(0);
+            expect(result[0].latestJobStatus).toBeNull();
+            expect(result[0].latestJobCreatedAt).toBeNull();
           });
 
-          it('P3-WP002-05. Single OA-scoped query is executed on campaignJobRepository with exact botId filter', async () => {
-            const resMock = createMockRes();
-            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
-            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
-            mockCustomerRepo.find.mockResolvedValueOnce([]);
-            const jobFindSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValueOnce([]);
-
-            await appController.getAllCustomers(targetBotId, resMock);
-            expect(jobFindSpy).toHaveBeenCalledWith(
-              expect.objectContaining({
-                where: { botId: targetBotId }
-              })
-            );
-          });
-
-          it('P3-WP002-06. Fail-closed: database query error on campaignJobRepository throws exception', async () => {
+          it('P3-WP002-R1-10. Database query error on createQueryBuilder throws exception fail-closed', async () => {
             const resMock = createMockRes();
             const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
             mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
             mockCustomerRepo.find.mockResolvedValueOnce([
               { botId: targetBotId, lineUserId: 'U105', displayName: 'Customer 5' }
             ]);
-            mockCampaignJobRepo.find.mockRejectedValueOnce(new Error('DB Connection Lost'));
+            const qb: any = {
+              select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockRejectedValue(new Error('DB Connection Lost')),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
 
             await expect(appController.getAllCustomers(targetBotId, resMock)).rejects.toThrow('DB Connection Lost');
           });
 
-          it('P3-WP002-07. DTO output strictly contains 12 fields only and no internal secrets', async () => {
-            const resMock = createMockRes();
-            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
-            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
-            mockCustomerRepo.find.mockResolvedValueOnce([
-              { botId: targetBotId, lineUserId: 'U106', displayName: 'Customer 6', isBlocked: false, blockReason: null, secretField: 'HIDDEN' }
-            ]);
-            mockCampaignJobRepo.find.mockResolvedValueOnce([]);
-
-            const result: any = await appController.getAllCustomers(targetBotId, resMock);
-            expect(Object.keys(result[0])).toEqual([
-              'botId', 'lineUserId', 'displayName', 'cleanedDisplayName',
-              'isBlocked', 'blockReason', 'successfulJobCount', 'lastSuccessfulSendAt',
-              'failedJobCount', 'reconcileRequiredCount', 'latestJobStatus', 'latestJobCreatedAt'
-            ]);
-            expect(result[0].secretField).toBeUndefined();
-          });
-
-          it('P3-WP002-08. Frontend renderTable renders "ยังไม่มี Successful Job" when successfulJobCount === 0', async () => {
-            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
-            setFilteredCustomers([
-              {
-                botId: 'OA1', lineUserId: 'U1001', displayName: 'Somchai', cleanedDisplayName: 'Somchai',
-                isBlocked: false, blockReason: null, successfulJobCount: 0, lastSuccessfulSendAt: null,
-                failedJobCount: 0, reconcileRequiredCount: 0, latestJobStatus: null, latestJobCreatedAt: null
-              }
-            ]);
-
-            vmContext.renderTable();
-
-            const tbody = getElementById('tableBody');
-            const row = tbody.children[0];
-            const activityCell = row.children[5];
-            expect(activityCell.textContent).toContain('ยังไม่มี Successful Job');
-          });
-
-          it('P3-WP002-09. Frontend renderTable renders "มี Successful Job แต่ไม่พบเวลาที่บันทึก" when successfulJobCount > 0 and lastSuccessfulSendAt is null', async () => {
-            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
-            setFilteredCustomers([
-              {
-                botId: 'OA1', lineUserId: 'U1002', displayName: 'Somหญิง', cleanedDisplayName: 'Somหญิง',
-                isBlocked: false, blockReason: null, successfulJobCount: 3, lastSuccessfulSendAt: null,
-                failedJobCount: 0, reconcileRequiredCount: 0, latestJobStatus: 'success', latestJobCreatedAt: '2026-09-01T00:00:00Z'
-              }
-            ]);
-
-            vmContext.renderTable();
-
-            const tbody = getElementById('tableBody');
-            const row = tbody.children[0];
-            const activityCell = row.children[5];
-            expect(activityCell.textContent).toContain('มี Successful Job แต่ไม่พบเวลาที่บันทึก');
-          });
-
-          it('P3-WP002-10. Frontend renderTable renders Failed Jobs title (NOT Failed Sends) when failedJobCount > 0', async () => {
-            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
-            setFilteredCustomers([
-              {
-                botId: 'OA1', lineUserId: 'U1003', displayName: 'Mana', cleanedDisplayName: 'Mana',
-                isBlocked: false, blockReason: null, successfulJobCount: 0, lastSuccessfulSendAt: null,
-                failedJobCount: 2, reconcileRequiredCount: 0, latestJobStatus: 'failed', latestJobCreatedAt: '2026-09-02T00:00:00Z'
-              }
-            ]);
-
-            vmContext.renderTable();
-
-            const tbody = getElementById('tableBody');
-            const row = tbody.children[0];
-            const activityCell = row.children[5];
-            expect(activityCell.textContent).toContain('Failed Jobs: 2');
-            expect(activityCell.textContent).not.toContain('Failed Sends');
-          });
-
-          it('P3-WP002-11. Activity filter "never_success" matches customers with successfulJobCount === 0', async () => {
-            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
-            setAllCustomers([
-              { lineUserId: 'U1', successfulJobCount: 0 },
-              { lineUserId: 'U2', successfulJobCount: 1, lastSuccessfulSendAt: new Date().toISOString() }
-            ]);
-
-            const select = getElementById('activityFilterSelect');
-            select.value = 'never_success';
-            vmContext.handleFilters();
-
-            const tbody = getElementById('tableBody');
-            expect(tbody.children.length).toBe(1);
-            expect(tbody.children[0].children[4].textContent).toBe('U1');
-          });
-
-          it('P3-WP002-12. Activity filter "has_failed" matches customers with failedJobCount > 0', async () => {
-            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
-            setAllCustomers([
-              { lineUserId: 'U1', failedJobCount: 0 },
-              { lineUserId: 'U2', failedJobCount: 3 }
-            ]);
-
-            const select = getElementById('activityFilterSelect');
-            select.value = 'has_failed';
-            vmContext.handleFilters();
-
-            const tbody = getElementById('tableBody');
-            expect(tbody.children.length).toBe(1);
-            expect(tbody.children[0].children[4].textContent).toBe('U2');
-          });
-
-          it('P3-WP002-13. Activity filter "reconcile_required" matches customers with reconcileRequiredCount > 0', async () => {
-            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
-            setAllCustomers([
-              { lineUserId: 'U1', reconcileRequiredCount: 0 },
-              { lineUserId: 'U2', reconcileRequiredCount: 1 }
-            ]);
-
-            const select = getElementById('activityFilterSelect');
-            select.value = 'reconcile_required';
-            vmContext.handleFilters();
-
-            const tbody = getElementById('tableBody');
-            expect(tbody.children.length).toBe(1);
-            expect(tbody.children[0].children[4].textContent).toBe('U2');
-          });
-
-          it('P3-WP002-14. Activity filter "success_7d" matches customers sent within 7 days', async () => {
+          // Time-Window Truth Tests (R1-11 to R1-20)
+          it('P3-WP002-R1-11. Activity filter "success_7d" matches customers sent within 7 days', async () => {
             const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
             const now = Date.now();
             const threeDaysAgo = new Date(now - 3 * 24 * 3600 * 1000).toISOString();
@@ -7626,7 +7629,61 @@ describe('AppController', () => {
             expect(tbody.children[0].children[4].textContent).toBe('U1');
           });
 
-          it('P3-WP002-15. Activity filter "success_30d" matches customers sent within 30 days', async () => {
+          it('P3-WP002-R1-12. Activity filter "success_7d" strictly rejects future timestamps (sendTime > now)', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const now = Date.now();
+            const futureTime = new Date(now + 10000).toISOString();
+
+            setAllCustomers([
+              { lineUserId: 'U_FUTURE', successfulJobCount: 1, lastSuccessfulSendAt: futureTime }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'success_7d';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          it('P3-WP002-R1-13. Activity filter "success_7d" includes exact lower boundary (sendTime === now - 7d)', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const now = Date.now();
+            const exact7dBoundary = new Date(now - 7 * 24 * 3600 * 1000).toISOString();
+
+            setAllCustomers([
+              { lineUserId: 'U_EXACT_7D', successfulJobCount: 1, lastSuccessfulSendAt: exact7dBoundary }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'success_7d';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U_EXACT_7D');
+          });
+
+          it('P3-WP002-R1-14. Activity filter "success_7d" rejects sendTime older than 7 days', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const now = Date.now();
+            const past7d = new Date(now - (7 * 24 * 3600 * 1000 + 1000)).toISOString();
+
+            setAllCustomers([
+              { lineUserId: 'U_OLD', successfulJobCount: 1, lastSuccessfulSendAt: past7d }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'success_7d';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          it('P3-WP002-R1-15. Activity filter "success_30d" matches customers sent within 30 days', async () => {
             const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
             const now = Date.now();
             const twentyDaysAgo = new Date(now - 20 * 24 * 3600 * 1000).toISOString();
@@ -7646,7 +7703,408 @@ describe('AppController', () => {
             expect(tbody.children[0].children[4].textContent).toBe('U1');
           });
 
-          it('P3-WP002-16. Stale OA response discard: loadInitialData discards response if active OA changed in-flight', async () => {
+          it('P3-WP002-R1-16. Activity filter "success_30d" strictly rejects future timestamps (sendTime > now)', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const now = Date.now();
+            const futureTime = new Date(now + 60000).toISOString();
+
+            setAllCustomers([
+              { lineUserId: 'U_FUTURE_30D', successfulJobCount: 1, lastSuccessfulSendAt: futureTime }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'success_30d';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          it('P3-WP002-R1-17. Activity filter "success_30d" includes exact lower boundary (sendTime === now - 30d)', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const now = Date.now();
+            const exact30dBoundary = new Date(now - 30 * 24 * 3600 * 1000).toISOString();
+
+            setAllCustomers([
+              { lineUserId: 'U_EXACT_30D', successfulJobCount: 1, lastSuccessfulSendAt: exact30dBoundary }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'success_30d';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U_EXACT_30D');
+          });
+
+          it('P3-WP002-R1-18. Activity filter "success_30d" rejects sendTime older than 30 days', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const now = Date.now();
+            const past30d = new Date(now - (30 * 24 * 3600 * 1000 + 1000)).toISOString();
+
+            setAllCustomers([
+              { lineUserId: 'U_TOO_OLD_30D', successfulJobCount: 1, lastSuccessfulSendAt: past30d }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'success_30d';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          it('P3-WP002-R1-19. Activity filter "success_7d" and "success_30d" reject invalid date strings (NaN)', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U_INVALID_DATE', successfulJobCount: 1, lastSuccessfulSendAt: 'INVALID_DATE_STRING' }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'success_7d';
+            vmContext.handleFilters();
+
+            let tbody = getElementById('tableBody');
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+
+            select.value = 'success_30d';
+            vmContext.handleFilters();
+            tbody = getElementById('tableBody');
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          it('P3-WP002-R1-20. Activity filter "success_7d" and "success_30d" require successfulJobCount > 0', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const recentDate = new Date().toISOString();
+
+            setAllCustomers([
+              { lineUserId: 'U_ZERO_SUCC', successfulJobCount: 0, lastSuccessfulSendAt: recentDate }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'success_7d';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          // NEVER_SUCCESS & Filter Mechanics Tests (R1-21 to R1-30)
+          it('P3-WP002-R1-21. Activity filter "never_success" matches customers with successfulJobCount === 0', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U1', successfulJobCount: 0 },
+              { lineUserId: 'U2', successfulJobCount: 1, lastSuccessfulSendAt: new Date().toISOString() }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'never_success';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U1');
+          });
+
+          it('P3-WP002-R1-22. Activity filter "never_success" matches customer with 0 successful jobs even if failed jobs exist', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U_FAILED_ONLY', successfulJobCount: 0, failedJobCount: 3, reconcileRequiredCount: 1 }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'never_success';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U_FAILED_ONLY');
+          });
+
+          it('P3-WP002-R1-23. Activity filter "never_success" DOES NOT match customer with successfulJobCount > 0 even if lastSuccessfulSendAt is null', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U_SUCC_NO_DATE', successfulJobCount: 2, lastSuccessfulSendAt: null }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'never_success';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          it('P3-WP002-R1-24. Activity filter "has_failed" matches customers with failedJobCount > 0', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U1', failedJobCount: 0 },
+              { lineUserId: 'U2', failedJobCount: 3 }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'has_failed';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U2');
+          });
+
+          it('P3-WP002-R1-25. Activity filter "has_failed" rejects customers with failedJobCount === 0', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U_NO_FAIL', failedJobCount: 0 }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'has_failed';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          it('P3-WP002-R1-26. Activity filter "reconcile_required" matches customers with reconcileRequiredCount > 0', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U1', reconcileRequiredCount: 0 },
+              { lineUserId: 'U2', reconcileRequiredCount: 1 }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'reconcile_required';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U2');
+          });
+
+          it('P3-WP002-R1-27. Activity filter "reconcile_required" rejects customers with reconcileRequiredCount === 0', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U_NO_REC', reconcileRequiredCount: 0 }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'reconcile_required';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          it('P3-WP002-R1-28. Activity filter "all" returns all customers regardless of activity', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U1', successfulJobCount: 0 },
+              { lineUserId: 'U2', successfulJobCount: 5 }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'all';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(2);
+          });
+
+          it('P3-WP002-R1-29. Keyword search filter combines with activity filter', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U1', displayName: 'Somchai', cleanedDisplayName: 'Somchai', successfulJobCount: 0 },
+              { lineUserId: 'U2', displayName: 'Somsak', cleanedDisplayName: 'Somsak', successfulJobCount: 0 },
+              { lineUserId: 'U3', displayName: 'Mana', cleanedDisplayName: 'Mana', successfulJobCount: 0 }
+            ]);
+
+            const actSelect = getElementById('activityFilterSelect');
+            actSelect.value = 'never_success';
+            const searchInput = getElementById('searchInput');
+            searchInput.value = 'Somchai';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U1');
+          });
+
+          it('P3-WP002-R1-30. Status filter (active/blocked) combines with activity filter', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U1', isBlocked: false, failedJobCount: 2 },
+              { lineUserId: 'U2', isBlocked: true, failedJobCount: 2 }
+            ]);
+
+            const actSelect = getElementById('activityFilterSelect');
+            actSelect.value = 'has_failed';
+            const statusSelect = getElementById('statusFilterSelect');
+            statusSelect.value = 'active';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U1');
+          });
+
+          // UI, DOM Safety & Edge Cases (R1-31 to R1-39)
+          it('P3-WP002-R1-31. Frontend renderTable renders "ยังไม่มี Successful Job" when successfulJobCount === 0', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1001', displayName: 'Somchai', cleanedDisplayName: 'Somchai',
+                isBlocked: false, blockReason: null, successfulJobCount: 0, lastSuccessfulSendAt: null,
+                failedJobCount: 0, reconcileRequiredCount: 0, latestJobStatus: null, latestJobCreatedAt: null
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+            expect(activityCell.textContent).toContain('ยังไม่มี Successful Job');
+          });
+
+          it('P3-WP002-R1-32. Frontend renderTable renders "มี Successful Job แต่ไม่พบเวลาที่บันทึก" when successfulJobCount > 0 and lastSuccessfulSendAt is null', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1002', displayName: 'Somหญิง', cleanedDisplayName: 'Somหญิง',
+                isBlocked: false, blockReason: null, successfulJobCount: 3, lastSuccessfulSendAt: null,
+                failedJobCount: 0, reconcileRequiredCount: 0, latestJobStatus: 'success', latestJobCreatedAt: '2026-09-01T00:00:00Z'
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+            expect(activityCell.textContent).toContain('มี Successful Job แต่ไม่พบเวลาที่บันทึก');
+          });
+
+          it('P3-WP002-R1-33. Frontend renderTable renders successful send count and Thai formatted date when lastSuccessfulSendAt is valid', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            const d = new Date('2026-09-01T10:00:00Z');
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1002', displayName: 'Mana', cleanedDisplayName: 'Mana',
+                isBlocked: false, blockReason: null, successfulJobCount: 4, lastSuccessfulSendAt: d.toISOString(),
+                failedJobCount: 0, reconcileRequiredCount: 0, latestJobStatus: 'success', latestJobCreatedAt: d.toISOString()
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+            expect(activityCell.textContent).toContain('ส่งสำเร็จ 4 ครั้ง');
+          });
+
+          it('P3-WP002-R1-34. Frontend renderTable renders Failed Jobs title (NOT Failed Sends) when failedJobCount > 0', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1003', displayName: 'Mana', cleanedDisplayName: 'Mana',
+                isBlocked: false, blockReason: null, successfulJobCount: 0, lastSuccessfulSendAt: null,
+                failedJobCount: 2, reconcileRequiredCount: 0, latestJobStatus: 'failed', latestJobCreatedAt: '2026-09-02T00:00:00Z'
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+            expect(activityCell.textContent).toContain('Failed Jobs: 2');
+            expect(activityCell.textContent).not.toContain('Failed Sends');
+          });
+
+          it('P3-WP002-R1-35. Frontend renderTable renders "Reconcile Required: N" when reconcileRequiredCount > 0', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1004', displayName: 'Piti', cleanedDisplayName: 'Piti',
+                isBlocked: false, blockReason: null, successfulJobCount: 1, lastSuccessfulSendAt: '2026-09-01T00:00:00Z',
+                failedJobCount: 0, reconcileRequiredCount: 3, latestJobStatus: 'reconcile_required', latestJobCreatedAt: '2026-09-02T00:00:00Z'
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+            expect(activityCell.textContent).toContain('Reconcile Required: 3');
+          });
+
+          it('P3-WP002-R1-36. Frontend renderTable renders "Latest: status" when latestJobStatus is present', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1005', displayName: 'Chujai', cleanedDisplayName: 'Chujai',
+                isBlocked: false, blockReason: null, successfulJobCount: 0, lastSuccessfulSendAt: null,
+                failedJobCount: 1, reconcileRequiredCount: 0, latestJobStatus: 'failed', latestJobCreatedAt: '2026-09-02T00:00:00Z'
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+            expect(activityCell.textContent).toContain('Latest: failed');
+          });
+
+          it('P3-WP002-R1-37. Frontend renderTable constructs compact activity cell using safe DOM nodes without innerHTML injection', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1006', displayName: 'SafeDOM', cleanedDisplayName: 'SafeDOM',
+                isBlocked: false, blockReason: null, successfulJobCount: 1, lastSuccessfulSendAt: '2026-09-01T00:00:00Z',
+                failedJobCount: 1, reconcileRequiredCount: 1, latestJobStatus: 'failed', latestJobCreatedAt: '2026-09-02T00:00:00Z'
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+            expect(activityCell.children.length).toBe(1); // container div
+            const container = activityCell.children[0];
+            expect(container.children.length).toBe(2); // mainLine & subLine
+            expect(container.innerHTML).not.toContain('<script');
+          });
+
+          it('P3-WP002-R1-38. Customer DTO output strictly contains 12 fields only and no internal secrets', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U106', displayName: 'Customer 6', isBlocked: false, blockReason: null, secretField: 'HIDDEN' }
+            ]);
+            const qb: any = {
+              select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+            expect(Object.keys(result[0])).toEqual([
+              'botId', 'lineUserId', 'displayName', 'cleanedDisplayName',
+              'isBlocked', 'blockReason', 'successfulJobCount', 'lastSuccessfulSendAt',
+              'failedJobCount', 'reconcileRequiredCount', 'latestJobStatus', 'latestJobCreatedAt'
+            ]);
+            expect(result[0].secretField).toBeUndefined();
+          });
+
+          it('P3-WP002-R1-39. Stale OA response discard: loadInitialData discards response if active OA changed in-flight', async () => {
             const { vmContext, fetchMock, getElementById, setCurrentActiveBotId } = createFrontendVmContext({ initialActiveBotId: 'OA-INITIAL' });
 
             fetchMock.mockImplementation((url: string) => {
