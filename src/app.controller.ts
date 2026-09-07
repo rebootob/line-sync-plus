@@ -185,7 +185,7 @@ export class AppController {
     return { success: true, activeBotId: requestedBotId };
   }
 
-  // 1. ดึงรายชื่อลูกค้าตาม botId ที่ระบุเท่านั้น (P3-WP001 OA Scoped Intelligence)
+  // 1. ดึงรายชื่อลูกค้าตาม botId ที่ระบุเท่านั้น (P3-WP001 OA Scoped Intelligence + P3-WP002 Outbound Activity Intelligence)
   @Get('customers')
   async getAllCustomers(
     @Query('botId') botId: string | undefined,
@@ -212,14 +212,74 @@ export class AppController {
       order: { createdAt: 'DESC' },
     });
 
-    return customers.map(cust => ({
-      botId: cust.botId,
-      lineUserId: cust.lineUserId,
-      displayName: cust.displayName,
-      cleanedDisplayName: normalizeDisplayName(cust.displayName),
-      isBlocked: cust.isBlocked || false,
-      blockReason: cust.blockReason || null,
-    }));
+    // P3-WP002: Single OA-scoped CampaignJob query
+    const jobs = await this.campaignJobRepository.find({
+      where: { botId: cleanBotId },
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
+
+    jobs.sort((a, b) => {
+      const timeA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
+      const timeB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+      return (b.id || '').localeCompare(a.id || '');
+    });
+
+    const jobsByLineUserId = new Map<string, CampaignJob[]>();
+    for (const job of jobs) {
+      if (!job.lineUserId) continue;
+      let userJobs = jobsByLineUserId.get(job.lineUserId);
+      if (!userJobs) {
+        userJobs = [];
+        jobsByLineUserId.set(job.lineUserId, userJobs);
+      }
+      userJobs.push(job);
+    }
+
+    return customers.map(cust => {
+      const userJobs = jobsByLineUserId.get(cust.lineUserId) || [];
+      const latestJob = userJobs.length > 0 ? userJobs[0] : null;
+
+      const successfulJobs = userJobs.filter(j => j.status === 'success');
+      const successfulJobCount = successfulJobs.length;
+
+      let lastSuccessfulSendAt: string | null = null;
+      for (const sj of successfulJobs) {
+        if (sj.sentAt) {
+          const sentTime = sj.sentAt instanceof Date ? sj.sentAt.getTime() : new Date(sj.sentAt).getTime();
+          if (!isNaN(sentTime)) {
+            const isoStr = sj.sentAt instanceof Date ? sj.sentAt.toISOString() : new Date(sj.sentAt).toISOString();
+            if (!lastSuccessfulSendAt || sentTime > new Date(lastSuccessfulSendAt).getTime()) {
+              lastSuccessfulSendAt = isoStr;
+            }
+          }
+        }
+      }
+
+      const failedJobCount = userJobs.filter(j => j.status === 'failed').length;
+      const reconcileRequiredCount = userJobs.filter(j => j.status === 'reconcile_required').length;
+      const latestJobStatus = latestJob ? latestJob.status : null;
+      const latestJobCreatedAt = latestJob && latestJob.createdAt
+        ? (latestJob.createdAt instanceof Date ? latestJob.createdAt.toISOString() : new Date(latestJob.createdAt).toISOString())
+        : null;
+
+      return {
+        botId: cust.botId,
+        lineUserId: cust.lineUserId,
+        displayName: cust.displayName,
+        cleanedDisplayName: normalizeDisplayName(cust.displayName),
+        isBlocked: cust.isBlocked || false,
+        blockReason: cust.blockReason || null,
+        successfulJobCount,
+        lastSuccessfulSendAt,
+        failedJobCount,
+        reconcileRequiredCount,
+        latestJobStatus,
+        latestJobCreatedAt,
+      };
+    });
   }
 
   // SYNC-WP001 — LINE OA Customer Directory Sync to DB

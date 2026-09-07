@@ -164,6 +164,12 @@ describe('AppController', () => {
           cleanedDisplayName: 'Somchai',
           isBlocked: false,
           blockReason: null,
+          successfulJobCount: 0,
+          lastSuccessfulSendAt: null,
+          failedJobCount: 0,
+          reconcileRequiredCount: 0,
+          latestJobStatus: null,
+          latestJobCreatedAt: null,
         },
       ]);
     });
@@ -6694,6 +6700,9 @@ describe('AppController', () => {
             setFilteredCustomers: (val: any[]) => {
               vmModule.runInContext(`filteredCustomers = ${JSON.stringify(val)}`, vmContext);
             },
+            setAllCustomers: (val: any[]) => {
+              vmModule.runInContext(`allCustomers = ${JSON.stringify(val)}`, vmContext);
+            },
             setCurrentGroups: (val: any[]) => {
               vmModule.runInContext(`currentGroups = ${JSON.stringify(val)}`, vmContext);
             },
@@ -7266,6 +7275,12 @@ describe('AppController', () => {
               cleanedDisplayName: 'Somchai',
               isBlocked: false,
               blockReason: null,
+              successfulJobCount: 0,
+              lastSuccessfulSendAt: null,
+              failedJobCount: 0,
+              reconcileRequiredCount: 0,
+              latestJobStatus: null,
+              latestJobCreatedAt: null,
             });
           });
 
@@ -7339,7 +7354,11 @@ describe('AppController', () => {
             const result: any = await appController.getAllCustomers('U09d6b978fcbfb5275e533ca9b788eb22', resMock);
             expect(result[0].secretKey).toBeUndefined();
             expect(result[0].internalNotes).toBeUndefined();
-            expect(Object.keys(result[0])).toEqual(['botId', 'lineUserId', 'displayName', 'cleanedDisplayName', 'isBlocked', 'blockReason']);
+            expect(Object.keys(result[0])).toEqual([
+              'botId', 'lineUserId', 'displayName', 'cleanedDisplayName',
+              'isBlocked', 'blockReason', 'successfulJobCount', 'lastSuccessfulSendAt',
+              'failedJobCount', 'reconcileRequiredCount', 'latestJobStatus', 'latestJobCreatedAt'
+            ]);
           });
 
           it('P3-15. GET /api/customers when OA runtime query returns null fails closed with 409', async () => {
@@ -7361,6 +7380,295 @@ describe('AppController', () => {
           });
         });
 
+        describe('P3-WP002 — Outbound Activity Intelligence Behavioral Proof Tests', () => {
+          it('P3-WP002-01. GET /api/customers correctly derives successfulJobCount and lastSuccessfulSendAt ISO string', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U101', displayName: 'Customer 1', isBlocked: false }
+            ]);
+            const d1 = new Date('2026-09-01T10:00:00Z');
+            const d2 = new Date('2026-09-05T14:30:00Z');
+            mockCampaignJobRepo.find.mockResolvedValueOnce([
+              { id: 'j1', botId: targetBotId, lineUserId: 'U101', status: 'success', sentAt: d1, createdAt: d1 },
+              { id: 'j2', botId: targetBotId, lineUserId: 'U101', status: 'success', sentAt: d2, createdAt: d2 },
+              { id: 'j3', botId: targetBotId, lineUserId: 'U101', status: 'failed', sentAt: null, createdAt: new Date('2026-09-06T10:00:00Z') }
+            ]);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+            expect(result[0].successfulJobCount).toBe(2);
+            expect(result[0].lastSuccessfulSendAt).toBe(d2.toISOString());
+            expect(result[0].failedJobCount).toBe(1);
+            expect(result[0].reconcileRequiredCount).toBe(0);
+            expect(result[0].latestJobStatus).toBe('failed');
+          });
+
+          it('P3-WP002-02. GET /api/customers derives failedJobCount and reconcileRequiredCount accurately', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U102', displayName: 'Customer 2', isBlocked: false }
+            ]);
+            mockCampaignJobRepo.find.mockResolvedValueOnce([
+              { id: 'j1', botId: targetBotId, lineUserId: 'U102', status: 'failed', createdAt: new Date('2026-09-01T10:00:00Z') },
+              { id: 'j2', botId: targetBotId, lineUserId: 'U102', status: 'failed', createdAt: new Date('2026-09-02T10:00:00Z') },
+              { id: 'j3', botId: targetBotId, lineUserId: 'U102', status: 'reconcile_required', createdAt: new Date('2026-09-03T10:00:00Z') }
+            ]);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+            expect(result[0].successfulJobCount).toBe(0);
+            expect(result[0].lastSuccessfulSendAt).toBeNull();
+            expect(result[0].failedJobCount).toBe(2);
+            expect(result[0].reconcileRequiredCount).toBe(1);
+            expect(result[0].latestJobStatus).toBe('reconcile_required');
+          });
+
+          it('P3-WP002-03. latestJobStatus and latestJobCreatedAt correctly tie-break by createdAt DESC, id DESC', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U103', displayName: 'Customer 3' }
+            ]);
+            const sameDate = new Date('2026-09-05T12:00:00Z');
+            mockCampaignJobRepo.find.mockResolvedValueOnce([
+              { id: 'job_a', botId: targetBotId, lineUserId: 'U103', status: 'success', createdAt: sameDate },
+              { id: 'job_z', botId: targetBotId, lineUserId: 'U103', status: 'failed', createdAt: sameDate }
+            ]);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+            expect(result[0].latestJobStatus).toBe('failed');
+            expect(result[0].latestJobCreatedAt).toBe(sameDate.toISOString());
+          });
+
+          it('P3-WP002-04. Jobs belonging to foreign botId or with botId NULL are NOT counted for target botId', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U104', displayName: 'Customer 4' }
+            ]);
+            mockCampaignJobRepo.find.mockResolvedValueOnce([]);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+            expect(result[0].successfulJobCount).toBe(0);
+            expect(result[0].failedJobCount).toBe(0);
+            expect(result[0].reconcileRequiredCount).toBe(0);
+          });
+
+          it('P3-WP002-05. Single OA-scoped query is executed on campaignJobRepository with exact botId filter', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([]);
+            const jobFindSpy = jest.spyOn(mockCampaignJobRepo, 'find').mockResolvedValueOnce([]);
+
+            await appController.getAllCustomers(targetBotId, resMock);
+            expect(jobFindSpy).toHaveBeenCalledWith(
+              expect.objectContaining({
+                where: { botId: targetBotId }
+              })
+            );
+          });
+
+          it('P3-WP002-06. Fail-closed: database query error on campaignJobRepository throws exception', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U105', displayName: 'Customer 5' }
+            ]);
+            mockCampaignJobRepo.find.mockRejectedValueOnce(new Error('DB Connection Lost'));
+
+            await expect(appController.getAllCustomers(targetBotId, resMock)).rejects.toThrow('DB Connection Lost');
+          });
+
+          it('P3-WP002-07. DTO output strictly contains 12 fields only and no internal secrets', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U106', displayName: 'Customer 6', isBlocked: false, blockReason: null, secretField: 'HIDDEN' }
+            ]);
+            mockCampaignJobRepo.find.mockResolvedValueOnce([]);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+            expect(Object.keys(result[0])).toEqual([
+              'botId', 'lineUserId', 'displayName', 'cleanedDisplayName',
+              'isBlocked', 'blockReason', 'successfulJobCount', 'lastSuccessfulSendAt',
+              'failedJobCount', 'reconcileRequiredCount', 'latestJobStatus', 'latestJobCreatedAt'
+            ]);
+            expect(result[0].secretField).toBeUndefined();
+          });
+
+          it('P3-WP002-08. Frontend renderTable renders "ยังไม่มี Successful Job" when successfulJobCount === 0', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1001', displayName: 'Somchai', cleanedDisplayName: 'Somchai',
+                isBlocked: false, blockReason: null, successfulJobCount: 0, lastSuccessfulSendAt: null,
+                failedJobCount: 0, reconcileRequiredCount: 0, latestJobStatus: null, latestJobCreatedAt: null
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+            expect(activityCell.textContent).toContain('ยังไม่มี Successful Job');
+          });
+
+          it('P3-WP002-09. Frontend renderTable renders "มี Successful Job แต่ไม่พบเวลาที่บันทึก" when successfulJobCount > 0 and lastSuccessfulSendAt is null', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1002', displayName: 'Somหญิง', cleanedDisplayName: 'Somหญิง',
+                isBlocked: false, blockReason: null, successfulJobCount: 3, lastSuccessfulSendAt: null,
+                failedJobCount: 0, reconcileRequiredCount: 0, latestJobStatus: 'success', latestJobCreatedAt: '2026-09-01T00:00:00Z'
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+            expect(activityCell.textContent).toContain('มี Successful Job แต่ไม่พบเวลาที่บันทึก');
+          });
+
+          it('P3-WP002-10. Frontend renderTable renders Failed Jobs title (NOT Failed Sends) when failedJobCount > 0', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1003', displayName: 'Mana', cleanedDisplayName: 'Mana',
+                isBlocked: false, blockReason: null, successfulJobCount: 0, lastSuccessfulSendAt: null,
+                failedJobCount: 2, reconcileRequiredCount: 0, latestJobStatus: 'failed', latestJobCreatedAt: '2026-09-02T00:00:00Z'
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+            expect(activityCell.textContent).toContain('Failed Jobs: 2');
+            expect(activityCell.textContent).not.toContain('Failed Sends');
+          });
+
+          it('P3-WP002-11. Activity filter "never_success" matches customers with successfulJobCount === 0', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U1', successfulJobCount: 0 },
+              { lineUserId: 'U2', successfulJobCount: 1, lastSuccessfulSendAt: new Date().toISOString() }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'never_success';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U1');
+          });
+
+          it('P3-WP002-12. Activity filter "has_failed" matches customers with failedJobCount > 0', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U1', failedJobCount: 0 },
+              { lineUserId: 'U2', failedJobCount: 3 }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'has_failed';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U2');
+          });
+
+          it('P3-WP002-13. Activity filter "reconcile_required" matches customers with reconcileRequiredCount > 0', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            setAllCustomers([
+              { lineUserId: 'U1', reconcileRequiredCount: 0 },
+              { lineUserId: 'U2', reconcileRequiredCount: 1 }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'reconcile_required';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U2');
+          });
+
+          it('P3-WP002-14. Activity filter "success_7d" matches customers sent within 7 days', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const now = Date.now();
+            const threeDaysAgo = new Date(now - 3 * 24 * 3600 * 1000).toISOString();
+            const tenDaysAgo = new Date(now - 10 * 24 * 3600 * 1000).toISOString();
+
+            setAllCustomers([
+              { lineUserId: 'U1', successfulJobCount: 1, lastSuccessfulSendAt: threeDaysAgo },
+              { lineUserId: 'U2', successfulJobCount: 1, lastSuccessfulSendAt: tenDaysAgo }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'success_7d';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U1');
+          });
+
+          it('P3-WP002-15. Activity filter "success_30d" matches customers sent within 30 days', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const now = Date.now();
+            const twentyDaysAgo = new Date(now - 20 * 24 * 3600 * 1000).toISOString();
+            const fortyDaysAgo = new Date(now - 40 * 24 * 3600 * 1000).toISOString();
+
+            setAllCustomers([
+              { lineUserId: 'U1', successfulJobCount: 1, lastSuccessfulSendAt: twentyDaysAgo },
+              { lineUserId: 'U2', successfulJobCount: 1, lastSuccessfulSendAt: fortyDaysAgo }
+            ]);
+
+            const select = getElementById('activityFilterSelect');
+            select.value = 'success_30d';
+            vmContext.handleFilters();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[4].textContent).toBe('U1');
+          });
+
+          it('P3-WP002-16. Stale OA response discard: loadInitialData discards response if active OA changed in-flight', async () => {
+            const { vmContext, fetchMock, getElementById, setCurrentActiveBotId } = createFrontendVmContext({ initialActiveBotId: 'OA-INITIAL' });
+
+            fetchMock.mockImplementation((url: string) => {
+              if (url.includes('/customers')) {
+                setCurrentActiveBotId('OA-CHANGED');
+                return Promise.resolve({
+                  json: () => Promise.resolve([
+                    { botId: 'OA-INITIAL', lineUserId: 'U100', displayName: 'Stale' }
+                  ])
+                });
+              }
+              return Promise.resolve({ json: () => Promise.resolve([]) });
+            });
+
+            await vmContext.loadData();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+        });
+
         describe('Safe Customer & Group DOM Rendering Behavioral Proof', () => {
           it('P3-17. renderTable() populates customer rows using textContent and safe DOM nodes', async () => {
             const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
@@ -7372,13 +7680,9 @@ describe('AppController', () => {
 
             const tbody = getElementById('tableBody');
             expect(tbody.children.length).toBe(1);
-            const row = tbody.children[0];
-            const cleanedNameCell = row.children[2];
-            expect(cleanedNameCell.textContent).toBe('Somchai');
-            const rawNameCell = row.children[3];
-            expect(rawNameCell.textContent).toBe('101 Somchai');
-            const lineIdCell = row.children[4];
-            expect(lineIdCell.textContent).toBe('U1001');
+            expect(tbody.children[0].children[2].textContent).toBe('Somchai');
+            expect(tbody.children[0].children[3].textContent).toBe('101 Somchai');
+            expect(tbody.children[0].children[4].textContent).toBe('U1001');
           });
 
           it('P3-18. renderTable() prevents XSS execution when customer displayName contains HTML/script payloads', async () => {
@@ -7392,9 +7696,8 @@ describe('AppController', () => {
 
             const tbody = getElementById('tableBody');
             const row = tbody.children[0];
-            const cleanedNameCell = row.children[2];
-            expect(cleanedNameCell.textContent).toBe(xssPayload);
-            expect(cleanedNameCell.innerHTML).toBe('');
+            expect(row.children[2].textContent).toBe(xssPayload);
+            expect(row.children[2].innerHTML).toBe('');
           });
 
           it('P3-A5. Malicious customer text node creation proof: payload is literal textContent and creates zero malicious DOM elements', async () => {
@@ -7408,8 +7711,7 @@ describe('AppController', () => {
 
             const tbody = getElementById('tableBody');
             const row = tbody.children[0];
-            const cleanedNameCell = row.children[2];
-            expect(cleanedNameCell.textContent).toBe(xssPayload);
+            expect(row.children[2].textContent).toBe(xssPayload);
 
             const createdTags = getCreatedElements();
             expect(createdTags).not.toContain('IMG');
@@ -7427,7 +7729,7 @@ describe('AppController', () => {
 
             const tbody = getElementById('tableBody');
             const row = tbody.children[0];
-            const statusCell = row.children[5];
+            const statusCell = row.children[6];
             expect(statusCell.textContent).toContain('🚫 บล็อก/ส่งไม่ได้');
             expect(statusCell.innerHTML).not.toContain('<b style');
           });
@@ -7443,7 +7745,7 @@ describe('AppController', () => {
 
             const tbody = getElementById('tableBody');
             const row = tbody.children[0];
-            const statusCell = row.children[5];
+            const statusCell = row.children[6];
             const badgeSpan = statusCell.children[0];
             expect(badgeSpan.title).toBe(maliciousReason);
             expect(badgeSpan.textContent).toBe('🚫 บล็อก/ส่งไม่ได้');

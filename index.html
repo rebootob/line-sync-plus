@@ -271,6 +271,15 @@
                     <option value="unnamed">❓ ไม่ระบุชื่อ</option>
                 </select>
 
+                <select id="activityFilterSelect" class="select-box" onchange="handleFilters()" title="กรองตามกิจกรรมส่งออก (Outbound Activity)">
+                    <option value="all">📊 กิจกรรมส่งออกทั้งหมด</option>
+                    <option value="never_success">⚪ ยังไม่มี Successful Job</option>
+                    <option value="success_7d">🟢 ส่งสำเร็จภายใน 7 วัน</option>
+                    <option value="success_30d">🟢 ส่งสำเร็จภายใน 30 วัน</option>
+                    <option value="has_failed">🔴 มี Failed Jobs</option>
+                    <option value="reconcile_required">⚠️ ต้องกระทบยอด (Reconcile Required)</option>
+                </select>
+
                 <select id="groupSelect" class="select-box" onchange="handleGroupSelect()" title="เลือกกลุ่มลูกค้า">
                     <option value="">📁 เลือกกลุ่มลูกค้า...</option>
                 </select>
@@ -329,14 +338,15 @@
                     <tr>
                         <th class="checkbox-cell"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()"></th>
                         <th width="5%">ลำดับ</th>
-                        <th width="25%">ชื่อที่จัดรูปแบบแล้ว</th>
-                        <th width="20%">ชื่อดั้งเดิมบน LINE</th>
-                        <th width="32%">รหัส Line ID</th>
-                        <th width="15%">สถานะแชท</th>
+                        <th width="20%">ชื่อที่จัดรูปแบบแล้ว</th>
+                        <th width="15%">ชื่อดั้งเดิมบน LINE</th>
+                        <th width="23%">รหัส Line ID</th>
+                        <th width="24%">กิจกรรมส่งออก</th>
+                        <th width="13%">สถานะแชท</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
-                    <tr><td colspan="5" style="text-align: center; padding: 30px;">⏳ กำลังดึงข้อมูลจากระบบ...</td></tr>
+                    <tr><td colspan="7" style="text-align: center; padding: 30px;">⏳ กำลังดึงข้อมูลจากระบบ...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -1564,15 +1574,25 @@
                     return;
                 }
 
+                const requestBotId = currentActiveBotId;
                 const [resCust, resGroups, resCampaigns] = await Promise.all([
                     fetch(`${API_BASE}/customers?botId=${encodeURIComponent(currentActiveBotId)}`),
                     fetch(`${API_BASE}/groups?botId=${encodeURIComponent(currentActiveBotId)}`),
                     fetch(`${API_BASE}/campaigns?botId=${encodeURIComponent(currentActiveBotId)}`)
                 ]);
 
-                allCustomers = await resCust.json();
-                currentGroups = await resGroups.json();
-                const campaigns = await resCampaigns.json();
+                const fetchedCustomers = await resCust.json();
+                const fetchedGroups = await resGroups.json();
+                const fetchedCampaigns = await resCampaigns.json();
+
+                if (requestBotId !== currentActiveBotId) {
+                    console.warn(`[LineSync] Discarding stale response for botId: ${requestBotId} (active: ${currentActiveBotId})`);
+                    return;
+                }
+
+                allCustomers = fetchedCustomers;
+                currentGroups = fetchedGroups;
+                const campaigns = fetchedCampaigns;
 
                 filteredCustomers = [...allCustomers]; 
                 
@@ -1583,7 +1603,7 @@
                 renderActiveCampaignBanner(campaigns);
             } catch (error) {
                 console.error(error);
-                document.getElementById('tableBody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">❌ ไม่สามารถเชื่อมต่อฐานข้อมูลได้</td></tr>`;
+                document.getElementById('tableBody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:red;">❌ ไม่สามารถเชื่อมต่อฐานข้อมูลได้</td></tr>`;
             }
         }
 
@@ -1605,7 +1625,7 @@
             if (paginatedData.length === 0) {
                 const tr = document.createElement('tr');
                 const td = document.createElement('td');
-                td.colSpan = 6;
+                td.colSpan = 7;
                 td.style.textAlign = 'center';
                 td.style.padding = '20px';
                 td.textContent = 'ไม่พบข้อมูลที่ค้นหา';
@@ -1661,6 +1681,76 @@
                     tdLineId.textContent = cust.lineUserId || '';
                     tr.appendChild(tdLineId);
 
+                    // Outbound Activity cell (P3-WP002 Compact Presentation via Safe DOM)
+                    const tdActivity = document.createElement('td');
+                    tdActivity.className = 'activity-cell';
+
+                    const succCount = typeof cust.successfulJobCount === 'number' ? cust.successfulJobCount : 0;
+                    const failCount = typeof cust.failedJobCount === 'number' ? cust.failedJobCount : 0;
+                    const recCount = typeof cust.reconcileRequiredCount === 'number' ? cust.reconcileRequiredCount : 0;
+                    const lastStatus = cust.latestJobStatus || null;
+                    const lastSendAt = cust.lastSuccessfulSendAt || null;
+
+                    if (succCount === 0 && failCount === 0 && recCount === 0 && !lastStatus) {
+                        const span = document.createElement('span');
+                        span.style.color = '#6b7280';
+                        span.style.fontSize = '12px';
+                        span.textContent = 'ยังไม่มี Successful Job';
+                        tdActivity.appendChild(span);
+                    } else {
+                        const container = document.createElement('div');
+                        container.style.fontSize = '12px';
+                        container.style.lineHeight = '1.35';
+
+                        const mainLine = document.createElement('div');
+                        if (succCount > 0) {
+                            if (lastSendAt) {
+                                const d = new Date(lastSendAt);
+                                const dateStr = !isNaN(d.getTime()) ? d.toLocaleString('th-TH') : lastSendAt;
+                                mainLine.textContent = `🟢 ส่งสำเร็จ ${succCount} ครั้ง (${dateStr})`;
+                                mainLine.style.color = '#15803d';
+                                mainLine.style.fontWeight = '500';
+                            } else {
+                                mainLine.textContent = `🟢 ส่งสำเร็จ ${succCount} ครั้ง (มี Successful Job แต่ไม่พบเวลาที่บันทึก)`;
+                                mainLine.style.color = '#15803d';
+                                mainLine.style.fontWeight = '500';
+                            }
+                        } else {
+                            mainLine.textContent = 'ยังไม่มี Successful Job';
+                            mainLine.style.color = '#6b7280';
+                        }
+                        container.appendChild(mainLine);
+
+                        if (failCount > 0 || recCount > 0 || lastStatus) {
+                            const subLine = document.createElement('div');
+                            subLine.style.fontSize = '11px';
+                            subLine.style.marginTop = '2px';
+
+                            const parts = [];
+                            if (failCount > 0) {
+                                parts.push(`Failed Jobs: ${failCount}`);
+                            }
+                            if (recCount > 0) {
+                                parts.push(`Reconcile Required: ${recCount}`);
+                            }
+                            if (lastStatus) {
+                                parts.push(`Latest: ${lastStatus}`);
+                            }
+                            subLine.textContent = parts.join(' | ');
+
+                            if (failCount > 0 || recCount > 0) {
+                                subLine.style.color = '#dc2626';
+                                subLine.style.fontWeight = '500';
+                            } else {
+                                subLine.style.color = '#4b5563';
+                            }
+                            container.appendChild(subLine);
+                        }
+
+                        tdActivity.appendChild(container);
+                    }
+                    tr.appendChild(tdActivity);
+
                     // Status Badge cell
                     const tdStatus = document.createElement('td');
                     const badgeSpan = document.createElement('span');
@@ -1695,6 +1785,11 @@
             const keyword = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
             const statusFilter = document.getElementById('statusFilterSelect')?.value || 'all';
             const nameFilter = document.getElementById('nameFilterSelect')?.value || 'all';
+            const actFilter = document.getElementById('activityFilterSelect')?.value || 'all';
+
+            const now = Date.now();
+            const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+            const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
             
             filteredCustomers = allCustomers.filter(cust => {
                 // 1. Text Search Filter
@@ -1714,7 +1809,35 @@
                 if (nameFilter === 'named') matchName = !isUnnamed;
                 else if (nameFilter === 'unnamed') matchName = isUnnamed;
 
-                return matchKeyword && matchStatus && matchName;
+                // 4. Outbound Activity Filter (P3-WP002)
+                let matchActivity = true;
+                const succCount = typeof cust.successfulJobCount === 'number' ? cust.successfulJobCount : 0;
+                const failCount = typeof cust.failedJobCount === 'number' ? cust.failedJobCount : 0;
+                const recCount = typeof cust.reconcileRequiredCount === 'number' ? cust.reconcileRequiredCount : 0;
+
+                if (actFilter === 'never_success') {
+                    matchActivity = (succCount === 0);
+                } else if (actFilter === 'success_7d') {
+                    if (succCount > 0 && cust.lastSuccessfulSendAt) {
+                        const sendTime = new Date(cust.lastSuccessfulSendAt).getTime();
+                        matchActivity = !isNaN(sendTime) && (now - sendTime) <= SEVEN_DAYS_MS;
+                    } else {
+                        matchActivity = false;
+                    }
+                } else if (actFilter === 'success_30d') {
+                    if (succCount > 0 && cust.lastSuccessfulSendAt) {
+                        const sendTime = new Date(cust.lastSuccessfulSendAt).getTime();
+                        matchActivity = !isNaN(sendTime) && (now - sendTime) <= THIRTY_DAYS_MS;
+                    } else {
+                        matchActivity = false;
+                    }
+                } else if (actFilter === 'has_failed') {
+                    matchActivity = (failCount > 0);
+                } else if (actFilter === 'reconcile_required') {
+                    matchActivity = (recCount > 0);
+                }
+
+                return matchKeyword && matchStatus && matchName && matchActivity;
             });
             
             currentPage = 1; 
