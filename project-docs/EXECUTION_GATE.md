@@ -1,18 +1,18 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 20
+CONTROL_VERSION: 21
 
 TASK_ID:
-P2-WP003-CLOSE
+PHASE-2-CLOSE
 
 PARENT_TASK:
-P2-WP003
+PHASE-2
 
 AUTHORIZATION_REVISION:
-P2-WP003-CLOSE
+PHASE-2-CLOSE
 
 TITLE:
-P2-WP003 Final Parent Closure & Control Sync
+Phase 2 — Campaign Builder v2 Final Closure
 
 STATUS:
 CLOSED_PASS
@@ -27,7 +27,7 @@ ACCEPTED_IMPLEMENTATION_HEAD:
 23f98b0e7c3fd232d63bc94533da6eae262b32fc
 
 AUTHORIZATION_REF:
-P2-WP003 final closure/control-document sync
+Phase 2 final closure/control-document sync
 
 AUTHORIZE_EXECUTION:
 FALSE
@@ -47,8 +47,9 @@ main
 PROJECT_STATE:
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
-PHASE_2: IN PROGRESS
+PHASE_2: CLOSED / PASS
 PHASE_2_TITLE: Campaign Builder v2
+PHASE-2-CLOSE: CLOSED_PASS
 P2-WP001: CLOSED / PASS
 P2-WP001-R1: CLOSED / PASS
 P2-WP002: CLOSED / PASS
@@ -65,33 +66,32 @@ NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: AWAITING_OWNER_AUTHORIZATION
 
 --------------------------------------------------
-OBJECTIVE — P2-WP003 FINAL PARENT CLOSURE
+OBJECTIVE — PHASE 2 FINAL CLOSURE
 --------------------------------------------------
 
-Perform final repository control closure for parent work package P2-WP003 following Project Owner authorization, ChatGPT independent review acceptance of P2-WP003-R2, Owner-validated SAFE Preview-only UAT, and accepted documentation consistency correctives.
+Perform final repository control closure for Phase 2 — Campaign Builder v2 following explicit Project Owner authorization, ChatGPT independent evidence-only closure readiness review (READY_TO_CLOSE_PHASE_2), and complete acceptance of all Phase 2 work packages (P2-WP001, P2-WP002, P2-WP003).
 
 --------------------------------------------------
 CLOSURE BASIS & REVIEW TRUTH
 --------------------------------------------------
 
 Closure Basis:
-- P2-WP003 implementation completed.
-- P2-WP003-R1 superseded by R2.
-- P2-WP003-R2 independently reviewed and accepted by ChatGPT.
-- SAFE Preview-only UAT PASS (Owner-validated).
-- Documentation consistency corrective (P2-WP003-R2-CLOSE-R1) accepted.
+1. P2-WP001 closed/pass: Authoritative Campaign Authoring Contract & OA Isolation.
+2. P2-WP002 closed/pass: Authoritative Campaign Preview & Safe Template Reuse V2.
+3. P2-WP003 closed/pass: Scheduled Queue Controls V2.
+4. All required corrective work accepted or superseded correctly.
+5. SAFE Preview-only UAT for final P2-WP003 acceptance: PASS.
+6. ChatGPT independently performed final Phase 2 EVIDENCE-ONLY closure readiness review and concluded: READY_TO_CLOSE_PHASE_2.
+7. No material Phase 2 gap identified requiring P2-WP004.
 
-ChatGPT Independent Review Result:
-P2-WP003-R2: PASS / ACCEPTED
+ChatGPT Independent Readiness Review:
+PHASE 2 CLOSURE: READY_TO_CLOSE_PHASE_2
 
-Accepted Implementation HEAD:
-23f98b0e7c3fd232d63bc94533da6eae262b32fc
-
-Commit:
-fix: restore active OA loader and scheduled behavioral tests
-
-Historical Pre-R2 Code Baseline HEAD:
-06020bf0adbb072ef067e143f2924e154fc6609c
+Accepted Review HEADs:
+- P2-WP001 Accepted Final HEAD: 37b078de425e2fd3267652e142d76959f408c701
+- P2-WP002 Accepted Final Code HEAD: b6103e9c322ff257dcfda475217186e740e4893a
+- P2-WP003-R2 Accepted Implementation HEAD: 23f98b0e7c3fd232d63bc94533da6eae262b32fc
+- P2-WP003 Historical Pre-R2 Baseline HEAD: 06020bf0adbb072ef067e143f2924e154fc6609c
 
 --------------------------------------------------
 ACCEPTED AUTOMATED TEST EVIDENCE
@@ -130,7 +130,7 @@ Preview Boundary & Safety Invariants:
 - NO Live LINE send was part of this UAT (0 physical LINE sends).
 - Master Bot remains PAUSED.
 - Invariant preserved: Never automatically resend an ambiguous physical send.
-- Do NOT claim true exactly-once physical LINE delivery.
+- Do NOT claim true exactly-once physical LINE delivery across LINE Web UI boundary.
 
 --------------------------------------------------
 VERSION & CONTRACT INVARIANTS
