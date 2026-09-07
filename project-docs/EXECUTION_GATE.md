@@ -1,21 +1,21 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 25
+CONTROL_VERSION: 26
 
 TASK_ID:
-P3-WP001-R1-C1
+P3-WP001-CLOSE
 
 PARENT_TASK:
-P3-WP001-R1
+P3-WP001
 
 AUTHORIZATION_REVISION:
-P3-WP001-R1-C1-CONTROL-TRUTH
+P3-WP001-CLOSE
 
 TITLE:
-P3-WP001-R1-C1 — Final Control-Document Truth Corrective
+P3-WP001 — Customer Intelligence Foundation Final Closure
 
 STATUS:
-READY_FOR_CHATGPT_REVIEW
+CLOSED_PASS
 
 CODE_BASELINE_HEAD:
 c58d7e41c340590e5db9171305dbd8d9b16a4c2c
@@ -27,16 +27,16 @@ REVIEWED_IMPLEMENTATION_HEAD:
 f9a097a7579c1a357506816656b10c01f68be6ac
 
 ACCEPTED_IMPLEMENTATION_HEAD:
-NONE
+f9a097a7579c1a357506816656b10c01f68be6ac
 
 AUTHORIZATION_REF:
-Owner authorized P3-WP001-R1-C1 final control-document truth corrective
+P3-WP001 final closure authorized by Project Owner following ChatGPT review acceptance
 
 AUTHORIZE_EXECUTION:
 FALSE
 
 AUTHORIZED_BY:
-Project Owner (P3-WP001-R1-C1 final control-document truth corrective)
+Project Owner (P3-WP001 final closure)
 
 CONTROL_PLANE:
 ChatGPT
@@ -54,22 +54,23 @@ PHASE_2: CLOSED / PASS
 PHASE-2-CLOSE: CLOSED_PASS
 PHASE_3: IN PROGRESS
 PHASE_3_TITLE: Audience & Customer Intelligence
-ACTIVE_WORK_PACKAGE: P3-WP001-R1-C1
-P3-WP001: CORRECTIVE REQUIRED / AWAITING_C1_REVIEW
-P3-WP001-R1: CORRECTIVE REQUIRED / SUPERSEDED_BY_C1
-P3-WP001-R1-C1: READY_FOR_CHATGPT_REVIEW
+ACTIVE_WORK_PACKAGE: P3-WP001-CLOSE
+P3-WP001: CLOSED / PASS
+P3-WP001-R1: SUPERSEDED_BY_R1_C1
+P3-WP001-R1-C1: CLOSED_PASS
+P3-WP001-CLOSE: CLOSED_PASS
 P3-WP002: FUTURE / NOT AUTHORIZED
 P3-WP003: FUTURE / NOT AUTHORIZED
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_CHATGPT_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_OWNER_AUTHORIZATION
 
 --------------------------------------------------
-OBJECTIVE — P3-WP001-R1-C1 FINAL CONTROL-DOCUMENT TRUTH CORRECTIVE
+OBJECTIVE — P3-WP001 FINAL CONTROL CLOSURE
 --------------------------------------------------
 
-Perform final control-document truth synchronization for P3-WP001 following successful ChatGPT independent review of source implementation (HEAD f9a097a7579c1a357506816656b10c01f68be6ac) and behavioral test evidence (HEAD ced2292d8e6c7f5f569b96e8e84af0c587fd80df).
+Final control-document closure of P3-WP001 (Customer Intelligence Foundation) after independent review acceptance by ChatGPT of source implementation (HEAD f9a097a7579c1a357506816656b10c01f68be6ac), behavioral test evidence (HEAD ced2292d8e6c7f5f569b96e8e84af0c587fd80df), and control-document truth corrective C1 (HEAD 4f7503e48fbadcd7e6346d77d7ed9086f1401086).
 
-IMPORTANT: This gate is NON-EXECUTABLE (AUTHORIZE_EXECUTION: FALSE). Project Owner has authorized control-document truth corrective ONLY in this run. Implementation of P3-WP001 was previously authorized and completed at commit f9a097a7579c1a357506816656b10c01f68be6ac, with R1 test corrective completed at commit ced2292d8e6c7f5f569b96e8e84af0c587fd80df.
+IMPORTANT: This gate is NON-EXECUTABLE (AUTHORIZE_EXECUTION: FALSE). P3-WP001 is CLOSED / PASS.
 
 --------------------------------------------------
 PHASE 3 OBJECTIVE & WORK PACKAGE SCOPE
@@ -79,7 +80,7 @@ Objective:
 Improve audience understanding and selection using only authoritative OA-scoped customer and existing outbound campaign data, while preserving privacy and all accepted delivery-safety invariants.
 
 Work Packages:
-- P3-WP001 — Customer Intelligence Foundation (IMPLEMENTED at f9a097a7579c1a357506816656b10c01f68be6ac / AWAITING_C1_REVIEW)
+- P3-WP001 — Customer Intelligence Foundation (CLOSED / PASS, Accepted Implementation HEAD: f9a097a7579c1a357506816656b10c01f68be6ac)
 - P3-WP002 — Outbound Activity Intelligence (FUTURE / NOT AUTHORIZED)
 - P3-WP003 — Persistent Tags & Advanced Segmentation (FUTURE / NOT AUTHORIZED)
 
@@ -122,10 +123,10 @@ ACCEPTED AUTOMATED TEST EVIDENCE & INVARIANTS
 - Failures: 0
 - Evidence Classification: LOCAL REPORTED
 - GitHub CI / Status Workflow Evidence: NONE
-- Historical Implementation Build Evidence: PASS at P3-WP001 implementation run (no build rerun for R1/C1)
+- Historical Implementation Build Evidence: PASS at P3-WP001 implementation run
 - Worker Version: 28.16
 - Required Worker Version: 28.16
 - Runtime Contract Version: 2
-- Scope & Invariant Boundaries: Worker script, DB/schema, runtime-version contract and Telegram integration remained untouched by P3-WP001 implementation and correctives. P3-WP001 implementation changed app.controller.ts, app.controller.spec.ts and index.html within authorized scope. R1 changed tests/control docs only. C1 is documentation-only.
+- Scope & Invariant Boundaries: Worker script, DB/schema, runtime-version contract and Telegram integration remained untouched by P3-WP001 implementation and correctives. P3-WP001 implementation changed app.controller.ts, app.controller.spec.ts and index.html within authorized scope. R1 changed tests/control docs only. C1 changed control docs only. P3-WP001-CLOSE is documentation-only final closure.
 - Privacy & Safety Boundary: Customer intelligence uses existing directory metadata and campaign execution metadata only. No LINE chat content or private message semantics collected or inferred.
 - Safety Policy: Never automatically resend an ambiguous physical send. True exactly-once physical LINE delivery across LINE Web UI boundary is NOT guaranteed.
