@@ -22,7 +22,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 ## Work Package Status
 
 * **ACTIVE_WORK_PACKAGE**: `P3-WP002`
-* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `CLOSED / PASS`
@@ -36,7 +36,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P3-WP001-CLOSE**: `CLOSED_PASS`
 * **P3-WP001-CLOSE-C1**: `CLOSED_PASS`
 * **P3-WP002-PRE1**: `COMPLETE / DEFINITION READY`
-* **P3-WP002**: `AUTHORIZED_FOR_EXECUTION`
+* **P3-WP002**: `READY_FOR_CHATGPT_REVIEW`
 * **P3-WP003**: `FUTURE / NOT AUTHORIZED`
 * **P2-WP001**: `CLOSED / PASS`
 * **P2-WP001-R1**: `CLOSED / PASS`
@@ -50,11 +50,11 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP003-R2-CLOSE**: `CLOSED_PASS`
 * **P2-WP003-CLOSE**: `CLOSED_PASS`
 * **CODE_BASELINE_HEAD**: `7ca0a0dcde5896f18a8254f4a94a74a776d7a36e`
-* **IMPLEMENTATION_CANDIDATE_HEAD**: `NONE / PENDING_EXECUTION`
+* **IMPLEMENTATION_CANDIDATE_HEAD**: `956e576ffee2f194ce6e617531a58f336de2b280`
 * **REVIEWED_IMPLEMENTATION_HEAD**: `NONE`
 * **ACCEPTED_IMPLEMENTATION_HEAD**: `NONE`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_EXECUTION`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_REVIEW`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
@@ -147,7 +147,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 ## Exact Recommended Next Step
 
 * **ACTIVE_WORK_PACKAGE**: `P3-WP002`
-* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
+* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `CLOSED / PASS`
@@ -155,10 +155,11 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **PHASE_3**: `IN PROGRESS` (`Audience & Customer Intelligence`)
 * **P3-WP001**: `CLOSED / PASS`
 * **P3-WP002-PRE1**: `COMPLETE / DEFINITION READY`
-* **P3-WP002**: `AUTHORIZED_FOR_EXECUTION`
+* **P3-WP002**: `READY_FOR_CHATGPT_REVIEW`
 * **P3-WP003**: `FUTURE / NOT AUTHORIZED`
+* **IMPLEMENTATION_CANDIDATE_HEAD**: `956e576ffee2f194ce6e617531a58f336de2b280`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_EXECUTION`
-* **AUTHORIZE_EXECUTION**: `TRUE`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_REVIEW`
+* **AUTHORIZE_EXECUTION**: `FALSE`
 
-Phase 3 — Audience & Customer Intelligence is IN PROGRESS. Work package P3-WP002 (Outbound Activity Intelligence) is AUTHORIZED_FOR_EXECUTION according to accepted PRE1 definition. P3-WP003 remains FUTURE / NOT AUTHORIZED. Implementation is in progress.
+Phase 3 — Audience & Customer Intelligence is IN PROGRESS. Work package P3-WP002 (Outbound Activity Intelligence) implementation is COMPLETE at candidate HEAD `956e576ffee2f194ce6e617531a58f336de2b280` and READY_FOR_CHATGPT_REVIEW. P3-WP003 remains FUTURE / NOT AUTHORIZED. Full automated unit tests: 549/549 PASS.
