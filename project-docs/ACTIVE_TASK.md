@@ -1,8 +1,8 @@
 # ACTIVE TASK
 
 ```yaml
-ACTIVE_WORK_PACKAGE: P3-WP001-CLOSE
-AUTHORIZATION_REVISION: P3-WP001-CLOSE
+ACTIVE_WORK_PACKAGE: NONE
+AUTHORIZATION_REVISION: P3-WP001-CLOSE-C1
 STATUS: CLOSED_PASS
 AUTHORIZED_BY: Project Owner
 NEXT_CANDIDATE: NONE
@@ -15,9 +15,10 @@ PHASE-2-CLOSE: CLOSED_PASS
 PHASE_3: IN PROGRESS
 PHASE_3_TITLE: Audience & Customer Intelligence
 P3-WP001: CLOSED / PASS
-P3-WP001-R1: SUPERSEDED_BY_R1_C1
+P3-WP001-R1: CORRECTED / SUPERSEDED_BY_C1
 P3-WP001-R1-C1: CLOSED_PASS
 P3-WP001-CLOSE: CLOSED_PASS
+P3-WP001-CLOSE-C1: CLOSED_PASS
 P3-WP002: FUTURE / NOT AUTHORIZED
 P3-WP003: FUTURE / NOT AUTHORIZED
 P2-WP001: CLOSED / PASS
@@ -41,9 +42,10 @@ ACCEPTED_IMPLEMENTATION_HEAD: f9a097a7579c1a357506816656b10c01f68be6ac
 
 ## 📋 Work Package Status Summary
 
+- **P3-WP001-CLOSE-C1 — Final Idle-State Control Sync**: `CLOSED_PASS`
 - **P3-WP001-CLOSE — P3-WP001 Final Control Closure**: `CLOSED_PASS`
 - **P3-WP001-R1-C1 — Final Control-Document Truth Corrective**: `CLOSED_PASS`
-- **P3-WP001-R1 — Test Evidence & Control Truth Corrective**: `SUPERSEDED_BY_R1_C1`
+- **P3-WP001-R1 — Test Evidence & Control Truth Corrective**: `CORRECTED / SUPERSEDED_BY_C1`
 - **P3-WP001 — Customer Intelligence Foundation**: `CLOSED / PASS`
 - **P3-WP002 — Outbound Activity Intelligence**: `FUTURE / NOT AUTHORIZED`
 - **P3-WP003 — Persistent Tags & Advanced Segmentation**: `FUTURE / NOT AUTHORIZED`
@@ -498,7 +500,7 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 
 ## 🚀 Work Package Execution Status
 
-- **Active Work Package**: `P3-WP001-CLOSE`
+- **Active Work Package**: `NONE`
 - **Status**: `CLOSED_PASS`
 - **Phase 0 Status**: `CLOSED / PASS`
 - **Phase 1 Status**: `CLOSED / PASS`
@@ -506,9 +508,10 @@ Current Worker v28.16 preserves the accepted SAFE-WP001 protection contract.
 - **PHASE-2-CLOSE Status**: `CLOSED_PASS`
 - **Phase 3 Status**: `IN PROGRESS` (`Audience & Customer Intelligence`)
 - **P3-WP001 Status**: `CLOSED / PASS`
-- **P3-WP001-R1 Status**: `SUPERSEDED_BY_R1_C1`
+- **P3-WP001-R1 Status**: `CORRECTED / SUPERSEDED_BY_C1`
 - **P3-WP001-R1-C1 Status**: `CLOSED_PASS`
 - **P3-WP001-CLOSE Status**: `CLOSED_PASS`
+- **P3-WP001-CLOSE-C1 Status**: `CLOSED_PASS`
 - **P3-WP002 Status**: `FUTURE / NOT AUTHORIZED`
 - **P3-WP003 Status**: `FUTURE / NOT AUTHORIZED`
 - **P2-WP001 Status**: `CLOSED / PASS`

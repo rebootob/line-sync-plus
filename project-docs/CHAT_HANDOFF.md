@@ -21,7 +21,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `P3-WP001-CLOSE`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
 * **STATUS**: `CLOSED_PASS`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
@@ -31,9 +31,10 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **PHASE_3**: `IN PROGRESS`
 * **PHASE_3_TITLE**: `Audience & Customer Intelligence`
 * **P3-WP001**: `CLOSED / PASS`
-* **P3-WP001-R1**: `SUPERSEDED_BY_R1_C1`
+* **P3-WP001-R1**: `CORRECTED / SUPERSEDED_BY_C1`
 * **P3-WP001-R1-C1**: `CLOSED_PASS`
 * **P3-WP001-CLOSE**: `CLOSED_PASS`
+* **P3-WP001-CLOSE-C1**: `CLOSED_PASS`
 * **P3-WP002**: `FUTURE / NOT AUTHORIZED`
 * **P3-WP003**: `FUTURE / NOT AUTHORIZED`
 * **P2-WP001**: `CLOSED / PASS`
@@ -144,7 +145,7 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `P3-WP001-CLOSE`
+* **ACTIVE_WORK_PACKAGE**: `NONE`
 * **STATUS**: `CLOSED_PASS`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
@@ -152,9 +153,10 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **PHASE-2-CLOSE**: `CLOSED_PASS`
 * **PHASE_3**: `IN PROGRESS` (`Audience & Customer Intelligence`)
 * **P3-WP001**: `CLOSED / PASS`
-* **P3-WP001-R1**: `SUPERSEDED_BY_R1_C1`
+* **P3-WP001-R1**: `CORRECTED / SUPERSEDED_BY_C1`
 * **P3-WP001-R1-C1**: `CLOSED_PASS`
 * **P3-WP001-CLOSE**: `CLOSED_PASS`
+* **P3-WP001-CLOSE-C1**: `CLOSED_PASS`
 * **P3-WP002**: `FUTURE / NOT AUTHORIZED`
 * **P3-WP003**: `FUTURE / NOT AUTHORIZED`
 * **NEXT_CANDIDATE**: `NONE`

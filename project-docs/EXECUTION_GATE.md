@@ -1,18 +1,18 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 26
+CONTROL_VERSION: 27
 
 TASK_ID:
-P3-WP001-CLOSE
+P3-WP001-CLOSE-C1
 
 PARENT_TASK:
-P3-WP001
-
-AUTHORIZATION_REVISION:
 P3-WP001-CLOSE
 
+AUTHORIZATION_REVISION:
+P3-WP001-CLOSE-C1
+
 TITLE:
-P3-WP001 — Customer Intelligence Foundation Final Closure
+P3-WP001-CLOSE-C1 — Final Idle-State Control Sync
 
 STATUS:
 CLOSED_PASS
@@ -30,13 +30,13 @@ ACCEPTED_IMPLEMENTATION_HEAD:
 f9a097a7579c1a357506816656b10c01f68be6ac
 
 AUTHORIZATION_REF:
-P3-WP001 final closure authorized by Project Owner following ChatGPT review acceptance
+P3-WP001-CLOSE-C1 final idle-state control sync authorized by Project Owner
 
 AUTHORIZE_EXECUTION:
 FALSE
 
 AUTHORIZED_BY:
-Project Owner (P3-WP001 final closure)
+Project Owner (P3-WP001-CLOSE-C1 final idle-state control sync)
 
 CONTROL_PLANE:
 ChatGPT
@@ -54,23 +54,24 @@ PHASE_2: CLOSED / PASS
 PHASE-2-CLOSE: CLOSED_PASS
 PHASE_3: IN PROGRESS
 PHASE_3_TITLE: Audience & Customer Intelligence
-ACTIVE_WORK_PACKAGE: P3-WP001-CLOSE
+ACTIVE_WORK_PACKAGE: NONE
 P3-WP001: CLOSED / PASS
-P3-WP001-R1: SUPERSEDED_BY_R1_C1
+P3-WP001-R1: CORRECTED / SUPERSEDED_BY_C1
 P3-WP001-R1-C1: CLOSED_PASS
 P3-WP001-CLOSE: CLOSED_PASS
+P3-WP001-CLOSE-C1: CLOSED_PASS
 P3-WP002: FUTURE / NOT AUTHORIZED
 P3-WP003: FUTURE / NOT AUTHORIZED
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: AWAITING_OWNER_AUTHORIZATION
 
 --------------------------------------------------
-OBJECTIVE — P3-WP001 FINAL CONTROL CLOSURE
+OBJECTIVE — P3-WP001-CLOSE-C1 FINAL IDLE-STATE CONTROL SYNC
 --------------------------------------------------
 
-Final control-document closure of P3-WP001 (Customer Intelligence Foundation) after independent review acceptance by ChatGPT of source implementation (HEAD f9a097a7579c1a357506816656b10c01f68be6ac), behavioral test evidence (HEAD ced2292d8e6c7f5f569b96e8e84af0c587fd80df), and control-document truth corrective C1 (HEAD 4f7503e48fbadcd7e6346d77d7ed9086f1401086).
+Final idle-state control-document synchronization for P3-WP001 following accepted implementation (HEAD f9a097a7579c1a357506816656b10c01f68be6ac), behavioral test evidence (HEAD ced2292d8e6c7f5f569b96e8e84af0c587fd80df), control truth C1 (HEAD 4f7503e48fbadcd7e6346d77d7ed9086f1401086), and closure (HEAD d9cf8a6f6480311cc1d0a044902309434b6b1ebf).
 
-IMPORTANT: This gate is NON-EXECUTABLE (AUTHORIZE_EXECUTION: FALSE). P3-WP001 is CLOSED / PASS.
+IMPORTANT: This gate is NON-EXECUTABLE (AUTHORIZE_EXECUTION: FALSE). ACTIVE_WORK_PACKAGE is NONE.
 
 --------------------------------------------------
 PHASE 3 OBJECTIVE & WORK PACKAGE SCOPE
@@ -127,6 +128,6 @@ ACCEPTED AUTOMATED TEST EVIDENCE & INVARIANTS
 - Worker Version: 28.16
 - Required Worker Version: 28.16
 - Runtime Contract Version: 2
-- Scope & Invariant Boundaries: Worker script, DB/schema, runtime-version contract and Telegram integration remained untouched by P3-WP001 implementation and correctives. P3-WP001 implementation changed app.controller.ts, app.controller.spec.ts and index.html within authorized scope. R1 changed tests/control docs only. C1 changed control docs only. P3-WP001-CLOSE is documentation-only final closure.
+- Scope & Invariant Boundaries: Worker script, DB/schema, runtime-version contract and Telegram integration remained untouched by P3-WP001 implementation and correctives. P3-WP001 implementation changed app.controller.ts, app.controller.spec.ts and index.html within authorized scope. R1 changed tests/control docs only. C1 changed control docs only. P3-WP001-CLOSE and C1 are documentation-only control syncs.
 - Privacy & Safety Boundary: Customer intelligence uses existing directory metadata and campaign execution metadata only. No LINE chat content or private message semantics collected or inferred.
 - Safety Policy: Never automatically resend an ambiguous physical send. True exactly-once physical LINE delivery across LINE Web UI boundary is NOT guaranteed.
