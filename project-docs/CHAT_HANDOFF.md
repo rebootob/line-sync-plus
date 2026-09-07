@@ -21,8 +21,8 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Work Package Status
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **STATUS**: `CLOSED_PASS`
+* **ACTIVE_WORK_PACKAGE**: `P3-WP002`
+* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `CLOSED / PASS`
@@ -35,7 +35,8 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P3-WP001-R1-C1**: `CLOSED_PASS`
 * **P3-WP001-CLOSE**: `CLOSED_PASS`
 * **P3-WP001-CLOSE-C1**: `CLOSED_PASS`
-* **P3-WP002**: `FUTURE / NOT AUTHORIZED`
+* **P3-WP002-PRE1**: `COMPLETE / DEFINITION READY`
+* **P3-WP002**: `AUTHORIZED_FOR_EXECUTION`
 * **P3-WP003**: `FUTURE / NOT AUTHORIZED`
 * **P2-WP001**: `CLOSED / PASS`
 * **P2-WP001-R1**: `CLOSED / PASS`
@@ -48,12 +49,12 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 * **P2-WP003-R2**: `CLOSED / PASS`
 * **P2-WP003-R2-CLOSE**: `CLOSED_PASS`
 * **P2-WP003-CLOSE**: `CLOSED_PASS`
-* **CODE_BASELINE_HEAD**: `c58d7e41c340590e5db9171305dbd8d9b16a4c2c`
-* **IMPLEMENTATION_CANDIDATE_HEAD**: `f9a097a7579c1a357506816656b10c01f68be6ac`
-* **REVIEWED_IMPLEMENTATION_HEAD**: `f9a097a7579c1a357506816656b10c01f68be6ac`
-* **ACCEPTED_IMPLEMENTATION_HEAD**: `f9a097a7579c1a357506816656b10c01f68be6ac`
+* **CODE_BASELINE_HEAD**: `7ca0a0dcde5896f18a8254f4a94a74a776d7a36e`
+* **IMPLEMENTATION_CANDIDATE_HEAD**: `NONE / PENDING_EXECUTION`
+* **REVIEWED_IMPLEMENTATION_HEAD**: `NONE`
+* **ACCEPTED_IMPLEMENTATION_HEAD**: `NONE`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_AUTHORIZATION`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_EXECUTION`
 * **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
 * **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
 * **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
@@ -145,22 +146,19 @@ LineSync Plus is an automated LINE Official Account (LINE OA) customer contact s
 
 ## Exact Recommended Next Step
 
-* **ACTIVE_WORK_PACKAGE**: `NONE`
-* **STATUS**: `CLOSED_PASS`
+* **ACTIVE_WORK_PACKAGE**: `P3-WP002`
+* **STATUS**: `AUTHORIZED_FOR_EXECUTION`
 * **PHASE_0**: `CLOSED / PASS`
 * **PHASE_1**: `CLOSED / PASS`
 * **PHASE_2**: `CLOSED / PASS`
 * **PHASE-2-CLOSE**: `CLOSED_PASS`
 * **PHASE_3**: `IN PROGRESS` (`Audience & Customer Intelligence`)
 * **P3-WP001**: `CLOSED / PASS`
-* **P3-WP001-R1**: `CORRECTED / SUPERSEDED_BY_C1`
-* **P3-WP001-R1-C1**: `CLOSED_PASS`
-* **P3-WP001-CLOSE**: `CLOSED_PASS`
-* **P3-WP001-CLOSE-C1**: `CLOSED_PASS`
-* **P3-WP002**: `FUTURE / NOT AUTHORIZED`
+* **P3-WP002-PRE1**: `COMPLETE / DEFINITION READY`
+* **P3-WP002**: `AUTHORIZED_FOR_EXECUTION`
 * **P3-WP003**: `FUTURE / NOT AUTHORIZED`
 * **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_OWNER_AUTHORIZATION`
-* **AUTHORIZE_EXECUTION**: `FALSE`
+* **NEXT_CANDIDATE_STATUS**: `AWAITING_EXECUTION`
+* **AUTHORIZE_EXECUTION**: `TRUE`
 
-Phase 3 — Audience & Customer Intelligence is IN PROGRESS. P3-WP001 (Customer Intelligence Foundation) is CLOSED / PASS with Accepted Implementation HEAD `f9a097a7579c1a357506816656b10c01f68be6ac`. P3-WP002 and P3-WP003 are FUTURE / NOT AUTHORIZED. Worker script, DB/schema, runtime-version contract and Telegram integration remained untouched by P3-WP001 implementation and correctives. Master Bot remains PAUSED. Awaiting Project Owner authorization for future work packages.
+Phase 3 — Audience & Customer Intelligence is IN PROGRESS. Work package P3-WP002 (Outbound Activity Intelligence) is AUTHORIZED_FOR_EXECUTION according to accepted PRE1 definition. P3-WP003 remains FUTURE / NOT AUTHORIZED. Implementation is in progress.

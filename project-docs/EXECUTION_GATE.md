@@ -1,42 +1,42 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 27
+CONTROL_VERSION: 28
 
 TASK_ID:
-P3-WP001-CLOSE-C1
+P3-WP002
 
 PARENT_TASK:
-P3-WP001-CLOSE
+PHASE-3
 
 AUTHORIZATION_REVISION:
-P3-WP001-CLOSE-C1
+P3-WP002-IMPL
 
 TITLE:
-P3-WP001-CLOSE-C1 — Final Idle-State Control Sync
+P3-WP002 — Outbound Activity Intelligence
 
 STATUS:
-CLOSED_PASS
+AUTHORIZED_FOR_EXECUTION
 
 CODE_BASELINE_HEAD:
-c58d7e41c340590e5db9171305dbd8d9b16a4c2c
+7ca0a0dcde5896f18a8254f4a94a74a776d7a36e
 
 IMPLEMENTATION_CANDIDATE_HEAD:
-f9a097a7579c1a357506816656b10c01f68be6ac
+NONE / PENDING_EXECUTION
 
 REVIEWED_IMPLEMENTATION_HEAD:
-f9a097a7579c1a357506816656b10c01f68be6ac
+NONE
 
 ACCEPTED_IMPLEMENTATION_HEAD:
-f9a097a7579c1a357506816656b10c01f68be6ac
+NONE
 
 AUTHORIZATION_REF:
-P3-WP001-CLOSE-C1 final idle-state control sync authorized by Project Owner
+Owner authorized P3-WP002 Outbound Activity Intelligence implementation according to accepted PRE1 definition
 
 AUTHORIZE_EXECUTION:
-FALSE
+TRUE
 
 AUTHORIZED_BY:
-Project Owner (P3-WP001-CLOSE-C1 final idle-state control sync)
+Project Owner (P3-WP002 Outbound Activity Intelligence implementation)
 
 CONTROL_PLANE:
 ChatGPT
@@ -54,24 +54,25 @@ PHASE_2: CLOSED / PASS
 PHASE-2-CLOSE: CLOSED_PASS
 PHASE_3: IN PROGRESS
 PHASE_3_TITLE: Audience & Customer Intelligence
-ACTIVE_WORK_PACKAGE: NONE
+ACTIVE_WORK_PACKAGE: P3-WP002
 P3-WP001: CLOSED / PASS
 P3-WP001-R1: CORRECTED / SUPERSEDED_BY_C1
 P3-WP001-R1-C1: CLOSED_PASS
 P3-WP001-CLOSE: CLOSED_PASS
 P3-WP001-CLOSE-C1: CLOSED_PASS
-P3-WP002: FUTURE / NOT AUTHORIZED
+P3-WP002-PRE1: COMPLETE / DEFINITION READY
+P3-WP002: AUTHORIZED_FOR_EXECUTION
 P3-WP003: FUTURE / NOT AUTHORIZED
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_OWNER_AUTHORIZATION
+NEXT_CANDIDATE_STATUS: AWAITING_EXECUTION
 
 --------------------------------------------------
-OBJECTIVE — P3-WP001-CLOSE-C1 FINAL IDLE-STATE CONTROL SYNC
+OBJECTIVE — P3-WP002 OUTBOUND ACTIVITY INTELLIGENCE
 --------------------------------------------------
 
-Final idle-state control-document synchronization for P3-WP001 following accepted implementation (HEAD f9a097a7579c1a357506816656b10c01f68be6ac), behavioral test evidence (HEAD ced2292d8e6c7f5f569b96e8e84af0c587fd80df), control truth C1 (HEAD 4f7503e48fbadcd7e6346d77d7ed9086f1401086), and closure (HEAD d9cf8a6f6480311cc1d0a044902309434b6b1ebf).
+Implement P3-WP002 (Outbound Activity Intelligence) extending customer intelligence with authoritative outbound campaign activity metrics derived from existing OA-scoped CampaignJob execution data.
 
-IMPORTANT: This gate is NON-EXECUTABLE (AUTHORIZE_EXECUTION: FALSE). ACTIVE_WORK_PACKAGE is NONE.
+IMPORTANT: This gate is EXECUTABLE (AUTHORIZE_EXECUTION: TRUE). Project Owner has explicitly authorized bounded implementation of P3-WP002.
 
 --------------------------------------------------
 PHASE 3 OBJECTIVE & WORK PACKAGE SCOPE
@@ -82,38 +83,46 @@ Improve audience understanding and selection using only authoritative OA-scoped 
 
 Work Packages:
 - P3-WP001 — Customer Intelligence Foundation (CLOSED / PASS, Accepted Implementation HEAD: f9a097a7579c1a357506816656b10c01f68be6ac)
-- P3-WP002 — Outbound Activity Intelligence (FUTURE / NOT AUTHORIZED)
+- P3-WP002 — Outbound Activity Intelligence (AUTHORIZED_FOR_EXECUTION)
 - P3-WP003 — Persistent Tags & Advanced Segmentation (FUTURE / NOT AUTHORIZED)
 
 --------------------------------------------------
-P3-WP001 IMPLEMENTATION SCOPE & CONTRACT
+P3-WP002 AUTHORIZED IMPLEMENTATION CONTRACT
 --------------------------------------------------
 
-1. Display Name Normalization:
-- Preserve raw Customer.displayName unchanged (do NOT overwrite raw LINE display name).
-- Derive cleanedDisplayName deterministically without blindly removing the first whitespace-delimited token.
-- Preserve legitimate multi-word names. Avoid AI/LLM-based inference or probabilistic guessing.
+1. Authoritative Customer Identity:
+- Scoped strictly by (botId + lineUserId).
+- Primary activity source is CampaignJob.
+- CampaignSendPart is NOT a customer activity counter.
+- Do NOT use Customer.updatedAt as activity.
+- Do NOT reuse or modify /api/analytics.
+- Do NOT infer legacy jobs with botId = NULL into any OA.
+- No inbound chat data, message-body analytics, read receipts, online status, AI profiling, or behavioral inference.
 
-2. OA-Scoped Customer Intelligence Contract:
-- Scoped strictly by botId, preserving existing botId + lineUserId identity boundary.
-- No cross-OA aggregation. Fail closed on mismatched OA context.
+2. Authoritative Activity Metrics:
+- successfulJobCount: COUNT(CampaignJob) for exact (botId + lineUserId) with status = 'success'
+- lastSuccessfulSendAt: MAX(CampaignJob.sentAt) for status = 'success'
+- failedJobCount: COUNT(CampaignJob) for status = 'failed' (titled "Failed Jobs", NOT "Failed Sends")
+- reconcileRequiredCount: COUNT(CampaignJob) for status = 'reconcile_required'
+- latestJobStatus: CURRENT status of the most recently CREATED OA-attributed CampaignJob (tie-break by createdAt DESC, id DESC)
+- latestJobCreatedAt: createdAt of the latest created CampaignJob (tie-break by createdAt DESC, id DESC)
 
-3. Safe Customer / Group DOM Rendering:
-- Move dynamic customer/group/profile-derived text affected by P3-WP001 to safe DOM construction (createElement, textContent, safe attribute assignment).
-- Do NOT interpolate untrusted displayName, cleanedDisplayName, lineUserId, group name, group description, or blockReason into executable HTML strings.
-- Do NOT perform broad unrelated frontend refactoring.
+3. Backend & Query Invariants:
+- Single OA-scoped CampaignJob aggregate query (WHERE job.botId = :cleanBotId GROUP BY job.lineUserId).
+- NO N+1 per-customer queries.
+- Fail closed on query failure (do NOT convert DB error into zero metrics).
+- Strict DTO allowlist (no secrets, errorReason, or profile extra fields).
 
-4. Existing Filter Compatibility:
-- Preserve keyword filtering, Active/Blocked, Named/Unnamed, selected customer behavior, static customer groups, and Phase 2 campaign builder behavior.
-
-P3-WP001 Explicit Non-Scope:
-- NO DB schema change, migration, new entity/table, persistent customer tags, activity table, Worker modification, LINE send-path modification, customer sync behavior expansion, inbound LINE conversation scraping, message body storage, read-receipt tracking, online-status tracking, AI profiling/scoring, Telegram changes, Phase 4 work, or Phase 5 work.
+4. Frontend & UI Filters:
+- Compact Outbound Activity presentation in customer table using safe DOM construction only (createElement, textContent, safe attributes).
+- Display semantics for successfulJobCount === 0 ("ยังไม่มี Successful Job") and successfulJobCount > 0 with null lastSuccessfulSendAt ("มี Successful Job แต่ไม่พบเวลาที่บันทึก").
+- Activity filters: ALL, NEVER_SUCCESS (successfulJobCount === 0), SUCCESS_WITHIN_7_DAYS, SUCCESS_WITHIN_30_DAYS, HAS_FAILED_JOBS, RECONCILIATION_REQUIRED.
+- OA stale-response discard protection (verify requestBotId === currentActiveBotId before committing customer data).
 
 --------------------------------------------------
 FUTURE WORK PACKAGES (NOT AUTHORIZED)
 --------------------------------------------------
 
-- P3-WP002 — Outbound Activity Intelligence: Derive customer activity metrics (last send, attempt, counts, status) from existing campaign_jobs without creating a new activity table initially. OA-scoped. FUTURE / NOT AUTHORIZED.
 - P3-WP003 — Persistent Tags & Advanced Segmentation: Additive schema for tags and customer-tag assignments. Requires separate explicit Owner authorization. FUTURE / NOT AUTHORIZED.
 
 --------------------------------------------------
@@ -124,10 +133,8 @@ ACCEPTED AUTOMATED TEST EVIDENCE & INVARIANTS
 - Failures: 0
 - Evidence Classification: LOCAL REPORTED
 - GitHub CI / Status Workflow Evidence: NONE
-- Historical Implementation Build Evidence: PASS at P3-WP001 implementation run
 - Worker Version: 28.16
 - Required Worker Version: 28.16
 - Runtime Contract Version: 2
-- Scope & Invariant Boundaries: Worker script, DB/schema, runtime-version contract and Telegram integration remained untouched by P3-WP001 implementation and correctives. P3-WP001 implementation changed app.controller.ts, app.controller.spec.ts and index.html within authorized scope. R1 changed tests/control docs only. C1 changed control docs only. P3-WP001-CLOSE and C1 are documentation-only control syncs.
 - Privacy & Safety Boundary: Customer intelligence uses existing directory metadata and campaign execution metadata only. No LINE chat content or private message semantics collected or inferred.
 - Safety Policy: Never automatically resend an ambiguous physical send. True exactly-once physical LINE delivery across LINE Web UI boundary is NOT guaranteed.
