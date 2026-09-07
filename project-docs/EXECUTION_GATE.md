@@ -1,27 +1,27 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 28
+CONTROL_VERSION: 29
 
 TASK_ID:
-P3-WP002
+P3-WP002-R1
 
 PARENT_TASK:
-PHASE-3
+P3-WP002
 
 AUTHORIZATION_REVISION:
-P3-WP002-IMPL
+P3-WP002-R1-CORRECTIVE
 
 TITLE:
-P3-WP002 — Outbound Activity Intelligence
+P3-WP002-R1 — Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective
 
 STATUS:
-READY_FOR_CHATGPT_REVIEW
+CORRECTIVE_AUTHORIZED
 
 CODE_BASELINE_HEAD:
 7ca0a0dcde5896f18a8254f4a94a74a776d7a36e
 
 IMPLEMENTATION_CANDIDATE_HEAD:
-956e576ffee2f194ce6e617531a58f336de2b280
+NONE / PENDING_CORRECTIVE_EXECUTION
 
 REVIEWED_IMPLEMENTATION_HEAD:
 NONE
@@ -30,13 +30,13 @@ ACCEPTED_IMPLEMENTATION_HEAD:
 NONE
 
 AUTHORIZATION_REF:
-Owner authorized P3-WP002 Outbound Activity Intelligence implementation according to accepted PRE1 definition
+Owner authorized P3-WP002-R1 Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective
 
 AUTHORIZE_EXECUTION:
-FALSE
+TRUE
 
 AUTHORIZED_BY:
-Project Owner (P3-WP002 Outbound Activity Intelligence implementation)
+Project Owner (P3-WP002-R1 Corrective)
 
 CONTROL_PLANE:
 ChatGPT
@@ -54,25 +54,31 @@ PHASE_2: CLOSED / PASS
 PHASE-2-CLOSE: CLOSED_PASS
 PHASE_3: IN PROGRESS
 PHASE_3_TITLE: Audience & Customer Intelligence
-ACTIVE_WORK_PACKAGE: P3-WP002
+ACTIVE_WORK_PACKAGE: P3-WP002-R1
 P3-WP001: CLOSED / PASS
 P3-WP001-R1: CORRECTED / SUPERSEDED_BY_C1
 P3-WP001-R1-C1: CLOSED_PASS
 P3-WP001-CLOSE: CLOSED_PASS
 P3-WP001-CLOSE-C1: CLOSED_PASS
 P3-WP002-PRE1: COMPLETE / DEFINITION READY
-P3-WP002: READY_FOR_CHATGPT_REVIEW
+P3-WP002: CORRECTIVE REQUIRED / R1 AUTHORIZED
+P3-WP002-R1: CORRECTIVE_AUTHORIZED
 P3-WP003: FUTURE / NOT AUTHORIZED
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_CORRECTIVE_EXECUTION
 
 --------------------------------------------------
-OBJECTIVE — P3-WP002 OUTBOUND ACTIVITY INTELLIGENCE
+OBJECTIVE — P3-WP002-R1 AGGREGATE QUERY + TIME-WINDOW TRUTH + FINAL EVIDENCE/CONTROL CORRECTIVE
 --------------------------------------------------
 
-Implement P3-WP002 (Outbound Activity Intelligence) extending customer intelligence with authoritative outbound campaign activity metrics derived from existing OA-scoped CampaignJob execution data.
+Correct P3-WP002 implementation to:
+1. Replace Node.js in-memory CampaignJob loading with exactly ONE DB-side CampaignJob QueryBuilder aggregate query grouped by lineUserId.
+2. Fix 7-day and 30-day activity filter logic to strictly reject future and invalid timestamps while supporting lower boundary equality.
+3. Ensure NEVER_SUCCESS is determined ONLY by successfulJobCount === 0.
+4. Expand test suite to 39 explicit R1 assertions.
+5. Fix supporting control document state and roadmap structure.
 
-IMPORTANT: This gate is currently PENDING REVIEW (AUTHORIZE_EXECUTION: FALSE). Bounded source implementation completed at candidate HEAD 956e576ffee2f194ce6e617531a58f336de2b280. Awaiting ChatGPT independent review.
+IMPORTANT: This gate is EXECUTABLE (AUTHORIZE_EXECUTION: TRUE). Project Owner has explicitly authorized bounded implementation of P3-WP002-R1.
 
 --------------------------------------------------
 PHASE 3 OBJECTIVE & WORK PACKAGE SCOPE
@@ -83,41 +89,32 @@ Improve audience understanding and selection using only authoritative OA-scoped 
 
 Work Packages:
 - P3-WP001 — Customer Intelligence Foundation (CLOSED / PASS, Accepted Implementation HEAD: f9a097a7579c1a357506816656b10c01f68be6ac)
-- P3-WP002 — Outbound Activity Intelligence (READY_FOR_CHATGPT_REVIEW)
+- P3-WP002 — Outbound Activity Intelligence (CORRECTIVE REQUIRED / R1 AUTHORIZED)
+- P3-WP002-R1 — Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective (CORRECTIVE_AUTHORIZED)
 - P3-WP003 — Persistent Tags & Advanced Segmentation (FUTURE / NOT AUTHORIZED)
 
 --------------------------------------------------
-P3-WP002 AUTHORIZED IMPLEMENTATION CONTRACT
+P3-WP002-R1 AUTHORIZED IMPLEMENTATION CONTRACT
 --------------------------------------------------
 
-1. Authoritative Customer Identity:
-- Scoped strictly by (botId + lineUserId).
-- Primary activity source is CampaignJob.
-- CampaignSendPart is NOT a customer activity counter.
-- Do NOT use Customer.updatedAt as activity.
-- Do NOT reuse or modify /api/analytics.
-- Do NOT infer legacy jobs with botId = NULL into any OA.
-- No inbound chat data, message-body analytics, read receipts, online status, AI profiling, or behavioral inference.
+1. DB-Side Aggregation:
+- Single OA-scoped CampaignJob QueryBuilder aggregate query (`WHERE job.botId = :cleanBotId GROUP BY job.lineUserId`).
+- `COUNT(*) FILTER (WHERE job.status = 'success')` as successfulJobCount
+- `MAX(job.sentAt) FILTER (WHERE job.status = 'success')` as lastSuccessfulSendAt
+- `COUNT(*) FILTER (WHERE job.status = 'failed')` as failedJobCount
+- `COUNT(*) FILTER (WHERE job.status = 'reconcile_required')` as reconcileRequiredCount
+- `latestJobStatus` & `latestJobCreatedAt` derived deterministically DB-side by `createdAt DESC, id DESC`.
+- Exactly ONE `getRawMany()` query. NO N+1, NO `campaignJobRepository.find(...)` for activity.
 
-2. Authoritative Activity Metrics:
-- successfulJobCount: COUNT(CampaignJob) for exact (botId + lineUserId) with status = 'success'
-- lastSuccessfulSendAt: MAX(CampaignJob.sentAt) for status = 'success'
-- failedJobCount: COUNT(CampaignJob) for status = 'failed' (titled "Failed Jobs", NOT "Failed Sends")
-- reconcileRequiredCount: COUNT(CampaignJob) for status = 'reconcile_required'
-- latestJobStatus: CURRENT status of the most recently CREATED OA-attributed CampaignJob (tie-break by createdAt DESC, id DESC)
-- latestJobCreatedAt: createdAt of the latest created CampaignJob (tie-break by createdAt DESC, id DESC)
+2. Time Window & Filter Truth:
+- 7-day & 30-day filters require `sendTime <= now` AND `sendTime >= now - window`.
+- Future timestamps and invalid timestamps MUST NOT match.
+- Exact lower boundary (`sendTime === now - window`) MUST match.
+- NEVER_SUCCESS is determined ONLY by `successfulJobCount === 0`.
 
-3. Backend & Query Invariants:
-- Single OA-scoped CampaignJob aggregate query (WHERE job.botId = :cleanBotId GROUP BY job.lineUserId).
-- NO N+1 per-customer queries.
-- Fail closed on query failure (do NOT convert DB error into zero metrics).
-- Strict DTO allowlist (no secrets, errorReason, or profile extra fields).
-
-4. Frontend & UI Filters:
-- Compact Outbound Activity presentation in customer table using safe DOM construction only (createElement, textContent, safe attributes).
-- Display semantics for successfulJobCount === 0 ("ยังไม่มี Successful Job") and successfulJobCount > 0 with null lastSuccessfulSendAt ("มี Successful Job แต่ไม่พบเวลาที่บันทึก").
-- Activity filters: ALL, NEVER_SUCCESS (successfulJobCount === 0), SUCCESS_WITHIN_7_DAYS, SUCCESS_WITHIN_30_DAYS, HAS_FAILED_JOBS, RECONCILIATION_REQUIRED.
-- OA stale-response discard protection (verify requestBotId === currentActiveBotId before committing customer data).
+3. Safe Activity DOM:
+- Compact presentation using `createElement`, `textContent`, safe property assignment.
+- Dynamic activity values must never be injected via innerHTML.
 
 --------------------------------------------------
 FUTURE WORK PACKAGES (NOT AUTHORIZED)
@@ -129,7 +126,7 @@ FUTURE WORK PACKAGES (NOT AUTHORIZED)
 ACCEPTED AUTOMATED TEST EVIDENCE & INVARIANTS
 --------------------------------------------------
 
-- Full Jest Test Suite: 549/549 PASS
+- Full Jest Test Suite: 549/549 PASS (Initial P3-WP002 evidence; R1 evidence pending R1 execution)
 - Failures: 0
 - Evidence Classification: LOCAL REPORTED
 - GitHub CI / Status Workflow Evidence: NONE

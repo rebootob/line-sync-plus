@@ -467,7 +467,8 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `P3-WP001-R1-C1 — Final Control-Document Truth Corrective`: **CLOSED_PASS**
   - `P3-WP001-CLOSE — P3-WP001 Final Control Closure`: **CLOSED_PASS**
   - `P3-WP001-CLOSE-C1 — Final Idle-State Control Sync`: **CLOSED_PASS**
-  - `P3-WP002 — Outbound Activity Intelligence`: **IN_PROGRESS (READY_FOR_CHATGPT_REVIEW)**
+  - `P3-WP002 — Outbound Activity Intelligence`: **CORRECTIVE REQUIRED / R1 AUTHORIZED**
+  - `P3-WP002-R1 — Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective`: **CORRECTIVE_AUTHORIZED**
   - `P3-WP003 — Persistent Tags & Advanced Segmentation`: **FUTURE / NOT AUTHORIZED**
   - Safe customer identity/display normalization, outbound customer activity intelligence, and persistent tagging/segmentation.
 - **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
@@ -505,13 +506,15 @@ P3-WP001-R1 is **CORRECTED / SUPERSEDED_BY_C1**.
 P3-WP001-R1-C1 is **CLOSED_PASS**.
 P3-WP001-CLOSE is **CLOSED_PASS**.
 P3-WP001-CLOSE-C1 is **CLOSED_PASS**.
-P3-WP002 is **IN_PROGRESS (READY_FOR_CHATGPT_REVIEW)**.
+P3-WP002 is **CORRECTIVE REQUIRED / R1 AUTHORIZED**.
+P3-WP002-R1 is **CORRECTIVE_AUTHORIZED**.
 P3-WP003 is **FUTURE / NOT AUTHORIZED**.
-Active Work Package: **P3-WP002**.
-Status: **READY_FOR_CHATGPT_REVIEW**.
-IMPLEMENTATION_CANDIDATE_HEAD: **956e576ffee2f194ce6e617531a58f336de2b280**.
-Next Candidate: **NONE** (Status: **AWAITING_REVIEW**).
-AUTHORIZE_EXECUTION: **FALSE**.
+Active Work Package: **P3-WP002-R1**.
+Status: **CORRECTIVE_AUTHORIZED**.
+CODE_BASELINE_HEAD: **80a9f2dcafdb81e84f990e5593009091ab83bb4e**.
+IMPLEMENTATION_CANDIDATE_HEAD: **NONE / PENDING_CORRECTIVE_EXECUTION**.
+Next Candidate: **NONE** (Status: **AWAITING_CORRECTIVE_EXECUTION**).
+AUTHORIZE_EXECUTION: **TRUE**.
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-P3-WP001 (Customer Intelligence Foundation) is CLOSED / PASS. Accepted implementation HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`. R1 test evidence HEAD: `ced2292d8e6c7f5f569b96e8e84af0c587fd80df` (533/533 PASS). C1 control corrective HEAD: `4f7503e48fbadcd7e6346d77d7ed9086f1401086`. Closure HEAD: `d9cf8a6f6480311cc1d0a044902309434b6b1ebf`. P3-WP002 implementation candidate HEAD is `956e576ffee2f194ce6e617531a58f336de2b280` (549/549 PASS). P3-WP003 remains FUTURE / NOT AUTHORIZED.
+P3-WP001 (Customer Intelligence Foundation) is CLOSED / PASS. Accepted implementation HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`. R1 test evidence HEAD: `ced2292d8e6c7f5f569b96e8e84af0c587fd80df` (533/533 PASS). C1 control corrective HEAD: `4f7503e48fbadcd7e6346d77d7ed9086f1401086`. Closure HEAD: `d9cf8a6f6480311cc1d0a044902309434b6b1ebf`. P3-WP002-R1 corrective execution authorized on baseline `80a9f2dcafdb81e84f990e5593009091ab83bb4e`. P3-WP003 remains FUTURE / NOT AUTHORIZED.
