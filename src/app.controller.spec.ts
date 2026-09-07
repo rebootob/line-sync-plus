@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
+import { AppController, normalizeDisplayName } from './app.controller';
 import { Customer } from './customer.entity';
 import { CustomerGroup } from './entities/customer-group.entity';
 import { CustomerGroupMember } from './entities/customer-group-member.entity';
@@ -6529,7 +6529,6 @@ describe('AppController', () => {
         }
       });
 
-      describe('P2-WP003-R2 Corrective Tests', () => {
         function createFrontendVmContext(options: { initialActiveBotId?: string | null } = {}) {
           const indexHtml = fs.readFileSync('index.html', 'utf8');
           const scriptContent = indexHtml.split('<script>')[1].split('</script>')[0];
@@ -6565,13 +6564,30 @@ describe('AppController', () => {
                 innerHTMLValue = val;
                 childrenList.length = 0;
               },
-              get textContent() { return textContentValue; },
+              get textContent() {
+                if (childrenList.length > 0) {
+                  return childrenList.map((c: any) => c.textContent).join('');
+                }
+                return textContentValue;
+              },
               set textContent(val: string) { textContentValue = val; },
               get value() { return valueValue; },
               set value(val: string) { valueValue = val; },
               appendChild: (child: any) => {
                 childrenList.push(child);
                 return child;
+              },
+              replaceChildren: (...nodes: any[]) => {
+                childrenList.length = 0;
+                for (const node of nodes) {
+                  if (typeof node === 'string' || typeof node === 'number') {
+                    const textEl = createMockElement('', '#text');
+                    textEl.textContent = String(node);
+                    childrenList.push(textEl);
+                  } else if (node) {
+                    childrenList.push(node);
+                  }
+                }
               },
               addEventListener: (event: string, handler: Function) => {
                 eventListeners[event] = handler;
@@ -6667,11 +6683,18 @@ describe('AppController', () => {
             getScheduledRequestGeneration: () => vmModule.runInContext('scheduledRequestGeneration', vmContext),
             setScheduledRequestGeneration: (val: number) => {
               vmModule.runInContext(`scheduledRequestGeneration = ${val}`, vmContext);
+            },
+            setFilteredCustomers: (val: any[]) => {
+              vmModule.runInContext(`filteredCustomers = ${JSON.stringify(val)}`, vmContext);
+            },
+            setCurrentGroups: (val: any[]) => {
+              vmModule.runInContext(`currentGroups = ${JSON.stringify(val)}`, vmContext);
             }
           };
         }
 
-        it('R1-01. Operator stop with no jobId and limitReached=true still results in stopped_user', async () => {
+        describe('P2-WP003-R2 Corrective Tests', () => {
+          it('R1-01. Operator stop with no jobId and limitReached=true still results in stopped_user', async () => {
           const camp = { id: 'c1', botId: testBotId, status: 'processing', name: 'Operator Stop Test' };
           mockCampaignRepo.findOne.mockResolvedValueOnce(camp as any);
           mockCampaignRepo.save.mockImplementationOnce((c: any) => Promise.resolve(c));
@@ -6859,6 +6882,9 @@ describe('AppController', () => {
           fetchMock.mockImplementation((url: string, opts: any) => {
             if (url.endsWith('/oa/active') && opts?.method === 'POST') {
               return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
+            }
+            if (url.endsWith('/oa/active')) {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, activeBotId: 'OA-B' }) });
             }
             return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
           });
@@ -7129,6 +7155,263 @@ describe('AppController', () => {
           const nameCell = tbody.children[0].children[1].children[0];
           expect(nameCell.textContent).toBe(xssPayload);
           expect(nameCell.innerHTML).not.toContain('<img');
+        });
+      });
+
+      describe('P3-WP001 — Customer Intelligence Foundation', () => {
+        describe('Display Name Normalization (normalizeDisplayName)', () => {
+          it('P3-01. Null / undefined / non-string / empty / whitespace-only returns "ลูกค้า"', () => {
+            expect(normalizeDisplayName(null)).toBe('ลูกค้า');
+            expect(normalizeDisplayName(undefined)).toBe('ลูกค้า');
+            expect(normalizeDisplayName(123 as any)).toBe('ลูกค้า');
+            expect(normalizeDisplayName('')).toBe('ลูกค้า');
+            expect(normalizeDisplayName('   ')).toBe('ลูกค้า');
+          });
+
+          it('P3-02. Trims outer whitespace first', () => {
+            expect(normalizeDisplayName('  Somchai  ')).toBe('Somchai');
+            expect(normalizeDisplayName('   101 Somchai   ')).toBe('Somchai');
+          });
+
+          it('P3-03. Removes 3-digit ASCII prefix followed by whitespace', () => {
+            expect(normalizeDisplayName('101 Somchai')).toBe('Somchai');
+            expect(normalizeDisplayName('999 John')).toBe('John');
+          });
+
+          it('P3-04. Preserves multi-word names without blindly stripping initial tokens', () => {
+            expect(normalizeDisplayName('Somchai Puttasee')).toBe('Somchai Puttasee');
+            expect(normalizeDisplayName('John Smith')).toBe('John Smith');
+          });
+
+          it('P3-05. Preserves legitimate numeric multi-word names', () => {
+            expect(normalizeDisplayName('7 Eleven')).toBe('7 Eleven');
+            expect(normalizeDisplayName('2024 Sale')).toBe('2024 Sale');
+          });
+
+          it('P3-06. Does NOT strip 1-digit, 2-digit, or 4-digit prefixes', () => {
+            expect(normalizeDisplayName('1 Somchai')).toBe('1 Somchai');
+            expect(normalizeDisplayName('12 Somchai')).toBe('12 Somchai');
+            expect(normalizeDisplayName('1234 Somchai')).toBe('1234 Somchai');
+          });
+
+          it('P3-07. Preserves Thai and Unicode names', () => {
+            expect(normalizeDisplayName('101 สมชาย')).toBe('สมชาย');
+            expect(normalizeDisplayName('สมชาย พุทธิสีห์')).toBe('สมชาย พุทธิสีห์');
+            expect(normalizeDisplayName('  สมชาย  ')).toBe('สมชาย');
+          });
+
+          it('P3-08. Handles 3-digit string without space prefix', () => {
+            expect(normalizeDisplayName('101')).toBe('101');
+            expect(normalizeDisplayName('101Somchai')).toBe('101Somchai');
+          });
+
+          it('P3-09. Is pure and does not mutate raw inputs', () => {
+            const raw = '101 Somchai';
+            const result = normalizeDisplayName(raw);
+            expect(result).toBe('Somchai');
+            expect(raw).toBe('101 Somchai');
+          });
+        });
+
+        describe('OA-Scoped Customer Intelligence & GET /api/customers', () => {
+          it('P3-10. GET /api/customers without botId parameter returns HTTP 400', async () => {
+            const resMock = createMockRes();
+            await appController.getAllCustomers(undefined, resMock);
+            expect(resMock.statusCode).toBe(400);
+          });
+
+          it('P3-11. GET /api/customers with active botId returns customer DTOs', async () => {
+            const resMock = createMockRes();
+            const mockOa = { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', activeBotId: 'U09d6b978fcbfb5275e533ca9b788eb22' };
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce(mockOa as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', lineUserId: 'U12345', displayName: '101 Somchai', isBlocked: false, blockReason: null }
+            ]);
+
+            const result: any = await appController.getAllCustomers('U09d6b978fcbfb5275e533ca9b788eb22', resMock);
+            expect(result).toBeDefined();
+            expect(result[0]).toEqual({
+              botId: 'U09d6b978fcbfb5275e533ca9b788eb22',
+              lineUserId: 'U12345',
+              displayName: '101 Somchai',
+              cleanedDisplayName: 'Somchai',
+              isBlocked: false,
+              blockReason: null,
+            });
+          });
+
+          it('P3-12. GET /api/customers with mismatched botId fails closed with 409 and does NOT query customers', async () => {
+            const resMock = createMockRes();
+            const mockOa = { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', activeBotId: 'U09d6b978fcbfb5275e533ca9b788eb22' };
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce(mockOa as any);
+            const findSpy = jest.spyOn(mockCustomerRepo, 'find');
+            findSpy.mockClear();
+
+            await appController.getAllCustomers('U11111111222222223333333344444444', resMock);
+            expect(resMock.statusCode).toBe(409);
+            expect(findSpy).not.toHaveBeenCalled();
+          });
+
+          it('P3-13. GET /api/customers populates cleanedDisplayName deterministically via normalizeDisplayName', async () => {
+            const resMock = createMockRes();
+            const mockOa = { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', activeBotId: 'U09d6b978fcbfb5275e533ca9b788eb22' };
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce(mockOa as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', lineUserId: 'U1', displayName: '202 Jane' }
+            ]);
+
+            const result: any = await appController.getAllCustomers('U09d6b978fcbfb5275e533ca9b788eb22', resMock);
+            expect(result[0].cleanedDisplayName).toBe('Jane');
+          });
+
+          it('P3-14. GET /api/customers DTO does NOT leak unauthorized internal properties', async () => {
+            const resMock = createMockRes();
+            const mockOa = { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', activeBotId: 'U09d6b978fcbfb5275e533ca9b788eb22' };
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce(mockOa as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', lineUserId: 'U1', displayName: 'User', secretKey: 'HIDDEN', internalNotes: 'SECRET' }
+            ]);
+
+            const result: any = await appController.getAllCustomers('U09d6b978fcbfb5275e533ca9b788eb22', resMock);
+            expect(result[0].secretKey).toBeUndefined();
+            expect(result[0].internalNotes).toBeUndefined();
+            expect(Object.keys(result[0])).toEqual(['botId', 'lineUserId', 'displayName', 'cleanedDisplayName', 'isBlocked', 'blockReason']);
+          });
+
+          it('P3-15. GET /api/customers when OA runtime query returns null fails closed with 409', async () => {
+            const resMock = createMockRes();
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce(null);
+
+            await appController.getAllCustomers('U09d6b978fcbfb5275e533ca9b788eb22', resMock);
+            expect(resMock.statusCode).toBe(409);
+          });
+
+          it('P3-16. GET /api/customers returns empty array gracefully when customer repo returns []', async () => {
+            const resMock = createMockRes();
+            const mockOa = { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', activeBotId: 'U09d6b978fcbfb5275e533ca9b788eb22' };
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce(mockOa as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([]);
+
+            const result: any = await appController.getAllCustomers('U09d6b978fcbfb5275e533ca9b788eb22', resMock);
+            expect(result).toEqual([]);
+          });
+        });
+
+        describe('Safe Customer & Group DOM Rendering Behavioral Proof', () => {
+          it('P3-17. renderTable() populates customer rows using textContent and safe DOM nodes', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              { botId: 'OA1', lineUserId: 'U1001', displayName: '101 Somchai', cleanedDisplayName: 'Somchai', isBlocked: false, blockReason: null }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(1);
+            const row = tbody.children[0];
+            const cleanedNameCell = row.children[2];
+            expect(cleanedNameCell.textContent).toBe('Somchai');
+            const rawNameCell = row.children[3];
+            expect(rawNameCell.textContent).toBe('101 Somchai');
+            const lineIdCell = row.children[4];
+            expect(lineIdCell.textContent).toBe('U1001');
+          });
+
+          it('P3-18. renderTable() prevents XSS execution when customer displayName contains HTML/script payloads', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            const xssPayload = '<img src=x onerror=alert("HACKED")><script>alert(1)</script>';
+            setFilteredCustomers([
+              { botId: 'OA1', lineUserId: 'U999', displayName: xssPayload, cleanedDisplayName: xssPayload, isBlocked: false, blockReason: null }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const cleanedNameCell = row.children[2];
+            expect(cleanedNameCell.textContent).toBe(xssPayload);
+            expect(cleanedNameCell.innerHTML).toBe('');
+          });
+
+          it('P3-19. renderTable() renders blocked status and blockReason using safe text DOM manipulation', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              { botId: 'OA1', lineUserId: 'U2002', displayName: 'Blocked User', cleanedDisplayName: 'Blocked User', isBlocked: true, blockReason: '<b style="color:red">SPAM</b>' }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const statusCell = row.children[5];
+            expect(statusCell.textContent).toContain('🚫 บล็อก/ส่งไม่ได้');
+            expect(statusCell.innerHTML).not.toContain('<b style');
+          });
+
+          it('P3-20. renderGroupDropdown() populates group options safely using createElement and textContent', async () => {
+            const { vmContext, getElementById, setCurrentGroups } = createFrontendVmContext();
+            setCurrentGroups([
+              { id: 'g1', name: 'VIP Group', description: 'Very Important Customers' },
+              { id: 'g2', name: 'Regular Group', description: 'Standard Customers' }
+            ]);
+
+            vmContext.renderGroupDropdown();
+
+            const select = getElementById('groupSelect');
+            expect(select.children.length).toBe(3);
+            expect(select.children[1].value).toBe('g1');
+            expect(select.children[1].textContent).toContain('VIP Group');
+            expect(select.children[2].value).toBe('g2');
+            expect(select.children[2].textContent).toContain('Regular Group');
+          });
+
+          it('P3-21. renderGroupDropdown() safely handles XSS/HTML payloads in group names and descriptions', async () => {
+            const { vmContext, getElementById, setCurrentGroups } = createFrontendVmContext();
+            const maliciousName = '<svg/onload=alert(1)>Malicious Group';
+            setCurrentGroups([
+              { id: 'gXSS', name: maliciousName, description: '<b>Desc</b>' }
+            ]);
+
+            vmContext.renderGroupDropdown();
+
+            const select = getElementById('groupSelect');
+            const option = select.children[1];
+            expect(option.textContent).toContain(maliciousName);
+            expect(option.innerHTML).toBe('');
+          });
+
+          it('P3-22. Event properties on rendered elements use safe property assignment rather than executable HTML string injection', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              { botId: 'OA1', lineUserId: 'U1', displayName: 'User 1', cleanedDisplayName: 'User 1', isBlocked: false }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const selectCell = row.children[0];
+            const checkbox = selectCell.children[0];
+            expect(checkbox.tagName).toBe('INPUT');
+            expect(typeof checkbox.onchange).toBe('function');
+          });
+
+          it('P3-23. renderTable() clears existing content cleanly using replaceChildren()', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            const tbody = getElementById('tableBody');
+
+            setFilteredCustomers([
+              { botId: 'OA1', lineUserId: 'U1', displayName: 'U1', cleanedDisplayName: 'U1' },
+              { botId: 'OA1', lineUserId: 'U2', displayName: 'U2', cleanedDisplayName: 'U2' }
+            ]);
+            vmContext.renderTable();
+            expect(tbody.children.length).toBe(2);
+
+            setFilteredCustomers([]);
+            vmContext.renderTable();
+            expect(tbody.children.length).toBe(1);
+            expect(tbody.children[0].children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
         });
       });
     });

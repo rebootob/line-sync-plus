@@ -1587,40 +1587,103 @@
             }
         }
 
-        // 2. แสดงตารางรายชื่อลูกค้า
+        // 2. แสดงตารางรายชื่อลูกค้า (P3-WP001 Safe DOM Construction)
         function renderTable() {
             const start = (currentPage - 1) * rowsPerPage;
             const end = start + rowsPerPage;
             const paginatedData = filteredCustomers.slice(start, end);
             
             const tbody = document.getElementById('tableBody');
+            if (!tbody) return;
+
+            if (typeof tbody.replaceChildren === 'function') {
+                tbody.replaceChildren();
+            } else {
+                tbody.innerHTML = '';
+            }
             
             if (paginatedData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">ไม่พบข้อมูลที่ค้นหา</td></tr>`;
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 6;
+                td.style.textAlign = 'center';
+                td.style.padding = '20px';
+                td.textContent = 'ไม่พบข้อมูลที่ค้นหา';
+                tr.appendChild(td);
+                tbody.appendChild(tr);
             } else {
-                tbody.innerHTML = paginatedData.map((cust, index) => {
-                    const statusBadge = cust.isBlocked 
-                        ? `<span class="badge" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; font-size:11px;" title="${cust.blockReason || 'บล็อก/ส่งไม่ได้'}">🚫 บล็อก/ส่งไม่ได้</span>` 
-                        : `<span class="badge" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-size:11px;">✅ ปกติ</span>`;
+                paginatedData.forEach((cust, index) => {
+                    const tr = document.createElement('tr');
+                    if (cust.isBlocked) {
+                        tr.style.backgroundColor = '#fff1f2';
+                        tr.style.opacity = '0.75';
+                    }
 
-                    const rowStyle = cust.isBlocked ? 'background-color: #fff1f2; opacity: 0.75;' : '';
+                    // Checkbox cell
+                    const tdCheckbox = document.createElement('td');
+                    tdCheckbox.className = 'checkbox-cell';
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'row-checkbox';
+                    checkbox.value = cust.lineUserId || '';
+                    checkbox.checked = selectedUsers.has(cust.lineUserId);
+                    if (cust.isBlocked) {
+                        checkbox.disabled = true;
+                        checkbox.title = 'ผู้ใช้นี้บล็อกแชท ไม่สามารถเลือกได้';
+                    }
+                    const uid = cust.lineUserId;
+                    checkbox.onchange = function() {
+                        toggleSingleSelect(uid);
+                    };
+                    tdCheckbox.appendChild(checkbox);
+                    tr.appendChild(tdCheckbox);
 
-                    return `
-                        <tr style="${rowStyle}">
-                            <td class="checkbox-cell">
-                                <input type="checkbox" class="row-checkbox" value="${cust.lineUserId}" 
-                                    onchange="toggleSingleSelect('${cust.lineUserId}')" 
-                                    ${selectedUsers.has(cust.lineUserId) ? 'checked' : ''}
-                                    ${cust.isBlocked ? 'disabled title="ผู้ใช้นี้บล็อกแชท ไม่สามารถเลือกได้"' : ''}>
-                            </td>
-                            <td>${start + index + 1}</td>
-                            <td class="name-clean">${cust.cleanedDisplayName}</td>
-                            <td class="name-original">${cust.displayName || '-'}</td>
-                            <td class="line-id">${cust.lineUserId}</td>
-                            <td>${statusBadge}</td>
-                        </tr>
-                    `;
-                }).join('');
+                    // Row number cell
+                    const tdNo = document.createElement('td');
+                    tdNo.textContent = String(start + index + 1);
+                    tr.appendChild(tdNo);
+
+                    // Cleaned Display Name cell
+                    const tdCleanName = document.createElement('td');
+                    tdCleanName.className = 'name-clean';
+                    tdCleanName.textContent = cust.cleanedDisplayName || 'ลูกค้า';
+                    tr.appendChild(tdCleanName);
+
+                    // Original Display Name cell
+                    const tdOrigName = document.createElement('td');
+                    tdOrigName.className = 'name-original';
+                    tdOrigName.textContent = cust.displayName || '-';
+                    tr.appendChild(tdOrigName);
+
+                    // LINE User ID cell
+                    const tdLineId = document.createElement('td');
+                    tdLineId.className = 'line-id';
+                    tdLineId.textContent = cust.lineUserId || '';
+                    tr.appendChild(tdLineId);
+
+                    // Status Badge cell
+                    const tdStatus = document.createElement('td');
+                    const badgeSpan = document.createElement('span');
+                    badgeSpan.className = 'badge';
+                    if (cust.isBlocked) {
+                        badgeSpan.style.background = '#fee2e2';
+                        badgeSpan.style.color = '#dc2626';
+                        badgeSpan.style.border = '1px solid #fca5a5';
+                        badgeSpan.style.fontSize = '11px';
+                        badgeSpan.title = cust.blockReason || 'บล็อก/ส่งไม่ได้';
+                        badgeSpan.textContent = '🚫 บล็อก/ส่งไม่ได้';
+                    } else {
+                        badgeSpan.style.background = '#dcfce7';
+                        badgeSpan.style.color = '#15803d';
+                        badgeSpan.style.border = '1px solid #86efac';
+                        badgeSpan.style.fontSize = '11px';
+                        badgeSpan.textContent = '✅ ปกติ';
+                    }
+                    tdStatus.appendChild(badgeSpan);
+                    tr.appendChild(tdStatus);
+
+                    tbody.appendChild(tr);
+                });
             }
 
             updatePaginationUI();
@@ -1700,11 +1763,28 @@
             updateSelectionUI();
         }
 
-        // 4. ระบบจัดการกลุ่มลูกค้า (Group Management)
+        // 4. ระบบจัดการกลุ่มลูกค้า (Group Management P3-WP001 Safe DOM)
         function renderGroupDropdown() {
             const select = document.getElementById('groupSelect');
-            select.innerHTML = '<option value="">📁 เลือกกลุ่มลูกค้า...</option>' + 
-                currentGroups.map(g => `<option value="${g.id}">${g.name} (${g.memberCount} คน)</option>`).join('');
+            if (!select) return;
+
+            if (typeof select.replaceChildren === 'function') {
+                select.replaceChildren();
+            } else {
+                select.innerHTML = '';
+            }
+
+            const defaultOpt = document.createElement('option');
+            defaultOpt.value = '';
+            defaultOpt.textContent = '📁 เลือกกลุ่มลูกค้า...';
+            select.appendChild(defaultOpt);
+
+            currentGroups.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.id || '';
+                opt.textContent = `${g.name || ''} (${(g.memberCount || 0).toLocaleString()} คน)`;
+                select.appendChild(opt);
+            });
         }
 
         async function handleGroupSelect() {

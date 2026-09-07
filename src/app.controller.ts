@@ -17,6 +17,24 @@ import { RUNTIME_CONTRACT_VERSION, REQUIRED_WORKER_VERSION } from './runtime-ver
 
 export type SendPartKey = 'image' | 'text';
 
+export function normalizeDisplayName(displayName: any): string {
+  if (displayName === null || displayName === undefined || typeof displayName !== 'string') {
+    return 'ลูกค้า';
+  }
+  const trimmed = displayName.trim();
+  if (trimmed.length === 0) {
+    return 'ลูกค้า';
+  }
+  const match = trimmed.match(/^[0-9]{3}\s+(.+)$/);
+  if (match) {
+    const afterPrefix = match[1].trim();
+    if (afterPrefix.length > 0) {
+      return afterPrefix;
+    }
+  }
+  return trimmed;
+}
+
 export interface SendPartSpec {
   partKey: SendPartKey;
   partOrder: number;
@@ -167,7 +185,7 @@ export class AppController {
     return { success: true, activeBotId: requestedBotId };
   }
 
-  // 1. ดึงรายชื่อลูกค้าตาม botId ที่ระบุเท่านั้น (OA-WP001 Isolation)
+  // 1. ดึงรายชื่อลูกค้าตาม botId ที่ระบุเท่านั้น (P3-WP001 OA Scoped Intelligence)
   @Get('customers')
   async getAllCustomers(
     @Query('botId') botId: string | undefined,
@@ -179,23 +197,29 @@ export class AppController {
     }
 
     const cleanBotId = botId.trim();
+
+    // 2. Active OA Context Verification (Fencing BEFORE repository queries)
+    const oaState = await this.oaRuntimeStateRepository.findOne({ where: { id: 'global' } });
+    const activeBotId = oaState ? oaState.activeBotId : null;
+
+    if (!activeBotId || cleanBotId !== activeBotId) {
+      res.status(HttpStatus.CONFLICT);
+      return { success: false, message: `Requested botId (${cleanBotId}) does not match active OA (${activeBotId})` };
+    }
+
     const customers = await this.customerRepository.find({
       where: { botId: cleanBotId },
       order: { createdAt: 'DESC' },
     });
-    
-    return customers.map(cust => {
-      let cleanName = cust.displayName;
-      if (cleanName && cleanName.includes(' ')) {
-        cleanName = cleanName.substring(cleanName.indexOf(' ') + 1).trim();
-      }
-      return {
-        ...cust,
-        cleanedDisplayName: cleanName || 'ลูกค้า',
-        isBlocked: cust.isBlocked || false,
-        blockReason: cust.blockReason || null,
-      };
-    });
+
+    return customers.map(cust => ({
+      botId: cust.botId,
+      lineUserId: cust.lineUserId,
+      displayName: cust.displayName,
+      cleanedDisplayName: normalizeDisplayName(cust.displayName),
+      isBlocked: cust.isBlocked || false,
+      blockReason: cust.blockReason || null,
+    }));
   }
 
   // SYNC-WP001 — LINE OA Customer Directory Sync to DB
