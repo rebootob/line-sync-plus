@@ -268,7 +268,8 @@ Over the course of safety hardening, 26 work packages were identified, implement
   - `PHASE-2-CLOSE — Phase 2 — Campaign Builder v2 Final Closure`: **CLOSED_PASS**
   - Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
 - **Phase 3 — Audience & Customer Intelligence**: **IN PROGRESS**
-  - `P3-WP001 — Customer Intelligence Foundation`: **READY_FOR_CHATGPT_REVIEW**
+  - `P3-WP001-R1 — Test Evidence & Control Truth Corrective`: **READY_FOR_CHATGPT_REVIEW**
+  - `P3-WP001 — Customer Intelligence Foundation`: **CORRECTIVE REQUIRED / AWAITING_R1_REVIEW**
   - `P3-WP002 — Outbound Activity Intelligence`: **FUTURE / NOT AUTHORIZED**
   - `P3-WP003 — Persistent Tags & Advanced Segmentation`: **FUTURE / NOT AUTHORIZED**
   - Safe customer identity/display normalization, outbound customer activity intelligence, and persistent tagging/segmentation.
@@ -280,7 +281,7 @@ Over the course of safety hardening, 26 work packages were identified, implement
 ## 11. Technical Evolution
 
 - **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003 CLOSED / PASS).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), dashboard-only Incident Visibility card (`index.html`) with in-memory session lifecycle, authoritative campaign authoring contract, authoritative campaign preview API (`POST /api/campaign/preview`), safe template reuse DTO and content-only copy, non-destructive stale preview discard, OA template cache fencing, operator stop semantics fix, monotonic OA identity epoch fencing, strict local datetime validation, deterministic display-name normalization (`normalizeDisplayName`), active-OA customer endpoint context fencing & DTO, safe customer/group DOM construction, and 525 passing local unit tests (LOCAL REPORTED).
+- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), dashboard-only Incident Visibility card (`index.html`) with in-memory session lifecycle, authoritative campaign authoring contract, authoritative campaign preview API (`POST /api/campaign/preview`), safe template reuse DTO and content-only copy, non-destructive stale preview discard, OA template cache fencing, operator stop semantics fix, monotonic OA identity epoch fencing, strict local datetime validation, deterministic display-name normalization (`normalizeDisplayName`), active-OA customer endpoint context fencing & DTO, safe customer/group DOM construction, and 533 passing local unit tests (LOCAL REPORTED).
 
 ---
 
@@ -302,13 +303,14 @@ P2-WP003-R2-CLOSE is **CLOSED_PASS**.
 P2-WP003-CLOSE is **CLOSED_PASS**.
 PHASE-2-CLOSE is **CLOSED_PASS**.
 Phase 3 (Audience & Customer Intelligence) is **IN PROGRESS**.
-P3-WP001 is **READY_FOR_CHATGPT_REVIEW**.
+P3-WP001-R1 is **READY_FOR_CHATGPT_REVIEW**.
+P3-WP001 is **CORRECTIVE REQUIRED / AWAITING_R1_REVIEW**.
 P3-WP002 is **FUTURE / NOT AUTHORIZED**.
 P3-WP003 is **FUTURE / NOT AUTHORIZED**.
-Active Work Package: **P3-WP001**.
+Active Work Package: **P3-WP001-R1**.
 Status: **READY_FOR_CHATGPT_REVIEW**.
-Next Candidate: **P3-WP001** (Status: **READY_FOR_CHATGPT_REVIEW**).
+Next Candidate: **P3-WP001-R1** (Status: **READY_FOR_CHATGPT_REVIEW**).
 AUTHORIZE_EXECUTION: **FALSE**.
 Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
 Policy: Never automatically resend an ambiguous physical send.
-P3-WP001 (Customer Intelligence Foundation) implementation completed with 525/525 unit tests PASS. P3-WP002 and P3-WP003 remain FUTURE / NOT AUTHORIZED. Ready for independent ChatGPT review.
+P3-WP001-R1 (Test Evidence & Control Truth Corrective) completed with 533/533 unit tests PASS. Baseline candidate HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`. Ready for independent ChatGPT review.

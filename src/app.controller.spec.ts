@@ -6540,6 +6540,8 @@ describe('AppController', () => {
           let promptReturnVal: any = null;
           let confirmReturnVal: boolean = true;
 
+          const createdElementsList: string[] = [];
+
           const createMockElement = (id = '', tagName = 'div') => {
             const childrenList: any[] = [];
             const eventListeners: Record<string, Function> = {};
@@ -6554,6 +6556,8 @@ describe('AppController', () => {
               className: '',
               title: '',
               colSpan: 1,
+              disabled: false,
+              checked: false,
               children: childrenList,
               style: new Proxy(styleObj, {
                 get: (target, prop: string) => target[prop] || '',
@@ -6608,7 +6612,10 @@ describe('AppController', () => {
               }
               return elementsMap.get(id);
             },
-            createElement: (tag: string) => createMockElement('', tag),
+            createElement: (tag: string) => {
+              createdElementsList.push(tag.toUpperCase());
+              return createMockElement('', tag);
+            },
             createTextNode: (text: string) => {
               const el = createMockElement('', '#text');
               el.textContent = text;
@@ -6689,7 +6696,12 @@ describe('AppController', () => {
             },
             setCurrentGroups: (val: any[]) => {
               vmModule.runInContext(`currentGroups = ${JSON.stringify(val)}`, vmContext);
-            }
+            },
+            getCreatedElements: () => createdElementsList,
+            setSelectedUsers: (userIds: string[]) => {
+              vmModule.runInContext(`selectedUsers.clear(); (${JSON.stringify(userIds)}).forEach(id => selectedUsers.add(id));`, vmContext);
+            },
+            getSelectedUsers: () => vmModule.runInContext('selectedUsers', vmContext)
           };
         }
 
@@ -7173,17 +7185,19 @@ describe('AppController', () => {
             expect(normalizeDisplayName('   101 Somchai   ')).toBe('Somchai');
           });
 
-          it('P3-03. Removes 3-digit ASCII prefix followed by whitespace', () => {
+          it('P3-03. Removes 3-digit ASCII prefix followed by whitespace (A1 proof)', () => {
             expect(normalizeDisplayName('101 Somchai')).toBe('Somchai');
             expect(normalizeDisplayName('999 John')).toBe('John');
+            expect(normalizeDisplayName('001 สมชาย ใจดี')).toBe('สมชาย ใจดี');
           });
 
-          it('P3-04. Preserves multi-word names without blindly stripping initial tokens', () => {
+          it('P3-04. Preserves multi-word names without blindly stripping initial tokens (A1 proof)', () => {
             expect(normalizeDisplayName('Somchai Puttasee')).toBe('Somchai Puttasee');
             expect(normalizeDisplayName('John Smith')).toBe('John Smith');
+            expect(normalizeDisplayName('สมชาย ใจดี')).toBe('สมชาย ใจดี');
           });
 
-          it('P3-05. Preserves legitimate numeric multi-word names', () => {
+          it('P3-05. Preserves legitimate numeric multi-word names (A1 proof)', () => {
             expect(normalizeDisplayName('7 Eleven')).toBe('7 Eleven');
             expect(normalizeDisplayName('2024 Sale')).toBe('2024 Sale');
           });
@@ -7220,6 +7234,21 @@ describe('AppController', () => {
             expect(resMock.statusCode).toBe(400);
           });
 
+          it('P3-A3. Malformed botId query parameter ("BAD", "U123") returns HTTP 400 and does NOT query customer repository', async () => {
+            const findSpy = jest.spyOn(mockCustomerRepo, 'find');
+            findSpy.mockClear();
+
+            const resMock1 = createMockRes();
+            await appController.getAllCustomers('BAD', resMock1);
+            expect(resMock1.statusCode).toBe(400);
+            expect(findSpy).not.toHaveBeenCalled();
+
+            const resMock2 = createMockRes();
+            await appController.getAllCustomers('U123', resMock2);
+            expect(resMock2.statusCode).toBe(400);
+            expect(findSpy).not.toHaveBeenCalled();
+          });
+
           it('P3-11. GET /api/customers with active botId returns customer DTOs', async () => {
             const resMock = createMockRes();
             const mockOa = { botId: 'U09d6b978fcbfb5275e533ca9b788eb22', activeBotId: 'U09d6b978fcbfb5275e533ca9b788eb22' };
@@ -7238,6 +7267,21 @@ describe('AppController', () => {
               isBlocked: false,
               blockReason: null,
             });
+          });
+
+          it('P3-A4. GET /api/customers enforces strict matching-OA query with exact botId where clause', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            const mockOa = { botId: targetBotId, activeBotId: targetBotId };
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce(mockOa as any);
+            const findSpy = jest.spyOn(mockCustomerRepo, 'find').mockResolvedValueOnce([]);
+
+            await appController.getAllCustomers(targetBotId, resMock);
+            expect(findSpy).toHaveBeenCalledWith(
+              expect.objectContaining({
+                where: { botId: targetBotId }
+              })
+            );
           });
 
           it('P3-12. GET /api/customers with mismatched botId fails closed with 409 and does NOT query customers', async () => {
@@ -7262,6 +7306,26 @@ describe('AppController', () => {
 
             const result: any = await appController.getAllCustomers('U09d6b978fcbfb5275e533ca9b788eb22', resMock);
             expect(result[0].cleanedDisplayName).toBe('Jane');
+          });
+
+          it('P3-A2. GET /api/customers preserves raw Customer.displayName object immutability', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            const mockOa = { botId: targetBotId, activeBotId: targetBotId };
+            const fixture = {
+              botId: targetBotId,
+              lineUserId: 'U999',
+              displayName: '001 สมชาย ใจดี',
+              isBlocked: false,
+              blockReason: null,
+            };
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce(mockOa as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([fixture]);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+            expect(fixture.displayName).toBe('001 สมชาย ใจดี');
+            expect(result[0].displayName).toBe('001 สมชาย ใจดี');
+            expect(result[0].cleanedDisplayName).toBe('สมชาย ใจดี');
           });
 
           it('P3-14. GET /api/customers DTO does NOT leak unauthorized internal properties', async () => {
@@ -7333,6 +7397,26 @@ describe('AppController', () => {
             expect(cleanedNameCell.innerHTML).toBe('');
           });
 
+          it('P3-A5. Malicious customer text node creation proof: payload is literal textContent and creates zero malicious DOM elements', async () => {
+            const { vmContext, getElementById, setFilteredCustomers, getCreatedElements } = createFrontendVmContext();
+            const xssPayload = '<img src=x onerror="window.__pwned=1">';
+            setFilteredCustomers([
+              { botId: 'OA1', lineUserId: 'U999', displayName: xssPayload, cleanedDisplayName: xssPayload, isBlocked: false, blockReason: null }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const cleanedNameCell = row.children[2];
+            expect(cleanedNameCell.textContent).toBe(xssPayload);
+
+            const createdTags = getCreatedElements();
+            expect(createdTags).not.toContain('IMG');
+            expect(createdTags).not.toContain('SCRIPT');
+            expect(createdTags).not.toContain('SVG');
+          });
+
           it('P3-19. renderTable() renders blocked status and blockReason using safe text DOM manipulation', async () => {
             const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
             setFilteredCustomers([
@@ -7346,6 +7430,67 @@ describe('AppController', () => {
             const statusCell = row.children[5];
             expect(statusCell.textContent).toContain('🚫 บล็อก/ส่งไม่ได้');
             expect(statusCell.innerHTML).not.toContain('<b style');
+          });
+
+          it('P3-A6. Malicious blockReason proof: title property equals original literal string, no SVG created, badge renders safely', async () => {
+            const { vmContext, getElementById, setFilteredCustomers, getCreatedElements } = createFrontendVmContext();
+            const maliciousReason = '"><svg onload="window.__pwned=1">';
+            setFilteredCustomers([
+              { botId: 'OA1', lineUserId: 'U2002', displayName: 'Blocked User', cleanedDisplayName: 'Blocked User', isBlocked: true, blockReason: maliciousReason }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const statusCell = row.children[5];
+            const badgeSpan = statusCell.children[0];
+            expect(badgeSpan.title).toBe(maliciousReason);
+            expect(badgeSpan.textContent).toBe('🚫 บล็อก/ส่งไม่ได้');
+            expect(badgeSpan.innerHTML).toBe('');
+
+            const createdTags = getCreatedElements();
+            expect(createdTags).not.toContain('SVG');
+            expect(createdTags).not.toContain('SCRIPT');
+            expect(createdTags).not.toContain('IMG');
+          });
+
+          it('P3-A7. Blocked customer checkbox behavior: checkbox is disabled with expected title', async () => {
+            const { vmContext, getElementById, setFilteredCustomers } = createFrontendVmContext();
+            setFilteredCustomers([
+              { botId: 'OA1', lineUserId: 'U_BLOCKED', displayName: 'Blocked User', cleanedDisplayName: 'Blocked User', isBlocked: true, blockReason: 'SPAM' }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const selectCell = row.children[0];
+            const checkbox = selectCell.children[0];
+            expect(checkbox.disabled).toBe(true);
+            expect(checkbox.title).toBe('ผู้ใช้นี้บล็อกแชท ไม่สามารถเลือกได้');
+          });
+
+          it('P3-A8. selectedUsers checked state: selected customer checkbox.checked is true, unselected is false', async () => {
+            const { vmContext, getElementById, setFilteredCustomers, setSelectedUsers } = createFrontendVmContext();
+            setFilteredCustomers([
+              { botId: 'OA1', lineUserId: 'U_SELECTED', displayName: 'User Selected', cleanedDisplayName: 'User Selected', isBlocked: false },
+              { botId: 'OA1', lineUserId: 'U_UNSELECTED', displayName: 'User Unselected', cleanedDisplayName: 'User Unselected', isBlocked: false }
+            ]);
+            setSelectedUsers(['U_SELECTED']);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            expect(tbody.children.length).toBe(2);
+
+            const row1 = tbody.children[0];
+            const checkbox1 = row1.children[0].children[0];
+            expect(checkbox1.checked).toBe(true);
+
+            const row2 = tbody.children[1];
+            const checkbox2 = row2.children[0].children[0];
+            expect(checkbox2.checked).toBe(false);
           });
 
           it('P3-20. renderGroupDropdown() populates group options safely using createElement and textContent', async () => {
@@ -7378,6 +7523,28 @@ describe('AppController', () => {
             const option = select.children[1];
             expect(option.textContent).toContain(maliciousName);
             expect(option.innerHTML).toBe('');
+          });
+
+          it('P3-A9. Group XSS + ID + memberCount proof: option.value is group id, textContent contains literal group name and memberCount, no SCRIPT created', async () => {
+            const { vmContext, getElementById, setCurrentGroups, getCreatedElements } = createFrontendVmContext();
+            const groupXssName = '<script>window.__pwned=1</script>';
+            setCurrentGroups([
+              { id: 'g-safe', name: groupXssName, memberCount: 42 }
+            ]);
+
+            vmContext.renderGroupDropdown();
+
+            const select = getElementById('groupSelect');
+            const option = select.children[1];
+            expect(option.value).toBe('g-safe');
+            expect(option.textContent).toContain(groupXssName);
+            expect(option.textContent).toContain('42 คน');
+            expect(option.innerHTML).toBe('');
+
+            const createdTags = getCreatedElements();
+            expect(createdTags).not.toContain('SCRIPT');
+            expect(createdTags).not.toContain('SVG');
+            expect(createdTags).not.toContain('IMG');
           });
 
           it('P3-22. Event properties on rendered elements use safe property assignment rather than executable HTML string injection', async () => {
