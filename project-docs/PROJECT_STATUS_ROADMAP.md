@@ -24,10 +24,10 @@ ACTIVE_WORK_PACKAGE: P3-WP003-PRE1-R1
 TASK_ID: P3-WP003-PRE1-R1
 PARENT_TASK: P3-WP003-PRE1
 AUTHORIZATION_REVISION: P3-WP003-PRE1-R1-EVIDENCE-DEFINITION-COMPLETION
-STATUS: CORRECTIVE_AUTHORIZED
-AUTHORIZE_EXECUTION: TRUE
+STATUS: READY_FOR_CHATGPT_REVIEW
+AUTHORIZE_EXECUTION: FALSE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_R1_EVIDENCE
+NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
 ```
 
 This gate authorizes repository inspection and evidence-definition completion only, not implementation.
@@ -70,7 +70,7 @@ Independent review result:
 The initial PRE1 run changed lifecycle state but did not record the required repository-grounded findings.
 
 ### P3-WP003-PRE1-R1 — Evidence Definition Completion
-Status: `CORRECTIVE_AUTHORIZED / EVIDENCE_ONLY`
+Status: `READY_FOR_CHATGPT_REVIEW`
 
 R1 must complete the missing evidence. It may inspect relevant source/tests/entities/database-init/dashboard/package/docs, but may not modify implementation files.
 
