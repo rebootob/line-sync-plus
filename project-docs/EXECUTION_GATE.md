@@ -1,42 +1,30 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 30
+CONTROL_VERSION: 31
 
 TASK_ID:
-P3-WP002-R1
+P3-WP002-R2
 
 PARENT_TASK:
-P3-WP002
+P3-WP002-R1
 
 AUTHORIZATION_REVISION:
-P3-WP002-R1-REVIEW
+P3-WP002-R2-EVIDENCE-CLOSURE
 
 TITLE:
-P3-WP002-R1 — Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective
+P3-WP002-R2 — TEST-ONLY + CONTROL-DOC Evidence Closure
 
 STATUS:
-READY_FOR_CHATGPT_REVIEW
-
-CODE_BASELINE_HEAD:
-80a9f2dcafdb81e84f990e5593009091ab83bb4e
-
-IMPLEMENTATION_CANDIDATE_HEAD:
-03dd35a5d6b29c6394f93f16061bfaddb5f10174
-
-REVIEWED_IMPLEMENTATION_HEAD:
-NONE
-
-ACCEPTED_IMPLEMENTATION_HEAD:
-NONE
-
-AUTHORIZATION_REF:
-Owner authorized P3-WP002-R1 Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective
+CORRECTIVE_AUTHORIZED
 
 AUTHORIZE_EXECUTION:
-FALSE
+TRUE
 
 AUTHORIZED_BY:
-Project Owner (P3-WP002-R1 Corrective)
+Project Owner (P3-WP002-R2 Evidence Closure)
+
+AUTHORIZATION_REF:
+Owner authorized P3-WP002-R2 TEST-ONLY + CONTROL-DOC Evidence Closure according to the bounded scope recorded in this gate.
 
 CONTROL_PLANE:
 ChatGPT
@@ -47,6 +35,42 @@ Antigravity
 CANONICAL_BRANCH:
 main
 
+CONTROL_UPDATE_PARENT_HEAD:
+9b2a110dfe4f04302a4b6b60bdbc48dfde274009
+
+P3-WP002_BASELINE_HEAD:
+7ca0a0dcde5896f18a8254f4a94a74a776d7a36e
+
+P3-WP002_ORIGINAL_IMPLEMENTATION_HEAD:
+956e576ffee2f194ce6e617531a58f336de2b280
+
+P3-WP002_INITIAL_REVIEW_HEAD:
+80a9f2dcafdb81e84f990e5593009091ab83bb4e
+
+P3-WP002-R1_IMPLEMENTATION_HEAD:
+03dd35a5d6b29c6394f93f16061bfaddb5f10174
+
+P3-WP002-R1_REVIEW_READY_HEAD:
+9b2a110dfe4f04302a4b6b60bdbc48dfde274009
+
+CODE_BASELINE_HEAD:
+03dd35a5d6b29c6394f93f16061bfaddb5f10174
+
+IMPLEMENTATION_CANDIDATE_HEAD:
+03dd35a5d6b29c6394f93f16061bfaddb5f10174
+
+REVIEWED_IMPLEMENTATION_HEAD:
+03dd35a5d6b29c6394f93f16061bfaddb5f10174
+
+REVIEW_RESULT:
+SOURCE_PASS / EVIDENCE_CORRECTIVE_REQUIRED
+
+ACCEPTED_IMPLEMENTATION_HEAD:
+NONE
+
+IMPORTANT:
+The future P3-WP002-R2 TEST-ONLY commit MUST NOT be recorded as an implementation HEAD. The reviewed implementation remains 03dd35a5d6b29c6394f93f16061bfaddb5f10174 until independent acceptance says otherwise.
+
 PROJECT_STATE:
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
@@ -54,84 +78,173 @@ PHASE_2: CLOSED / PASS
 PHASE-2-CLOSE: CLOSED_PASS
 PHASE_3: IN PROGRESS
 PHASE_3_TITLE: Audience & Customer Intelligence
-ACTIVE_WORK_PACKAGE: P3-WP002-R1
+ACTIVE_WORK_PACKAGE: P3-WP002-R2
 P3-WP001: CLOSED / PASS
 P3-WP001-R1: CORRECTED / SUPERSEDED_BY_C1
 P3-WP001-R1-C1: CLOSED_PASS
 P3-WP001-CLOSE: CLOSED_PASS
 P3-WP001-CLOSE-C1: CLOSED_PASS
 P3-WP002-PRE1: COMPLETE / DEFINITION READY
-P3-WP002: CORRECTIVE REQUIRED / AWAITING_R1_REVIEW
-P3-WP002-R1: READY_FOR_CHATGPT_REVIEW
+P3-WP002: CORRECTIVE REQUIRED / R2 AUTHORIZED
+P3-WP002-R1: CORRECTIVE REQUIRED / SUPERSEDED_BY_R2
+P3-WP002-R2: CORRECTIVE_AUTHORIZED
 P3-WP003: FUTURE / NOT AUTHORIZED
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_EXECUTION
 
 --------------------------------------------------
-OBJECTIVE — P3-WP002-R1 AGGREGATE QUERY + TIME-WINDOW TRUTH + FINAL EVIDENCE/CONTROL CORRECTIVE
+PURPOSE — P3-WP002-R2 TEST-ONLY + CONTROL-DOC EVIDENCE CLOSURE
 --------------------------------------------------
 
-Correct P3-WP002 implementation to:
-1. Replace Node.js in-memory CampaignJob loading with exactly ONE DB-side CampaignJob QueryBuilder aggregate query grouped by lineUserId.
-2. Fix 7-day and 30-day activity filter logic to strictly reject future and invalid timestamps while supporting lower boundary equality.
-3. Ensure NEVER_SUCCESS is determined ONLY by successfulJobCount === 0.
-4. Expand test suite to 39 explicit R1 assertions.
-5. Fix supporting control document state and roadmap structure.
+Close the remaining P3-WP002 regression-evidence gap only.
 
-IMPORTANT: This gate is EXECUTABLE (AUTHORIZE_EXECUTION: TRUE). Project Owner has explicitly authorized bounded implementation of P3-WP002-R1.
+ChatGPT independent review of P3-WP002-R1 established:
+- SOURCE / ARCHITECTURE: PASS
+- DB-SIDE AGGREGATION: PASS
+- TIME-WINDOW PRODUCTION LOGIC: PASS
+- SAFE DOM PRODUCTION LOGIC: PASS
+- PRODUCTION CODE CORRECTIVE STILL NEEDED: NO
 
---------------------------------------------------
-PHASE 3 OBJECTIVE & WORK PACKAGE SCOPE
---------------------------------------------------
-
-Objective:
-Improve audience understanding and selection using only authoritative OA-scoped customer and existing outbound campaign data, while preserving privacy and all accepted delivery-safety invariants.
-
-Work Packages:
-- P3-WP001 — Customer Intelligence Foundation (CLOSED / PASS, Accepted Implementation HEAD: f9a097a7579c1a357506816656b10c01f68be6ac)
-- P3-WP002 — Outbound Activity Intelligence (CORRECTIVE REQUIRED / R1 AUTHORIZED)
-- P3-WP002-R1 — Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective (CORRECTIVE_AUTHORIZED)
-- P3-WP003 — Persistent Tags & Advanced Segmentation (FUTURE / NOT AUTHORIZED)
+The only remaining blocking item is TEST EVIDENCE + CONTROL DOCUMENT TRUTH.
 
 --------------------------------------------------
-P3-WP002-R1 AUTHORIZED IMPLEMENTATION CONTRACT
+AUTHORIZED FILES — NEXT FRESH R2 EXECUTION RUN
 --------------------------------------------------
 
-1. DB-Side Aggregation:
-- Single OA-scoped CampaignJob QueryBuilder aggregate query (`WHERE job.botId = :cleanBotId GROUP BY job.lineUserId`).
-- `COUNT(*) FILTER (WHERE job.status = 'success')` as successfulJobCount
-- `MAX(job.sentAt) FILTER (WHERE job.status = 'success')` as lastSuccessfulSendAt
-- `COUNT(*) FILTER (WHERE job.status = 'failed')` as failedJobCount
-- `COUNT(*) FILTER (WHERE job.status = 'reconcile_required')` as reconcileRequiredCount
-- `latestJobStatus` & `latestJobCreatedAt` derived deterministically DB-side by `createdAt DESC, id DESC`.
-- Exactly ONE `getRawMany()` query. NO N+1, NO `campaignJobRepository.find(...)` for activity.
+R2 may modify ONLY:
 
-2. Time Window & Filter Truth:
-- 7-day & 30-day filters require `sendTime <= now` AND `sendTime >= now - window`.
-- Future timestamps and invalid timestamps MUST NOT match.
-- Exact lower boundary (`sendTime === now - window`) MUST match.
-- NEVER_SUCCESS is determined ONLY by `successfulJobCount === 0`.
+- src/app.controller.spec.ts
 
-3. Safe Activity DOM:
-- Compact presentation using `createElement`, `textContent`, safe property assignment.
-- Dynamic activity values must never be injected via innerHTML.
+and, at completion, these same five control documents:
+
+- project-docs/EXECUTION_GATE.md
+- project-docs/ACTIVE_TASK.md
+- project-docs/CHAT_HANDOFF.md
+- project-docs/CURRENT_STATE.md
+- project-docs/PROJECT_STATUS_ROADMAP.md
+
+ABSOLUTELY PROHIBITED:
+
+- src/app.controller.ts
+- index.html
+- run/**
+- src/entities/**
+- src/customer.entity.ts
+- src/database-init.service.ts
+- src/runtime-version.ts
+- src/telegram.service.ts
+- package*.json
+- DB/schema/migrations/indexes
+- any unrelated file
+
+If any prohibited production file appears necessary, STOP and return to the Control Plane. Do not expand scope.
 
 --------------------------------------------------
-FUTURE WORK PACKAGES (NOT AUTHORIZED)
+REQUIRED R2 REGRESSION EVIDENCE
 --------------------------------------------------
 
-- P3-WP003 — Persistent Tags & Advanced Segmentation: Additive schema for tags and customer-tag assignments. Requires separate explicit Owner authorization. FUTURE / NOT AUTHORIZED.
+1. malformed botId -> HTTP 400; customer query ZERO; activity createQueryBuilder ZERO.
+2. no active OA -> HTTP 409; customer query ZERO; activity query ZERO.
+3. mismatched OA -> HTTP 409; customer query ZERO; activity query ZERO.
+4. Assert ACTUAL QueryBuilder SQL expressions for:
+   - COUNT success
+   - MAX successful sentAt
+   - COUNT failed
+   - COUNT reconcile_required
+   - deterministic latest ordered by createdAt DESC, id DESC
+5. Strict SQL scope:
+   - WHERE job.botId = :cleanBotId
+   - GROUP BY job.lineUserId
+6. With at least 3 customers:
+   - createQueryBuilder exactly once
+   - getRawMany exactly once
+   - no N+1
+7. campaignJobRepository.find MUST NOT be used for this customer-activity endpoint.
+8. CampaignSendPart read/query MUST NOT be used for this customer-activity endpoint.
+9. Customer.createdAt/updatedAt cannot influence activity metrics and are not exposed in DTO.
+10. malicious latestJobStatus renders as literal text only with zero IMG/SCRIPT/SVG payload nodes.
+11. Fixed/deterministic clock proof for 7-day:
+    - exactly now PASS
+    - exactly now-7d PASS
+    - future FAIL
+    - invalid FAIL
+12. Fixed/deterministic clock proof for 30-day:
+    - exactly now PASS
+    - exactly now-30d PASS
+    - future FAIL
+    - invalid FAIL
+13. NEVER_SUCCESS:
+    - successfulJobCount == 0 -> MATCH
+    - successfulJobCount > 0 + null lastSuccessfulSendAt -> NOT MATCH
+
+Preserve existing regression evidence:
+- blocked customer checkbox disabled
+- selectedUsers checked behavior
+- stale OA response discard
+
+TEST INTEGRITY:
+- Tests must execute ACTUAL production code.
+- No copied production functions.
+- No .only / .skip.
+- Do not weaken existing tests.
 
 --------------------------------------------------
-ACCEPTED AUTOMATED TEST EVIDENCE & INVARIANTS
+R2 VALIDATION CONTRACT — NEXT FRESH RUN ONLY
 --------------------------------------------------
 
-- Full Jest Test Suite: 549/549 PASS (Initial P3-WP002 evidence; R1 evidence pending R1 execution)
-- Failures: 0
-- Evidence Classification: LOCAL REPORTED
-- GitHub CI / Status Workflow Evidence: NONE
-- Worker Version: 28.16
-- Required Worker Version: 28.16
-- Runtime Contract Version: 2
-- Privacy & Safety Boundary: Customer intelligence uses existing directory metadata and campaign execution metadata only. No LINE chat content or private message semantics collected or inferred.
-- Safety Policy: Never automatically resend an ambiguous physical send. True exactly-once physical LINE delivery across LINE Web UI boundary is NOT guaranteed.
+Required commands:
+
+npm test -- --runInBand
+npm run build
+git diff --check
+
+Require all PASS.
+
+Evidence classification:
+LOCAL REPORTED
+
+GitHub CI/status:
+NONE unless actual GitHub evidence exists.
+
+This control-update run MUST NOT execute those R2 tests and MUST NOT modify src/app.controller.spec.ts.
+
+--------------------------------------------------
+VERSION / SAFETY CONTRACT
+--------------------------------------------------
+
+Worker Version: 28.16
+Required Worker Version: 28.16
+Runtime Contract Version: 2
+
+No Worker change.
+No schema change.
+No LINE send.
+No Live UAT.
+No Telegram test.
+
+True exactly-once physical LINE delivery: NOT GUARANTEED.
+Never automatically resend an ambiguous physical send.
+
+--------------------------------------------------
+PROGRESS / LIFECYCLE
+--------------------------------------------------
+
+Official accepted roadmap progress estimate: ~56%
+Practical implementation progress estimate: ~61%
+
+These percentages are planning estimates, NOT acceptance evidence.
+
+Current blocking item:
+P3-WP002-R2 TEST-ONLY evidence closure.
+
+Exact lifecycle:
+CONTROL UPDATE
+-> COMMIT/PUSH
+-> STOP
+-> FRESH NEW RUN/CHAT
+-> execute P3-WP002-R2 gate only
+-> READY_FOR_CHATGPT_REVIEW
+-> STOP
+-> ChatGPT independent review
+
+P3-WP003 MUST NOT start automatically.

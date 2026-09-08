@@ -2,503 +2,313 @@
 
 ## 1. Executive Summary
 
-**LineSync Plus** is an automated customer contact synchronization, group segmentation, and broadcast campaign management platform operating against the **LINE Official Account (LINE OA)** Web Interface (`chat.line.biz`). The system consists of a NestJS backend REST API, a single-page HTML web dashboard, a PostgreSQL database, and a client-side Tampermonkey automation script (`run/LineSyncApp.js` v28.16).
+LineSync Plus is an automated LINE Official Account customer-contact synchronization, segmentation, and broadcast campaign management platform built around a NestJS backend, PostgreSQL/TypeORM data layer, single-page dashboard, and Tampermonkey worker running in `chat.line.biz`.
 
-This document serves as the master source-of-truth for project architecture, safety models, complete incident corrective history, live UAT evidence, technical debt, secret hygiene mandates, and the Phase 0–5 development roadmap.
+Current roadmap truth:
 
----
+- **Phase 0**: `CLOSED / PASS`
+- **Phase 1**: `CLOSED / PASS`
+- **Phase 2**: `CLOSED / PASS`
+- **Phase 3**: `IN PROGRESS`
+- **Phase 4**: `FUTURE`
+- **Phase 5**: `FUTURE`
 
-## 2. Project Purpose
+Current active corrective:
+**P3-WP002-R2 — TEST-ONLY + CONTROL-DOC Evidence Closure**.
 
-The primary objective of LineSync Plus is to enable high-volume, reliable, and safe message broadcasts to customer segments via LINE Official Account while maintaining zero-tolerance safety bounds against message misdelivery, context poisoning, quota overflows, multi-OA leakage, and execution race conditions.
-
-Key Operational Goals:
-- Synchronize customer profiles, display names, and block statuses automatically.
-- Provide real-time UI segmentation, tagging, and quick selection filters.
-- Automate multi-type message broadcasts (`text`, `image_only`, `link_only`, `text_link`, `image_link`).
-- Guarantee zero-tolerance recipient verification before every message send.
-- Guarantee single active worker execution across multiple open browser tabs.
-- Guarantee strict OA context isolation across multi-OA environments.
-- Protect LINE OA account via per-OA send rate limits, fail-closed protection state, exact read-back timestamp reservations, active worker telemetry heartbeats, campaign target hygiene, and adaptive error backoff (SAFE-WP001 / R1 / R2 / R3 CLOSED / PASS).
-- Guarantee durable backend job leases, active heartbeat renewals, pre-send lease fencing, transactional finalization, and stale worker fencing (REL-WP002 CLOSED / PASS; REL-WP002-R3 CLOSED / PASS).
+P3-WP003 remains **FUTURE / NOT AUTHORIZED**.
 
 ---
 
-## 3. Current Architecture
+## 2. Current Control Gate
 
-```
-+-----------------------------------------------------------------------------------+
-|                                 LineSync Dashboard                                |
-|                           Single-Page Web Application UI                          |
-+----------------------------------------+------------------------------------------+
-                                         |
-                                         | REST API (HTTP)
-                                         v
-+------------------+  HTTP   +------------------+ TypeORM  +--------------------+
-| Tampermonkey     |<------->| NestJS Backend   |<-------->| PostgreSQL DB      |
-| (LineSyncApp.js) |         | (AppController)  |          | (line_sync_db)     |
-+------------------+         +--------+---------+          +--------------------+
-  Runs inside                         |
-  chat.line.biz                       | Telegram API
-                                      v
-                             +------------------+
-                             | Telegram Bot API |
-                             +------------------+
-
-                                         ^
-                                         | REST API / Diagnostics & Telemetry
-                                         v
-
-+-----------------------------------------------------------------------------------+
-|                          Client Automation & Observability                        |
-|                     Tampermonkey Userscript (LineSyncApp.js v28.16)              |
-|                             Running in chat.line.biz                              |
-|                                                                                   |
-|  - Durable Job Lease & Active Heartbeat Loop (REL-WP002 / REL-WP002-R1)           |
-|  - Pre-Send Lease Renewal Fencing (renewJobLeaseOrThrow) (REL-WP002-R1)           |
-|  - Strict Worker Instance Identity Header (X-LineSync-Worker-Instance)            |
-|  - Real Same-Job Finalization Retry Without Re-Send (REL-WP002-R1)                |
-|  - Fail-Closed Lease Loss Router (handleJobLeaseLost) (REL-WP002-R1)              |
-|  - ARM + CONFIRM State Machine & Zero Network Gap Send (REL-WP003-R2)             |
-|  - Fail-Closed Ambiguity Quarantine & Operator Reconciliation (REL-WP003-R2)      |
-|  - Active Worker Telemetry Heartbeat (processQueue) (SAFE-WP001-R3 CLOSED / PASS)  |
-|  - Strict Protection State Schema (loadProtectionTimestamps) (SAFE-WP001-R2)       |
-|  - Exact Read-Back Timestamp Reservation (recordProtectionSendAction) (SAFE-WP001)|
-|  - Final Reservation Revalidation (verifyProtectionReservation) (SAFE-WP001-R2)   |
-|  - Loopback-Protected Telemetry Endpoints (/account-protection/telemetry)         |
-|  - Per-OA Account Protection Send Rate Guard (SAFE-WP001 CLOSED / PASS)           |
-|  - Adaptive System-Error Backoff Schedule (30s / 60s / 120s / max 300s)           |
-|  - LINE OA Directory Sync (/chats Endpoint Source) (SYNC-WP001 CLOSED / PASS)     |
-|  - Multi-OA Context Isolation & Identity Fencing (OA-WP001 / R1 CLOSED / PASS)     |
-|  - Single Worker Multi-Tab Lock (REL-WP001 / R1 / R2 CLOSED / PASS)               |
-|  - Document-Lifetime Tab Identity Lock & Clone Defense (ensureTabIdentity)        |
-|  - Fail-Closed Lease Persistence (writeAndVerifyLeaderRecord)                     |
-|  - Complete Navigation Hold (navigateAsLeader: NAVIGATION_LEASE_MS = 45000)       |
-|  - Atomic Pre-Send Fencing (confirmWorkerLeadershipForSend under Web Locks)       |
-|  - Fail-Closed Runtime Version Gate (X-LineSync-Worker-Version: 28.16)            |
-|  - Strict OA Context Validator (isValidChatContextId)                             |
-|  - Full-Lifecycle Execution Lock (isExecutingJob)                                 |
-|  - Same-Job Safe Recovery & Preservation (handleSafeRecovery)                     |
-|  - Zero-Tolerance Pre-Send Recipient Verification Guard                           |
-|  - Atomic Navigation-Safe Diagnostic Spooling (linesync_pending_diagnostics)      |
-+-----------------------------------------------------------------------------------+
+```yaml
+CONTROL_VERSION: 31
+ACTIVE_WORK_PACKAGE: P3-WP002-R2
+TASK_ID: P3-WP002-R2
+PARENT_TASK: P3-WP002-R1
+AUTHORIZATION_REVISION: P3-WP002-R2-EVIDENCE-CLOSURE
+STATUS: CORRECTIVE_AUTHORIZED
+AUTHORIZE_EXECUTION: TRUE
+NEXT_CANDIDATE: NONE
+NEXT_CANDIDATE_STATUS: AWAITING_EXECUTION
 ```
 
----
+P3-WP002-R1 production source has passed independent source/architecture review, but P3-WP002 is not accepted/closed because required regression evidence remains incomplete.
 
-## 4. Existing Functions
-
-1. **Customer & Group Management**:
-   - Multi-OA customer profile synchronization (`(botId, lineUserId)` composite primary key).
-   - Full directory synchronization from `chat.line.biz/api/v2/bots/{botId}/chats` via `POST /api/customers/sync-batch`.
-   - Granular 9-metric directory sync reporting.
-   - Tag assignment, group creation, member mapping, and deletion with explicit `botId` scoping.
-2. **Campaign & Queue Engine**:
-   - Campaign target hygiene on `POST /api/campaign/add`: deduplicates target IDs, excludes blocked customers (`isBlocked === true`), sets `totalTargets` to `queuedCount`.
-   - Multi-type campaign dispatching (`text`, `image_only`, `link_only`, `text_link`, `image_link`).
-   - Durable job lease claim via `GET /api/campaign/next` generating UUID `leaseToken` and setting 60s lease expiry with fail-closed runtime version gate (`X-LineSync-Worker-Version: 28.16`) and strict worker instance header (`^ts_[0-9]{10,17}_[a-z0-9]{4,32}$`).
-   - Active lease heartbeat via `POST /api/campaign/heartbeat` extending lease by 60s or returning 409 Conflict `lease_lost`.
-   - Pre-send lease renewal fencing (`renewJobLeaseOrThrow`) before image confirm, text send click, and Enter keydown.
-   - Transactional finalization (`/campaign/success`, `/campaign/fail`, `/campaign/stop`) executing inside TypeORM transactions with atomic fencing queries; duplicate finalizations fail closed with 409 `lease_lost` and cannot double-increment counters or mutate customer block status.
-   - Multipart send ledger (`campaign_send_parts` with unique `jobId, partKey`), separate queue safety pre-pass in `/campaign/next`, and hard-fenced operator crash reconciliation.
-3. **Account Protection & Compliance Guard (SAFE-WP001 / R1 / R2 / R3 CLOSED / PASS)**:
-   - Fail-closed protection state: strict schema validation, exact read-back timestamp reservations, final reservation revalidation before pointer/click/keydown events.
-   - Active worker telemetry heartbeat in `processQueue()` polling loop (~4s cadence) keeps Dashboard Account Protection telemetry continuously fresh without fake values or timestamp mutations.
-   - Loopback-trusted telemetry subsystem (`POST /api/account-protection/telemetry`) enforcing version, OA context header, and numeric schema validation.
-   - Centralized per-OA protection gate (`enforceAccountProtectionGate`) before image confirm send click, text send button click, and Enter key fallback.
-   - Internal protection defaults: `MIN_SEND_GAP_MS = 10000` (10s gap), `MAX_SEND_ACTIONS_10_MIN = 60` (rolling 10m limit), `MAX_SEND_ACTIONS_1_HOUR = 300` (rolling 1h limit).
-   - Adaptive system-error backoff schedule (30s / 60s / 120s / max 300s).
-4. **Telegram Notification Subsystem**:
-   - Formatted HTML campaign progress and completion summary reporting via Telegram Bot API.
-5. **Local Diagnostic Observability**:
-   - Confirmed-write browser diagnostic event logging to `uat-logs/browser-BUG-WP001-UAT.log` via `POST /api/diagnostics/browser-event`.
+Review result:
+`SOURCE_PASS / EVIDENCE_CORRECTIVE_REQUIRED`.
 
 ---
 
-## 5. Safety & Compliance Model
+## 3. P3-WP002 Head / Review Ledger
 
-The LineSync Plus safety model operates on strict **fail-closed** principles:
+- `P3-WP002_BASELINE_HEAD`: `7ca0a0dcde5896f18a8254f4a94a74a776d7a36e`
+- `P3-WP002_ORIGINAL_IMPLEMENTATION_HEAD`: `956e576ffee2f194ce6e617531a58f336de2b280`
+- `P3-WP002_INITIAL_REVIEW_HEAD`: `80a9f2dcafdb81e84f990e5593009091ab83bb4e`
+- `P3-WP002-R1_IMPLEMENTATION_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- `P3-WP002-R1_REVIEW_READY_HEAD`: `9b2a110dfe4f04302a4b6b60bdbc48dfde274009`
+- `CODE_BASELINE_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- `IMPLEMENTATION_CANDIDATE_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- `REVIEWED_IMPLEMENTATION_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- `REVIEW_RESULT`: `SOURCE_PASS / EVIDENCE_CORRECTIVE_REQUIRED`
+- `ACCEPTED_IMPLEMENTATION_HEAD`: `NONE`
 
-- **Durable Job Lease & Heartbeat Fencing (REL-WP002 / REL-WP002-R1)**: Atomic job claim generating UUID `leaseToken`, 60s lease expiry, 10s active heartbeat extension, pre-send lease renewal fencing, real same-job finalization retry without re-send, and transactional finalization fencing.
-- **Multipart Send Ledger & Crash Reconciliation (REL-WP003 CLOSED / PASS)**: Ephemeral in-memory dispatchToken, zero network gap pre-send ARM, durable per-part ledger (`campaign_send_parts`), queue safety pre-pass pre-scanning expired processing jobs, full ledger validation on `/campaign/success`, and hard-fenced operator reconciliation. Never automatically resend an ambiguous physical send.
-- **LINE OA Account Protection & Compliance Guard (SAFE-WP001 CLOSED / PASS)**: Enforces strict protection state schema reads, exact read-back timestamp reservations, final reservation revalidation, active worker telemetry heartbeats, loopback-trusted cross-origin telemetry, per-OA rolling window send caps (10s min gap, 60/10m, 300/1h), campaign target hygiene, and adaptive error backoff.
-  > ⚠️ **Notice**: SAFE-WP001 is an operational risk-reduction control. It does NOT guarantee that LINE will never restrict/suspend an OA. Internal rate thresholds are safety defaults, not official LINE API limits. Zero detection evasion techniques are included.
-- **Customer Directory Sync Hard Fencing & Metric Integrity (SYNC-WP001 CLOSED / PASS)**: `POST /api/customers/sync-batch` enforces loopback origin, valid `botId` format, `botId === activeBotId`, strict User ID regex, and Master Bot PAUSED status. Worker v28.16 queries `/chats?folderType=ALL&limit=20&prioritizePinnedChat=true`.
-- **Strict OA Identity Fencing (OA-WP001 / OA-WP001-R1 CLOSED / PASS)**: Terminal fallback reporting requires valid `botId` + `lineUserId` + `status: 'processing'`.
-- **Single Worker Multi-Tab Lock & Clone Defense (REL-WP001 CLOSED / PASS)**: `ensureWorkerLeadership()` enforces single worker tab execution.
-- **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path and DOM attribute validation before any physical send action.
-- **Fail-Closed Runtime Version Gate (OPS-WP001 CLOSED / PASS)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.16'`.
-
----
-
-## 6. Problems Found & Work Packages
-
-Over the course of safety hardening, 26 work packages were identified, implemented, verified, and updated:
-
-1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard (CLOSED)**
-2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard (CLOSED)**
-3. **BUG-WP001-UATLOG — Persistent Browser Safety Diagnostic Logging (CLOSED)**
-4. **BUG-WP001-UATLOG-R1 — Low-Noise / Local-Only Diagnostic Logging (CLOSED)**
-5. **BUG-WP002 — OA Context Poisoning / Invalid BotId 404 Loop (CLOSED)**
-6. **BUG-WP002-R1 — Preserve Active Job When OA Context Is Unknown (CLOSED)**
-7. **REL-WP001 / REL-WP001-R1 / REL-WP001-R2 — Single Worker / Multi-Tab Lock (CLOSED)**
-8. **OA-WP001 / OA-WP001-R1 — OA Context Isolation & Strict OA Identity Fencing (CLOSED / PASS)**
-9. **SYNC-WP001 — LINE OA Customer Directory Sync to DB (CLOSED / PASS)**
-10. **SYNC-WP001-R1..R5 — Full Directory Source Correction to /chats (CLOSED / PASS)**
-11. **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard (CLOSED / PASS)**
-12. **SAFE-WP001-R1 — Fail-Closed Protection State + Truthful Dashboard Telemetry (CLOSED / PASS)**
-13. **SAFE-WP001-R2 — Reservation Integrity + Truthful Protection Telemetry (CLOSED / PASS)**
-14. **SAFE-WP001-R3 — Active Worker Telemetry Heartbeat (CLOSED / PASS)**
-15. **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing (CLOSED / PASS)**
-16. **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing (CORRECTED / SUPERSEDED)**
-17. **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop (CORRECTIVE REQUIRED / SUPERSEDED)**
-18. **REL-WP002-R3 — Complete R2 Corrective Exactly (CLOSED / PASS)**
+The future R2 TEST-ONLY commit must not be recorded as an implementation HEAD.
 
 ---
 
-## 7. Operational Findings & Live UAT Evidence
+## 4. Current Phase 3 Decision
 
-- **Worker v28.11 Live UAT Evidence**:
-  - 2-recipient text campaign created while PAUSED contained exactly 2 jobs.
-  - Worker v28.11 processed both recipients to completion; LINE messages/send were observed.
-  - Campaign send completed with no recipient mismatch, no OA mismatch, and no protection-state errors.
-- **Worker v28.12 Live UAT Evidence**:
-  - Telemetry heartbeat verified on idle worker.
-  - Dashboard telemetry displayed `Protection: ON`, `10m: 0 / 60`, `1h: 2 / 300`, `Next Send: now`, `Cooling: none`.
-  - Proves 2 send reservations correctly aged out of 10m window while remaining inside 1h window. Heartbeat maintains telemetry freshness without creating fake timestamps.
-- **Worker v28.15 Live UAT Evidence (REL-WP002)**:
-  - 2-recipient text campaign (`"แคมเปญ 3/9/2026 8:6"`, test text `"1111"`) prepared while Master Bot was PAUSED.
-  - Master Bot enabled only after preparation; Worker claimed both jobs with valid 60s durable leases.
-  - Recipient verification verified prior to send; LINE send physically observed.
-  - Both jobs completed successfully (`08:10:18`, `08:10:30`); 0 failed; overall campaign completed.
-  - Zero visible `JOB_LEASE_LOST`, `lease_lost`, `OA_CONTEXT_MISMATCH`, or `RECIPIENT_UNVERIFIED`.
-  - Post-run Account Protection: ON, 10m: 2/60, 1h: 2/300, Next Send: now, Cooling: none.
-  - *Non-Destructive UAT Limitation*: These destructive scenarios were not executed on Live LINE OA to avoid unnecessary operational/send risk. They are covered by focused behavioral/unit tests. The local validation suite reported 236/236 passing; no independent GitHub CI status is available.
-- **Worker v28.16 Live / Controlled UAT Evidence (REL-WP003 CLOSED / PASS)**:
-  - Backend migration startup: `Database schema verified/initialized successfully` with non-destructive, fail-closed legacy normalization and authoritative unique index.
-  - Normal text send: target: 1, success: 1, fail: 0, physical duplicate: 0.
-  - Durable ledger verification: `job_status = success`, `partKey = text`, `part_status = dispatched`, `armedAt` and `dispatchedAt` present, `reconcileReason = null`.
-  - Clean ambiguity baseline: 0 pre-existing `armed` or `reconcile_required` rows.
-  - Controlled DB-only fixture: job `processing`, part `armed`, NO physical LINE send.
-  - Send-plan ambiguity detection: `/campaign/send-plan` returned `success = true`, `isFullyDispatched = false`, `hasQuarantine = true`.
-  - Post-quarantine DB state: `job = reconcile_required`, `part = reconcile_required`, `reconcileReason = 'quarantined_on_reload_ambiguity'`, `campaign = paused_reconcile`, job leases cleared.
-  - Operator reconciliation GET: synthetic fixture visible with Master Bot PAUSED.
-  - Operator resolution: `confirmed_not_sent_retry` succeeded with zero LINE sends.
-  - Cleanup verification: DB inspection confirmed `CAMPAIGN FOUND = 0`, `JOB FOUND = 0`, `PARTS FOUND = 0`. Clean baseline restored.
-  - Static Review: REL-WP003-R3B review PASS, local automated suite reported 271/271 PASS, no GitHub CI status checks.
-  - Architectural Truth: Do NOT claim true exactly-once physical delivery; LINE Web UI remains outside database transaction boundary. Safety policy: Never automatically resend an ambiguous physical send.
+### P3-WP001 — Customer Intelligence Foundation
 
----
+Status: **CLOSED / PASS**
 
-## 8. UAT Evidence
+Accepted implementation HEAD:
+`f9a097a7579c1a357506816656b10c01f68be6ac`
 
-- **Safety Gate Status**: **PASS**
-- **BUG-WP001**: **CLOSED / PASS**
-- **BUG-WP001-UATLOG**: **CLOSED / PASS**
-- **BUG-WP002**: **CLOSED / PASS**
-- **SEC-WP001**: **CLOSED / PASS**
-- **OPS-WP001 / OPS-WP001-R1**: **CLOSED / PASS**
-- **REL-WP001 / REL-WP001-R1 / REL-WP001-R2**: **CLOSED / PASS**
-- **OA-WP001 / OA-WP001-R1**: **CLOSED / PASS** (Accepted on Worker v28.5)
-- **SYNC-WP001 / R1..R5**: **CLOSED / PASS** (Accepted on Worker v28.8)
-- **SAFE-WP001 / R1..R3**: **CLOSED / PASS** (Accepted on Worker v28.12)
-- **REL-WP002**: **CLOSED / PASS**
-- **REL-WP002-R1**: **CORRECTED / SUPERSEDED**
-- **REL-WP002-R2**: **CORRECTIVE REQUIRED / SUPERSEDED**
-- **REL-WP002-R3**: **CLOSED / PASS**
-- **REL-WP003**: **CLOSED / PASS**
-- **REL-WP003-R1**: **CORRECTIVE REQUIRED / SUPERSEDED**
-- **REL-WP003-R2**: **CORRECTIVE REQUIRED / SUPERSEDED**
-- **REL-WP003-R3A**: **CORRECTIVE REQUIRED / SUPERSEDED**
-- **REL-WP003-R3B**: **PASS / CLOSED**
+Historical corrective/closure chain:
 
----
+- `P3-WP001-R1`: `CORRECTED / SUPERSEDED_BY_C1`
+- `P3-WP001-R1-C1`: `CLOSED_PASS`
+- `P3-WP001-CLOSE`: `CLOSED_PASS`
+- `P3-WP001-CLOSE-C1`: `CLOSED_PASS`
 
-## 9. Known Risks & Technical Debt
+### P3-WP002-PRE1 — Activity Intelligence Definition
 
-### Secret Hygiene P0 Mandate (`SEC-WP001` STATUS: COMPLETED / CLOSED)
-- **CRITICAL**: The repository `rebootob/line-sync-plus` is **PUBLIC**.
-- **PROHIBITED**: Under no circumstances may `.env` files, API keys, passwords, database credentials, access tokens, refresh tokens, private keys, or LINE channel secrets be committed or pushed to Git.
+Status: **COMPLETE / DEFINITION READY**
 
-### Crash Safety Boundary Mandate (`REL-WP003`)
-- **Core Truth**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary. The LINE Web UI remains outside our database transaction boundary.
-- **Operational Policy**: Never automatically resend an ambiguous physical send. Ambiguous state requires reconciliation before retry.
-- **Ambiguity Quarantine**: Jobs discovering `armed` or `reconcile_required` states are quarantined to `paused_reconcile` until operator review.
-- **Operator Reconciliation**: Hard-fenced via loopback UI, bot paused, active OA, job in `reconcile_required` with no active lease. Two valid actions: `confirmed_sent` and `confirmed_not_sent_retry`.
+### P3-WP002 — Outbound Activity Intelligence
 
----
+Status: **CORRECTIVE REQUIRED / R2 AUTHORIZED**
 
-## 10. Development Roadmap
+Historical implementation/review chain:
 
-- **Phase 0 — Security & Reliability Foundation**: **CLOSED / PASS**
-  - Safety hardening (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002`, `BUG-WP002-R1`): **COMPLETED**
-  - `SEC-WP001` (Secret Hygiene): **COMPLETED / CLOSED**
-  - `OPS-WP001 / R1` (Runtime Version Gate): **COMPLETED / CLOSED**
-  - `REL-WP001 / R1 / R2` (Single Worker / Multi-Tab Lock): **COMPLETED / CLOSED**
-  - `OA-WP001 / R1` (OA Context Isolation & Strict Identity Fencing): **COMPLETED / CLOSED**
-  - `SYNC-WP001 / R1 / R2 / R3 / R4 / R5` (LINE OA Customer Directory Sync): **COMPLETED / CLOSED / PASS**
-  - `SAFE-WP001 / R1 / R2 / R3` (LINE OA Account Protection & Send Compliance Guard): **CLOSED / PASS**
-  - `REL-WP002` (Job Lease + Heartbeat + Stale Worker Fencing): **CLOSED / PASS**
-  - `REL-WP002-R1` (Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing): **CORRECTED / SUPERSEDED**
-  - `REL-WP002-R2` (Serialize Lease Finalization and Circuit Breaker Stop): **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP002-R3` (Complete R2 Corrective Exactly): **CLOSED / PASS**
-  - `REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety`: **CLOSED / PASS**
-  - `REL-WP003-R1 — Critical Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP003-R2 — Final Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP003-R3A — Backend Final Fencing Only`: **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration`: **PASS / CLOSED**
-- **Phase 1 — Operations & Monitoring**: **CLOSED / PASS**
-  - `MON-WP001 — Operational Health & Readiness`: **CLOSED / PASS**
-  - `MON-WP001-R1 — Truthful Health State Corrective`: **CLOSED / PASS**
-  - `MON-WP002 — Queue / Lease / Reconciliation Monitoring`: **CLOSED / PASS**
-  - `MON-WP003 — Alerts / Incident Visibility`: **CLOSED / PASS**
-  - *Backup / Recovery / Retention*: **DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE** (OPS-WP002 not authorized)
-- **Phase 2 — Campaign Builder v2**: **CLOSED / PASS**
-  - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **CLOSED / PASS**
-  - `P2-WP001-R1 — Fail-Closed scheduledAt Type Validation Corrective`: **CLOSED / PASS**
-  - `P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2`: **CLOSED / PASS**
-  - `P2-WP002-R1 — Stale Preview Race & OA Template Cache Fencing`: **SUPERSEDED_BY_R2**
-  - `P2-WP002-R2 — Non-Destructive Stale Response Discard`: **CLOSED / PASS**
-  - `P2-WP002-CLOSE — P2-WP002 Final Acceptance & Evidence Sync`: **CLOSED_PASS**
-  - `P2-WP003 — Scheduled Queue Controls V2`: **CLOSED / PASS**
-  - `P2-WP003-R1 — Operator Stop Semantics + Scheduled Race & Validation Corrective`: **SUPERSEDED_BY_R2**
+1. Baseline: `7ca0a0dcde5896f18a8254f4a94a74a776d7a36e`
+2. Original implementation: `956e576ffee2f194ce6e617531a58f336de2b280`
+3. Initial review: `CORRECTIVE REQUIRED`
+4. R1 source corrective: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+5. R1 independent review:
+   - source / architecture PASS
+   - DB-side aggregation PASS
+   - time-window production logic PASS
+   - safe DOM production logic PASS
+   - no further production corrective required
+6. Remaining gap: regression evidence + current control-document truth
+7. R2: **CORRECTIVE_AUTHORIZED** for test-only evidence closure
+
+### P3-WP002-R2 — TEST-ONLY + CONTROL-DOC Evidence Closure
+
+Status: **CORRECTIVE_AUTHORIZED**
+
+Authorized next-run production impact: **NONE**.
+
+The only implementation-adjacent file authorized is `src/app.controller.spec.ts`.
+
+Required evidence must prove:
+
+- malformed botId and invalid OA contexts fail before customer/activity queries
+- actual one-query DB-side aggregate SQL and strict OA/grouping scope
+- no N+1, no `campaignJobRepository.find`, and no CampaignSendPart query
+- customer timestamps cannot affect or leak into activity DTO semantics
+- malicious latest status remains text-only in the DOM
+- deterministic 7-day/30-day now/lower-boundary/future/invalid behavior
+- strict NEVER_SUCCESS behavior
+- prior blocked-checkbox, selectedUsers, and stale-OA-response regressions remain intact
+
+Required next-run validation:
+
+```text
+npm test -- --runInBand
+npm run build
+git diff --check
+```
+
+Evidence classification: `LOCAL REPORTED`.
+GitHub CI/status: `NONE` unless actual GitHub evidence exists.
+
+### P3-WP003 — Persistent Tags & Advanced Segmentation
+
+Status: **FUTURE / NOT AUTHORIZED**
+
+No automatic start is permitted.
 
 ---
 
-## 4. Existing Functions
+## 5. Continuous Phase 0–5 Roadmap
 
-1. **Customer & Group Management**:
-   - Multi-OA customer profile synchronization (`(botId, lineUserId)` composite primary key).
-   - Full directory synchronization from `chat.line.biz/api/v2/bots/{botId}/chats` via `POST /api/customers/sync-batch`.
-   - Granular 9-metric directory sync reporting.
-   - Tag assignment, group creation, member mapping, and deletion with explicit `botId` scoping.
-2. **Campaign & Queue Engine**:
-   - Campaign target hygiene on `POST /api/campaign/add`: deduplicates target IDs, excludes blocked customers (`isBlocked === true`), sets `totalTargets` to `queuedCount`.
-   - Multi-type campaign dispatching (`text`, `image_only`, `link_only`, `text_link`, `image_link`).
-   - Durable job lease claim via `GET /api/campaign/next` generating UUID `leaseToken` and setting 60s lease expiry with fail-closed runtime version gate (`X-LineSync-Worker-Version: 28.16`) and strict worker instance header (`^ts_[0-9]{10,17}_[a-z0-9]{4,32}$`).
-   - Active lease heartbeat via `POST /api/campaign/heartbeat` extending lease by 60s or returning 409 Conflict `lease_lost`.
-   - Pre-send lease renewal fencing (`renewJobLeaseOrThrow`) before image confirm, text send click, and Enter keydown.
-   - Transactional finalization (`/campaign/success`, `/campaign/fail`, `/campaign/stop`) executing inside TypeORM transactions with atomic fencing queries; duplicate finalizations fail closed with 409 `lease_lost` and cannot double-increment counters or mutate customer block status.
-   - Multipart send ledger (`campaign_send_parts` with unique `jobId, partKey`), separate queue safety pre-pass in `/campaign/next`, and hard-fenced operator crash reconciliation.
-3. **Account Protection & Compliance Guard (SAFE-WP001 / R1 / R2 / R3 CLOSED / PASS)**:
-   - Fail-closed protection state: strict schema validation, exact read-back timestamp reservations, final reservation revalidation before pointer/click/keydown events.
-   - Active worker telemetry heartbeat in `processQueue()` polling loop (~4s cadence) keeps Dashboard Account Protection telemetry continuously fresh without fake values or timestamp mutations.
-   - Loopback-trusted telemetry subsystem (`POST /api/account-protection/telemetry`) enforcing version, OA context header, and numeric schema validation.
-   - Centralized per-OA protection gate (`enforceAccountProtectionGate`) before image confirm send click, text send button click, and Enter key fallback.
-   - Internal protection defaults: `MIN_SEND_GAP_MS = 10000` (10s gap), `MAX_SEND_ACTIONS_10_MIN = 60` (rolling 10m limit), `MAX_SEND_ACTIONS_1_HOUR = 300` (rolling 1h limit).
-   - Adaptive system-error backoff schedule (30s / 60s / 120s / max 300s).
-4. **Telegram Notification Subsystem**:
-   - Formatted HTML campaign progress and completion summary reporting via Telegram Bot API.
-5. **Local Diagnostic Observability**:
-   - Confirmed-write browser diagnostic event logging to `uat-logs/browser-BUG-WP001-UAT.log` via `POST /api/diagnostics/browser-event`.
+### Phase 0 — Security & Reliability Foundation — CLOSED / PASS
 
----
+Purpose: establish fail-closed identity, worker, delivery-safety, and secret-hygiene foundations before higher-level product expansion.
 
-## 5. Safety & Compliance Model
+Accepted historical work includes:
 
-The LineSync Plus safety model operates on strict **fail-closed** principles:
+- `BUG-WP001` / related safety correctives — wrong-recipient and execution safety hardening.
+- `BUG-WP002` / R1 — OA context-poisoning protection.
+- `SEC-WP001` — secret hygiene; public-repository rules remain mandatory.
+- `OPS-WP001` / R1 — runtime version fencing.
+- `REL-WP001` / R1 / R2 — single worker / multi-tab lock.
+- `OA-WP001` / R1 — OA context isolation & strict identity fencing.
+- `SYNC-WP001` / R1..R5 — LINE OA customer-directory synchronization.
+- `SAFE-WP001` / R1..R3 — account-protection/send-compliance guard.
+- `REL-WP002` and accepted corrective chain — durable job lease, heartbeat, stale-worker fencing, serialized finalization.
+- `REL-WP003` and accepted corrective chain — send-part ledger, ambiguity quarantine, queue pre-pass, and operator reconciliation.
 
-- **Durable Job Lease & Heartbeat Fencing (REL-WP002 / REL-WP002-R1)**: Atomic job claim generating UUID `leaseToken`, 60s lease expiry, 10s active heartbeat extension, pre-send lease renewal fencing, real same-job finalization retry without re-send, and transactional finalization fencing.
-- **Multipart Send Ledger & Crash Reconciliation (REL-WP003 CLOSED / PASS)**: Ephemeral in-memory dispatchToken, zero network gap pre-send ARM, durable per-part ledger (`campaign_send_parts`), queue safety pre-pass pre-scanning expired processing jobs, full ledger validation on `/campaign/success`, and hard-fenced operator reconciliation. Never automatically resend an ambiguous physical send.
-- **LINE OA Account Protection & Compliance Guard (SAFE-WP001 CLOSED / PASS)**: Enforces strict protection state schema reads, exact read-back timestamp reservations, final reservation revalidation, active worker telemetry heartbeats, loopback-trusted cross-origin telemetry, per-OA rolling window send caps (10s min gap, 60/10m, 300/1h), campaign target hygiene, and adaptive error backoff.
-  > ⚠️ **Notice**: SAFE-WP001 is an operational risk-reduction control. It does NOT guarantee that LINE will never restrict/suspend an OA. Internal rate thresholds are safety defaults, not official LINE API limits. Zero detection evasion techniques are included.
-- **Customer Directory Sync Hard Fencing & Metric Integrity (SYNC-WP001 CLOSED / PASS)**: `POST /api/customers/sync-batch` enforces loopback origin, valid `botId` format, `botId === activeBotId`, strict User ID regex, and Master Bot PAUSED status. Worker v28.16 queries `/chats?folderType=ALL&limit=20&prioritizePinnedChat=true`.
-- **Strict OA Identity Fencing (OA-WP001 / OA-WP001-R1 CLOSED / PASS)**: Terminal fallback reporting requires valid `botId` + `lineUserId` + `status: 'processing'`.
-- **Single Worker Multi-Tab Lock & Clone Defense (REL-WP001 CLOSED / PASS)**: `ensureWorkerLeadership()` enforces single worker tab execution.
-- **Zero-Tolerance Recipient Verification**: `verifyCurrentRecipient(expectedUserId)` enforces matching URL path and DOM attribute validation before any physical send action.
-- **Fail-Closed Runtime Version Gate (OPS-WP001 CLOSED / PASS)**: `GET /api/campaign/next` rejects request with HTTP 409 Conflict if `X-LineSync-Worker-Version` header is missing or != `'28.16'`.
+Permanent Phase 0 safety truth:
 
----
+- True exactly-once physical LINE delivery cannot be guaranteed across the LINE Web UI boundary.
+- Never automatically resend an ambiguous physical send.
+- Wrong-recipient fencing, OA isolation, single-worker fencing, durable leases, account protection, and ambiguity reconciliation must remain intact.
 
-## 6. Problems Found & Work Packages
+### Phase 1 — Operations & Monitoring — CLOSED / PASS
 
-Over the course of safety hardening, 26 work packages were identified, implemented, verified, and updated:
+Accepted work:
 
-1. **BUG-WP001 — LINE OA 404 / Wrong Recipient Safety Guard (CLOSED)**
-2. **BUG-WP001-R1 — Execution Lock / Same-Job Recovery / Final Send Guard (CLOSED)**
-3. **BUG-WP001-UATLOG — Persistent Browser Safety Diagnostic Logging (CLOSED)**
-4. **BUG-WP001-UATLOG-R1 — Low-Noise / Local-Only Diagnostic Logging (CLOSED)**
-5. **BUG-WP002 — OA Context Poisoning / Invalid BotId 404 Loop (CLOSED)**
-6. **BUG-WP002-R1 — Preserve Active Job When OA Context Is Unknown (CLOSED)**
-7. **REL-WP001 / REL-WP001-R1 / REL-WP001-R2 — Single Worker / Multi-Tab Lock (CLOSED)**
-8. **OA-WP001 / OA-WP001-R1 — OA Context Isolation & Strict OA Identity Fencing (CLOSED / PASS)**
-9. **SYNC-WP001 — LINE OA Customer Directory Sync to DB (CLOSED / PASS)**
-10. **SYNC-WP001-R1..R5 — Full Directory Source Correction to /chats (CLOSED / PASS)**
-11. **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard (CLOSED / PASS)**
-12. **SAFE-WP001-R1 — Fail-Closed Protection State + Truthful Dashboard Telemetry (CLOSED / PASS)**
-13. **SAFE-WP001-R2 — Reservation Integrity + Truthful Protection Telemetry (CLOSED / PASS)**
-14. **SAFE-WP001-R3 — Active Worker Telemetry Heartbeat (CLOSED / PASS)**
-15. **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing (CLOSED / PASS)**
-16. **REL-WP002-R1 — Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing (CORRECTED / SUPERSEDED)**
-17. **REL-WP002-R2 — Serialize Lease Finalization and Circuit Breaker Stop (CORRECTIVE REQUIRED / SUPERSEDED)**
-18. **REL-WP002-R3 — Complete R2 Corrective Exactly (CLOSED / PASS)**
+- `MON-WP001 — Operational Health & Readiness`: closed/pass.
+- `MON-WP001-R1 — Truthful Health State Corrective`: closed/pass.
+- `MON-WP002 — Queue / Lease / Reconciliation Monitoring`: closed/pass.
+- `MON-WP003 — Alerts / Incident Visibility`: closed/pass.
 
----
+Historical evidence classification remains local-reported where no GitHub status workflow existed.
 
-## 7. Operational Findings & Live UAT Evidence
+Backup / Recovery / Retention was explicitly deferred and was not required for Phase 1 closure.
 
-- **Worker v28.11 Live UAT Evidence**:
-  - 2-recipient text campaign created while PAUSED contained exactly 2 jobs.
-  - Worker v28.11 processed both recipients to completion; LINE messages/send were observed.
-  - Campaign send completed with no recipient mismatch, no OA mismatch, and no protection-state errors.
-- **Worker v28.12 Live UAT Evidence**:
-  - Telemetry heartbeat verified on idle worker.
-  - Dashboard telemetry displayed `Protection: ON`, `10m: 0 / 60`, `1h: 2 / 300`, `Next Send: now`, `Cooling: none`.
-  - Proves 2 send reservations correctly aged out of 10m window while remaining inside 1h window. Heartbeat maintains telemetry freshness without creating fake timestamps.
-- **Worker v28.15 Live UAT Evidence (REL-WP002)**:
-  - 2-recipient text campaign (`"แคมเปญ 3/9/2026 8:6"`, test text `"1111"`) prepared while Master Bot was PAUSED.
-  - Master Bot enabled only after preparation; Worker claimed both jobs with valid 60s durable leases.
-  - Recipient verification verified prior to send; LINE send physically observed.
-  - Both jobs completed successfully (`08:10:18`, `08:10:30`); 0 failed; overall campaign completed.
-  - Zero visible `JOB_LEASE_LOST`, `lease_lost`, `OA_CONTEXT_MISMATCH`, or `RECIPIENT_UNVERIFIED`.
-  - Post-run Account Protection: ON, 10m: 2/60, 1h: 2/300, Next Send: now, Cooling: none.
-  - *Non-Destructive UAT Limitation*: These destructive scenarios were not executed on Live LINE OA to avoid unnecessary operational/send risk. They are covered by focused behavioral/unit tests. The local validation suite reported 236/236 passing; no independent GitHub CI status is available.
-- **Worker v28.16 Live / Controlled UAT Evidence (REL-WP003 CLOSED / PASS)**:
-  - Backend migration startup: `Database schema verified/initialized successfully` with non-destructive, fail-closed legacy normalization and authoritative unique index.
-  - Normal text send: target: 1, success: 1, fail: 0, physical duplicate: 0.
-  - Durable ledger verification: `job_status = success`, `partKey = text`, `part_status = dispatched`, `armedAt` and `dispatchedAt` present, `reconcileReason = null`.
-  - Clean ambiguity baseline: 0 pre-existing `armed` or `reconcile_required` rows.
-  - Controlled DB-only fixture: job `processing`, part `armed`, NO physical LINE send.
-  - Send-plan ambiguity detection: `/campaign/send-plan` returned `success = true`, `isFullyDispatched = false`, `hasQuarantine = true`.
-  - Post-quarantine DB state: `job = reconcile_required`, `part = reconcile_required`, `reconcileReason = 'quarantined_on_reload_ambiguity'`, `campaign = paused_reconcile`, job leases cleared.
-  - Operator reconciliation GET: synthetic fixture visible with Master Bot PAUSED.
-  - Operator resolution: `confirmed_not_sent_retry` succeeded with zero LINE sends.
-  - Cleanup verification: DB inspection confirmed `CAMPAIGN FOUND = 0`, `JOB FOUND = 0`, `PARTS FOUND = 0`. Clean baseline restored.
-  - Static Review: REL-WP003-R3B review PASS, local automated suite reported 271/271 PASS, no GitHub CI status checks.
-  - Architectural Truth: Do NOT claim true exactly-once physical delivery; LINE Web UI remains outside database transaction boundary. Safety policy: Never automatically resend an ambiguous physical send.
+### Phase 2 — Campaign Builder v2 — CLOSED / PASS
+
+Accepted work:
+
+- `P2-WP001 — Campaign Authoring Contract & OA Isolation`: closed/pass.
+- `P2-WP001-R1 — Fail-Closed scheduledAt Type Validation`: closed/pass.
+- `P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2`: closed/pass.
+- `P2-WP002-R1`: superseded by R2.
+- `P2-WP002-R2 — Non-Destructive Stale Response Discard`: closed/pass.
+- `P2-WP002-CLOSE`: closed/pass.
+- `P2-WP003 — Scheduled Queue Controls V2`: closed/pass.
+- `P2-WP003-R1`: superseded by R2.
+- `P2-WP003-R2 — Active OA Runtime Fix + Behavioral Proof`: closed/pass.
+- `P2-WP003-R2-CLOSE`: closed/pass.
+- `P2-WP003-CLOSE`: closed/pass.
+- `PHASE-2-CLOSE`: closed/pass.
+
+Historical accepted P2-WP002 final code HEAD:
+`b6103e9c322ff257dcfda475217186e740e4893a`.
+
+Historical accepted P2-WP003-R2 implementation HEAD:
+`23f98b0e7c3fd232d63bc94533da6eae262b32fc`.
+
+### Phase 3 — Audience & Customer Intelligence — IN PROGRESS
+
+Current sequence:
+
+- `P3-WP001`: closed/pass.
+- `P3-WP002-PRE1`: definition ready.
+- `P3-WP002`: corrective required; R2 authorized.
+- `P3-WP002-R1`: superseded by R2 for evidence closure only; its production source remains the reviewed implementation.
+- `P3-WP002-R2`: corrective authorized, test-only.
+- `P3-WP003`: future / not authorized.
+
+Phase 3 may not advance to P3-WP003 until P3-WP002 evidence is executed, independently reviewed, and explicitly closed/accepted by the Control Plane/Owner lifecycle.
+
+### Phase 4 — Multi-OA, Governance & Admin — FUTURE
+
+Planned direction only; not authorized by the current gate.
+
+Potential future themes:
+
+- stronger multi-OA administration
+- role/permission governance
+- administrative workflows and policy controls
+- operational governance across accounts
+
+No Phase 4 implementation is authorized now.
+
+### Phase 5 — Analytics & Optimization — FUTURE
+
+Planned direction only; not authorized by the current gate.
+
+Potential future themes:
+
+- campaign performance reporting
+- delivery throughput and operational metrics
+- audience/campaign effectiveness analytics
+- optimization and decision-support reporting
+
+No Phase 5 implementation is authorized now.
 
 ---
 
-## 8. UAT Evidence
+## 6. Historical Accepted Evidence Ledger
 
-- **Safety Gate Status**: **PASS**
-- **BUG-WP001**: **CLOSED / PASS**
-- **BUG-WP001-UATLOG**: **CLOSED / PASS**
-- **BUG-WP002**: **CLOSED / PASS**
-- **SEC-WP001**: **CLOSED / PASS**
-- **OPS-WP001 / OPS-WP001-R1**: **CLOSED / PASS**
-- **REL-WP001 / REL-WP001-R1 / REL-WP001-R2**: **CLOSED / PASS**
-- **OA-WP001 / OA-WP001-R1**: **CLOSED / PASS** (Accepted on Worker v28.5)
-- **SYNC-WP001 / R1..R5**: **CLOSED / PASS** (Accepted on Worker v28.8)
-- **SAFE-WP001 / R1..R3**: **CLOSED / PASS** (Accepted on Worker v28.12)
-- **REL-WP002**: **CLOSED / PASS**
-- **REL-WP002-R1**: **CORRECTED / SUPERSEDED**
-- **REL-WP002-R2**: **CORRECTIVE REQUIRED / SUPERSEDED**
-- **REL-WP002-R3**: **CLOSED / PASS**
-- **REL-WP003**: **CLOSED / PASS**
-- **REL-WP003-R1**: **CORRECTIVE REQUIRED / SUPERSEDED**
-- **REL-WP003-R2**: **CORRECTIVE REQUIRED / SUPERSEDED**
-- **REL-WP003-R3A**: **CORRECTIVE REQUIRED / SUPERSEDED**
-- **REL-WP003-R3B**: **PASS / CLOSED**
+The following history remains accepted and is retained as repository truth unless a later explicit review supersedes it:
+
+- OA context isolation accepted on Worker v28.5.
+- Customer directory synchronization accepted on Worker v28.8.
+- SAFE account-protection send run and telemetry closure accepted on Worker v28.11/v28.12 lineage; current Worker remains v28.16.
+- REL-WP002 controlled live evidence demonstrated successful 2-recipient processing with lease/recipient/OA protection and no duplicate physical resend claim.
+- REL-WP003 controlled evidence demonstrated durable send-part state, ambiguity quarantine, operator reconciliation, cleanup, and the permanent limitation that physical exactly-once cannot be guaranteed.
+- `MON-WP001` accepted review HEAD: `6729bb118e727f9ff3f559c8b4a8efe8c0c9ed38`.
+- `MON-WP002` accepted review HEAD: `5b34269397afbd9046610c366d9f0c27bf3d5532`.
+- `MON-WP003` accepted review HEAD: `acb1185e1a5ff21c2c346d326669392cacdfa639`.
+- Phase 1 closure baseline: `ac1ded4728df14f741104073618dd3623b6d1c25`.
+- P3-WP001 accepted implementation HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`.
+
+These historical records do not authorize new execution by themselves.
 
 ---
 
-## 9. Known Risks & Technical Debt
+## 7. Runtime / Safety Contract
 
-### Secret Hygiene P0 Mandate (`SEC-WP001` STATUS: COMPLETED / CLOSED)
-- **CRITICAL**: The repository `rebootob/line-sync-plus` is **PUBLIC**.
-- **PROHIBITED**: Under no circumstances may `.env` files, API keys, passwords, database credentials, access tokens, refresh tokens, private keys, or LINE channel secrets be committed or pushed to Git.
+- Worker: `28.16`
+- Required Worker: `28.16`
+- Runtime Contract: `2`
 
-### Crash Safety Boundary Mandate (`REL-WP003`)
-- **Core Truth**: True exactly-once delivery cannot be guaranteed across the unobservable LINE Web UI crash boundary. The LINE Web UI remains outside our database transaction boundary.
-- **Operational Policy**: Never automatically resend an ambiguous physical send. Ambiguous state requires reconciliation before retry.
-- **Ambiguity Quarantine**: Jobs discovering `armed` or `reconcile_required` states are quarantined to `paused_reconcile` until operator review.
-- **Operator Reconciliation**: Hard-fenced via loopback UI, bot paused, active OA, job in `reconcile_required` with no active lease. Two valid actions: `confirmed_sent` and `confirmed_not_sent_retry`.
+P3-WP002-R2 authorizes:
 
----
+- test evidence in `src/app.controller.spec.ts`
+- completion sync of the five control docs
 
-## 10. Development Roadmap
+P3-WP002-R2 does **not** authorize:
 
-- **Phase 0 — Security & Reliability Foundation**: **CLOSED / PASS**
-  - Safety hardening (`BUG-WP001`, `BUG-WP001-UATLOG`, `BUG-WP002`, `BUG-WP002-R1`): **COMPLETED**
-  - `SEC-WP001` (Secret Hygiene): **COMPLETED / CLOSED**
-  - `OPS-WP001 / R1` (Runtime Version Gate): **COMPLETED / CLOSED**
-  - `REL-WP001 / R1 / R2` (Single Worker / Multi-Tab Lock): **COMPLETED / CLOSED**
-  - `OA-WP001 / R1` (OA Context Isolation & Strict Identity Fencing): **COMPLETED / CLOSED**
-  - `SYNC-WP001 / R1 / R2 / R3 / R4 / R5` (LINE OA Customer Directory Sync): **COMPLETED / CLOSED / PASS**
-  - `SAFE-WP001 / R1 / R2 / R3` (LINE OA Account Protection & Send Compliance Guard): **CLOSED / PASS**
-  - `REL-WP002` (Job Lease + Heartbeat + Stale Worker Fencing): **CLOSED / PASS**
-  - `REL-WP002-R1` (Lease Loss Semantics + Atomic Finalization + Retry + Stop Fencing): **CORRECTED / SUPERSEDED**
-  - `REL-WP002-R2` (Serialize Lease Finalization and Circuit Breaker Stop): **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP002-R3` (Complete R2 Corrective Exactly): **CLOSED / PASS**
-  - `REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety`: **CLOSED / PASS**
-  - `REL-WP003-R1 — Critical Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP003-R2 — Final Crash-Safety Corrective`: **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP003-R3A — Backend Final Fencing Only`: **CORRECTIVE REQUIRED / SUPERSEDED**
-  - `REL-WP003-R3B — Queue Prepass & Fail-Closed Ledger Migration`: **PASS / CLOSED**
-- **Phase 1 — Operations & Monitoring**: **CLOSED / PASS**
-  - `MON-WP001 — Operational Health & Readiness`: **CLOSED / PASS**
-  - `MON-WP001-R1 — Truthful Health State Corrective`: **CLOSED / PASS**
-  - `MON-WP002 — Queue / Lease / Reconciliation Monitoring`: **CLOSED / PASS**
-  - `MON-WP003 — Alerts / Incident Visibility`: **CLOSED / PASS**
-  - *Backup / Recovery / Retention*: **DEFERRED / NOT REQUIRED FOR PHASE 1 CLOSURE** (OPS-WP002 not authorized)
-- **Phase 2 — Campaign Builder v2**: **CLOSED / PASS**
-  - `P2-WP001 — Campaign Authoring Contract & OA Isolation`: **CLOSED / PASS**
-  - `P2-WP001-R1 — Fail-Closed scheduledAt Type Validation Corrective`: **CLOSED / PASS**
-  - `P2-WP002 — Authoritative Campaign Preview & Safe Template Reuse V2`: **CLOSED / PASS**
-  - `P2-WP002-R1 — Stale Preview Race & OA Template Cache Fencing`: **SUPERSEDED_BY_R2**
-  - `P2-WP002-R2 — Non-Destructive Stale Response Discard`: **CLOSED / PASS**
-  - `P2-WP002-CLOSE — P2-WP002 Final Acceptance & Evidence Sync`: **CLOSED_PASS**
-  - `P2-WP003 — Scheduled Queue Controls V2`: **CLOSED / PASS**
-  - `P2-WP003-R1 — Operator Stop Semantics + Scheduled Race & Validation Corrective`: **SUPERSEDED_BY_R2**
-  - `P2-WP003-R2 — Active OA Runtime Fix + Behavioral Proof`: **CLOSED / PASS**
-  - `P2-WP003-R2-CLOSE — P2-WP003-R2 Closure & Control Sync`: **CLOSED_PASS**
-  - `P2-WP003-CLOSE — P2-WP003 Final Parent Closure & Control Sync`: **CLOSED_PASS**
-  - `PHASE-2-CLOSE — Phase 2 — Campaign Builder v2 Final Closure`: **CLOSED_PASS**
-  - Enhanced broadcast campaign creation, template previews, and scheduled queue controls.
-- **Phase 3 — Audience & Customer Intelligence**: **IN PROGRESS**
-  - `P3-WP001 — Customer Intelligence Foundation`: **CLOSED / PASS** (Accepted Implementation HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`)
-  - `P3-WP001-R1-C1 — Final Control-Document Truth Corrective`: **CLOSED_PASS**
-  - `P3-WP001-CLOSE — P3-WP001 Final Control Closure`: **CLOSED_PASS**
-  - `P3-WP001-CLOSE-C1 — Final Idle-State Control Sync`: **CLOSED_PASS**
-  - `P3-WP002 — Outbound Activity Intelligence`: **CORRECTIVE REQUIRED / AWAITING_R1_REVIEW**
-  - `P3-WP002-R1 — Aggregate Query + Time-Window Truth + Final Evidence/Control Corrective`: **READY_FOR_CHATGPT_REVIEW** (Candidate HEAD: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`)
-  - `P3-WP003 — Persistent Tags & Advanced Segmentation`: **FUTURE / NOT AUTHORIZED**
-  - Safe customer identity/display normalization, outbound customer activity intelligence, and persistent tagging/segmentation.
-- **Phase 4 — Multi-OA, Governance & Admin**: Context isolation across multiple LINE Official Accounts, role permissions, and administrative controls.
-- **Phase 5 — Analytics & Optimization**: Performance reporting, delivery throughput metrics, and campaign success analytics.
+- Worker changes
+- schema changes
+- production controller changes
+- dashboard production changes
+- LINE sends
+- Live UAT
+- Telegram tests
+- dependency/package changes
 
 ---
 
-## 11. Technical Evolution
+## 8. Progress Estimate
 
-- **Script Versioning**: Evolved from v27.0 -> ... -> v28.12 -> v28.13 -> v28.14 -> v28.15 -> v28.16 (REL-WP003 CLOSED / PASS).
-- **Architecture Maturity**: Enhanced with durable job leases, active heartbeat extensions, pre-send lease renewal fencing, worker instance identification, transactional finalization with pessimistic row locking, circuit breaker inside markFail, ARM+CONFIRM send-part ledger (`campaign_send_parts`), zero network gap physical dispatch, ambiguity quarantine, queue pre-pass reconciliation, operator reconciliation dashboard UI, loopback-only Operational Health monitoring endpoint (`GET /api/ops/health`), loopback-only Queue / Lease / Reconciliation monitoring endpoint (`GET /api/ops/queue`), dashboard-only Incident Visibility card (`index.html`) with in-memory session lifecycle, authoritative campaign authoring contract, authoritative campaign preview API (`POST /api/campaign/preview`), safe template reuse DTO and content-only copy, non-destructive stale preview discard, OA template cache fencing, operator stop semantics fix, monotonic OA identity epoch fencing, strict local datetime validation, deterministic display-name normalization (`normalizeDisplayName`), active-OA customer endpoint context fencing & DTO, safe customer/group DOM construction, compact Outbound Activity presentation & activity filters, single DB-side QueryBuilder aggregate query (`getRawMany`), strict 7-day and 30-day activity time-window filter bounds, and 572 passing local unit tests (LOCAL REPORTED).
+- Official accepted roadmap progress estimate: **~56%**
+- Practical implementation progress estimate: **~61%**
+
+These percentages are planning estimates, not acceptance evidence.
+
+The difference reflects implementation work that is materially present but is not counted as accepted until evidence closure and independent review complete.
 
 ---
 
-## 12. Immediate Decision Gate
+## 9. Immediate Decision Gate
 
-Phase 0 Foundation is **CLOSED / PASS**.
-Phase 1 (Operations & Monitoring) is **CLOSED / PASS**.
-Phase 2 (Campaign Builder v2) is **CLOSED / PASS**.
-P2-WP001 is **CLOSED / PASS** (Accepted Final HEAD: `37b078de425e2fd3267652e142d76959f408c701`).
-P2-WP001-R1 is **CLOSED / PASS**.
-P2-WP002 is **CLOSED / PASS** (Accepted Final Code HEAD: `b6103e9c322ff257dcfda475217186e740e4893a`).
-P2-WP002-R1 is **SUPERSEDED_BY_R2**.
-P2-WP002-R2 is **CLOSED / PASS**.
-P2-WP002-CLOSE is **CLOSED_PASS**.
-P2-WP003 is **CLOSED / PASS**.
-P2-WP003-R1 is **SUPERSEDED_BY_R2**.
-P2-WP003-R2 is **CLOSED / PASS** (Accepted Implementation HEAD: `23f98b0e7c3fd232d63bc94533da6eae262b32fc`, Pre-R2 Baseline: `06020bf0adbb072ef067e143f2924e154fc6609c`).
-P2-WP003-R2-CLOSE is **CLOSED_PASS**.
-P2-WP003-CLOSE is **CLOSED_PASS**.
-PHASE-2-CLOSE is **CLOSED_PASS**.
-Phase 3 (Audience & Customer Intelligence) is **IN PROGRESS**.
-P3-WP001 is **CLOSED / PASS** (Accepted Implementation HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`).
-P3-WP001-R1 is **CORRECTED / SUPERSEDED_BY_C1**.
-P3-WP001-R1-C1 is **CLOSED_PASS**.
-P3-WP001-CLOSE is **CLOSED_PASS**.
-P3-WP001-CLOSE-C1 is **CLOSED_PASS**.
-P3-WP002 is **CORRECTIVE REQUIRED / AWAITING_R1_REVIEW**.
-P3-WP002-R1 is **READY_FOR_CHATGPT_REVIEW**.
-P3-WP003 is **FUTURE / NOT AUTHORIZED**.
-Active Work Package: **P3-WP002-R1**.
-Status: **READY_FOR_CHATGPT_REVIEW**.
-CODE_BASELINE_HEAD: **80a9f2dcafdb81e84f990e5593009091ab83bb4e**.
-IMPLEMENTATION_CANDIDATE_HEAD: **03dd35a5d6b29c6394f93f16061bfaddb5f10174**.
-Next Candidate: **NONE** (Status: **AWAITING_REVIEW**).
-AUTHORIZE_EXECUTION: **FALSE**.
-Worker Version: 28.16 | Runtime Contract: 2 | Required Worker: 28.16
-Policy: Never automatically resend an ambiguous physical send.
-P3-WP001 (Customer Intelligence Foundation) is CLOSED / PASS. Accepted implementation HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`. R1 test evidence HEAD: `ced2292d8e6c7f5f569b96e8e84af0c587fd80df` (533/533 PASS). C1 control corrective HEAD: `4f7503e48fbadcd7e6346d77d7ed9086f1401086`. Closure HEAD: `d9cf8a6f6480311cc1d0a044902309434b6b1ebf`. P3-WP002-R1 implementation candidate HEAD is `03dd35a5d6b29c6394f93f16061bfaddb5f10174` (572/572 PASS). P3-WP003 remains FUTURE / NOT AUTHORIZED.
+Current blocking item:
+**P3-WP002-R2 TEST-ONLY evidence closure**.
+
+Exact next lifecycle:
+
+```text
+THIS CONTROL UPDATE
+-> COMMIT/PUSH
+-> STOP
+-> FRESH NEW RUN/CHAT
+-> execute P3-WP002-R2 gate only
+-> READY_FOR_CHATGPT_REVIEW
+-> STOP
+-> ChatGPT independent review
+```
+
+No work package after P3-WP002-R2 may auto-start.
+
+`P3-WP003` remains **FUTURE / NOT AUTHORIZED**.

@@ -2,166 +2,180 @@
 
 ## Repository
 
-* Repository: rebootob/line-sync-plus
-* Canonical Branch: main
-* Working Tree: Clean
-* Implementation Baseline: ef5d5b47e33e1e63648dd33dde40c35a638c2de2
+- Repository: `rebootob/line-sync-plus`
+- Canonical Branch: `main`
+- Control Update Parent HEAD: `9b2a110dfe4f04302a4b6b60bdbc48dfde274009`
+- Current control version: `31`
+- Worker Version: `28.16`
+- Required Worker Version: `28.16`
+- Runtime Contract Version: `2`
 
-## Project Purpose
+## Role Model
 
-LineSync Plus is an automated LINE Official Account (LINE OA) customer contact synchronization, group segmentation, and broadcast campaign management platform. It combines a NestJS backend REST API with a single-page HTML dashboard and a client-side Tampermonkey userscript (`LineSyncApp.js` v28.16) running inside `chat.line.biz`.
+- Project Owner = final human authority
+- ChatGPT = Control Plane / Project Lead / Architect / Independent Reviewer
+- Antigravity = bounded Execution Plane only
+- Repository truth is authoritative
 
-## Technology Stack
+## Current Project State
 
-- **Backend**: NestJS (v11), Node.js, TypeScript, TypeORM, PostgreSQL (`pg`)
-- **Frontend Dashboard**: HTML5, CSS3, JavaScript (Fetch API, DOM manipulation)
-- **Client Automation**: Tampermonkey Userscript (Native DOM & Synthetic Event dispatch)
-- **External Integrations**: Telegram Bot API (`https://api.telegram.org`)
-- **Testing & Tooling**: Jest (`ts-jest`), ESLint, Prettier
+- **PHASE_0**: `CLOSED / PASS`
+- **PHASE_1**: `CLOSED / PASS`
+- **PHASE_2**: `CLOSED / PASS`
+- **PHASE_3**: `IN PROGRESS` — Audience & Customer Intelligence
+- **P3-WP001**: `CLOSED / PASS`
+- **P3-WP002-PRE1**: `COMPLETE / DEFINITION READY`
+- **P3-WP002**: `CORRECTIVE REQUIRED / R2 AUTHORIZED`
+- **P3-WP002-R1**: `CORRECTIVE REQUIRED / SUPERSEDED_BY_R2`
+- **P3-WP002-R2**: `CORRECTIVE_AUTHORIZED`
+- **P3-WP003**: `FUTURE / NOT AUTHORIZED`
+- **ACTIVE_WORK_PACKAGE**: `P3-WP002-R2`
+- **AUTHORIZE_EXECUTION**: `TRUE`
+- **NEXT_CANDIDATE**: `NONE`
+- **NEXT_CANDIDATE_STATUS**: `AWAITING_EXECUTION`
 
-## Work Package Status
+## Latest Accepted Control-Plane Truth
 
-* **ACTIVE_WORK_PACKAGE**: `P3-WP002-R1`
-* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
-* **AUTHORIZE_EXECUTION**: `FALSE`
-* **PHASE_0**: `CLOSED / PASS`
-* **PHASE_1**: `CLOSED / PASS`
-* **PHASE_2**: `CLOSED / PASS`
-* **PHASE_2_TITLE**: `Campaign Builder v2`
-* **PHASE-2-CLOSE**: `CLOSED_PASS`
-* **PHASE_3**: `IN PROGRESS`
-* **PHASE_3_TITLE**: `Audience & Customer Intelligence`
-* **P3-WP001**: `CLOSED / PASS`
-* **P3-WP001-R1**: `CORRECTED / SUPERSEDED_BY_C1`
-* **P3-WP001-R1-C1**: `CLOSED_PASS`
-* **P3-WP001-CLOSE**: `CLOSED_PASS`
-* **P3-WP001-CLOSE-C1**: `CLOSED_PASS`
-* **P3-WP002-PRE1**: `COMPLETE / DEFINITION READY`
-* **P3-WP002**: `CORRECTIVE REQUIRED / AWAITING_R1_REVIEW`
-* **P3-WP002-R1**: `READY_FOR_CHATGPT_REVIEW`
-* **P3-WP003**: `FUTURE / NOT AUTHORIZED`
-* **P2-WP001**: `CLOSED / PASS`
-* **P2-WP001-R1**: `CLOSED / PASS`
-* **P2-WP002**: `CLOSED / PASS`
-* **P2-WP002-R1**: `SUPERSEDED_BY_R2`
-* **P2-WP002-R2**: `CLOSED / PASS`
-* **P2-WP002-CLOSE**: `CLOSED_PASS`
-* **P2-WP003**: `CLOSED / PASS`
-* **P2-WP003-R1**: `SUPERSEDED_BY_R2`
-* **P2-WP003-R2**: `CLOSED / PASS`
-* **P2-WP003-R2-CLOSE**: `CLOSED_PASS`
-* **P2-WP003-CLOSE**: `CLOSED_PASS`
-* **CODE_BASELINE_HEAD**: `80a9f2dcafdb81e84f990e5593009091ab83bb4e`
-* **IMPLEMENTATION_CANDIDATE_HEAD**: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
-* **REVIEWED_IMPLEMENTATION_HEAD**: `NONE`
-* **ACCEPTED_IMPLEMENTATION_HEAD**: `NONE`
-* **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_REVIEW`
-* **MON-WP001 — Operational Health & Readiness**: `CLOSED / PASS`
-* **MON-WP001-R1 — Truthful Health State Corrective**: `CLOSED / PASS`
-* **MON-WP002 — Queue / Lease / Reconciliation Monitoring**: `CLOSED / PASS`
-* **MON-WP003 — Alerts / Incident Visibility**: `CLOSED / PASS`
-* **REL-WP003 — Durable Send-Part Ledger + Multipart Crash Safety**: `CLOSED / PASS`
-* **REL-WP002 — Durable Job Lease + Heartbeat + Stale Worker Fencing**: `CLOSED / PASS`
-* **SAFE-WP001 — LINE OA Account Protection / Send Compliance Guard**: `CLOSED / PASS`
-* **SYNC-WP001 — LINE OA Customer Directory Sync to DB**: `CLOSED / PASS`
-* **OA-WP001**: `CLOSED / PASS`
-* **REL-WP001**: `CLOSED / PASS`
-* **Version Contracts**:
-  - Worker Version: `28.16`
-  - Runtime Contract Version: `2`
-  - Required Worker Version: `28.16`
+P3-WP002 original implementation:
+`956e576ffee2f194ce6e617531a58f336de2b280`
 
-## Accepted REL-WP002 Live UAT Evidence
+P3-WP002 initial review result:
+`CORRECTIVE REQUIRED`
 
-- **Precheck**: Dashboard Runtime Contract v2, Required Worker v28.15, Master Bot PAUSED before campaign creation, Active OA aligned, Worker v28.15 loaded.
-- **Campaign**: Name: `"แคมเปญ 3/9/2026 8:6"`, Type: text, Text: `"1111"`, Targets: 2, Initial status: pending, Exactly 2 queued jobs.
-- **Execution**: Master Bot enabled only after preparation, Worker claimed and processed both jobs, Recipient verification occurred before send, LINE send observed for both recipients, Both returned success, Worker returned to OA main page between/after jobs.
-- **Errors**: Zero visible `JOB_LEASE_LOST`, `lease_lost`, `OA_CONTEXT_MISMATCH`, or `RECIPIENT_UNVERIFIED`.
-- **Results**: Target = 2, Success = 2, Failed = 0, Status = completed, Timestamps: `08:10:18`, `08:10:30`.
-- **Post-run**: Master Bot returned to PAUSED, Account Protection remained ON, 10m = 2/60, 1h = 2/300, Next Send = now, Cooling = none.
+P3-WP002-R1 source corrective implementation:
+`03dd35a5d6b29c6394f93f16061bfaddb5f10174`
 
-## Accepted Safety Contract & Implementation Summary
+P3-WP002-R1 independent review result:
 
-- **CampaignJob Lease Schema**: `leaseToken` (varchar 64), `leaseOwner` (varchar 128), `leaseExpiresAt` (timestamp), `leaseHeartbeatAt` (timestamp).
-- **Lease Lifecycle**: 60s backend lease on claim (`GET /api/campaign/next`), ~10s heartbeat loop (`POST /api/campaign/heartbeat`) extending active leases by 60s.
-- **Strict Fencing**: Worker instance regex validation (`^ts_[0-9]{10,17}_[a-z0-9]{4,32}$`), pre-send lease renewal before clicks/Enter, upstream leadership/recipient/OA/SAFE checks intact.
-- **Transactional Finalization**: `markSuccess`, `markFail`, and `stopCampaign` lock `Campaign` row (and calling `CampaignJob` in stop) with `pessimistic_write`.
-- **Integrated Circuit Breaker**: 10 errors finalize via `POST /campaign/fail` with `errorOverflow: true` (increments failedCount, stops campaign `stopped_error`, clears remaining leases).
-- **Customer Rollback**: DB error updating blocked customer in `markFail` rolls back transaction.
-- **Post-Commit Telegram**: Sent only after DB transaction resolves.
-- **Crash Safety Boundary & Operator Reconciliation (REL-WP003)**:
-  - **Core Architectural Truth**: Do NOT claim true exactly-once physical delivery. The LINE Web UI remains outside our database transaction boundary.
-  - **Accepted Safety Policy**: Never automatically resend an ambiguous physical send. Ambiguous state requires reconciliation before retry.
-  - Safe migration of legacy schema: non-destructive migration deriving `partKey` from `partType` and `status = 'sent'` ➔ `'dispatched'`, fail-closed raw SQL execution, legacy fields removed from TypeORM entity.
-  - `already_dispatched` handled before physical send: skips physical DOM events completely.
-  - Immediate backend quarantine on reload ambiguity in `send-plan`: job and campaign paused (`reconcile_required` / `paused_reconcile`), leases stripped.
-  - Queue Safety Pre-pass in `/campaign/next`: separately pre-scans ALL expired processing jobs without `take: 100` limit before selecting pending jobs.
-  - Full ledger validation on `markSuccess`: 0 rows or missing multipart or ambiguous parts reject with 409 `send_ledger_incomplete` / `reconcile_required`.
-  - Operator reconciliation hard-fenced: loopback, active OA, bot paused, `job.status === reconcile_required`, no active lease, target part only `armed` or `reconcile_required`.
-  - `armSendPart` uses same `armRequestId` across transient retries; `confirmSendPart` enforces idempotency matching `armRequestId`.
-  - Static Review: REL-WP003-R3B review PASS. All 271 executable unit tests passing. No GitHub CI status checks.
+- SOURCE / ARCHITECTURE: `PASS`
+- DB-SIDE AGGREGATION: `PASS`
+- TIME-WINDOW PRODUCTION LOGIC: `PASS`
+- SAFE DOM PRODUCTION LOGIC: `PASS`
+- PRODUCTION CODE CORRECTIVE STILL NEEDED: `NO`
 
-## Implemented MON-WP001 / MON-WP001-R1 Operational Health Summary
+Remaining issue:
+`TEST EVIDENCE + CONTROL DOCUMENT TRUTH ONLY`
 
-- **Endpoint**: `GET /api/ops/health` (loopback only: `127.0.0.1`, `::1`, `::ffff:127.0.0.1`).
-- **Data Returned**: Truthful status enum (`healthy | degraded | attention`), contract versions, database ping status (`SELECT 1`), master bot state, active OA (`true | false | null`), truthful worker status (`online` <=30s, `stale` >30s, `unknown`), OA alignment (`aligned: true | false | "unknown"`), scoped queue counts (`pending`, `processing`, `reconcileRequired` as `number | null`), scoped campaign counts (`pausedReconcile`, `stoppedError` as `number | null`).
-- **Truthful Failure & Absent Scoping**:
-  - Failed metric query returns `null` (never masked as 0) with `degraded` status.
-  - No active OA returns `null` metrics (does NOT query global counts across all OAs) with `oa.active: false` and `attention` status.
-  - Unknown readiness (worker unknown/stale, alignment unknown/mismatched) returns `attention` status (never `healthy`).
-  - Infrastructure failures (DB ping error, OA runtime lookup error, metric query error) return `degraded` status.
-- **Security & Privacy**: Zero tokens, zero credentials, zero PII, zero LINE chat data exposed. Read-only operation with zero side-effects on worker observation timestamps or heartbeats.
-- **Dashboard UI**: Compact responsive card in `index.html` polling every 6 seconds, displaying `? Unknown` for null/unavailable metrics, displaying numeric 0 only on genuine success, and falling back gracefully on network errors.
-- **Worker Script**: `run/LineSyncApp.js` UNTOUCHED (v28.16).
-- **Unit Tests**: 23 tests in `src/app.controller.spec.ts` under MON-WP001, full test suite: 294/294 passing cleanly (LOCAL REPORTED evidence only; no GitHub CI/check runs existed).
+P3-WP002 is therefore not yet accepted/closed.
 
-## Implemented MON-WP002 Operational Queue / Lease / Reconciliation Monitoring Summary
+## Head / Review Truth
 
-- **Endpoint**: `GET /api/ops/queue` (loopback only: `127.0.0.1`, `::1`, `::ffff:127.0.0.1`).
-- **Data Returned**: Truthful status enum (`healthy | degraded | attention`), active OA (`true | false | null`), queue counts (`pending`, `processing` as `number | null`), lease counts (`active`, `expired`, `missing`, `residual` as `number | null`), reconciliation counts (`jobs`, `parts`, `staleArmed`, `pausedCampaigns` as `number | null`).
-- **Truthful Failure & Absent Scoping**:
-  - Failed metric query returns `null` for all metrics (never masked as 0) with `degraded` status.
-  - No active OA returns `null` metrics (does NOT query global counts across all OAs) with `oa.active: false` and `attention` status.
-  - OA runtime lookup error returns `null` metrics with `oa.active: null` and `degraded` status.
-- **Security & Privacy**: Zero tokens, zero credentials, zero PII, zero LINE chat data exposed. Read-only operation with zero side-effects.
-- **Dashboard UI**: Compact responsive card in `index.html` polling every 6 seconds, displaying `? Unknown` for null/unavailable metrics, displaying numeric 0 only on genuine success, displaying warnings for positive anomalies, and falling back gracefully on network errors.
-- **Worker Script**: `run/LineSyncApp.js` UNTOUCHED (v28.16).
-- **Unit Tests**: 23 tests in `src/app.controller.spec.ts` under MON-WP002, full test suite: 317/317 passing cleanly (LOCAL REPORTED evidence only; no GitHub CI/check runs existed).
+- `P3-WP002_BASELINE_HEAD`: `7ca0a0dcde5896f18a8254f4a94a74a776d7a36e`
+- `P3-WP002_ORIGINAL_IMPLEMENTATION_HEAD`: `956e576ffee2f194ce6e617531a58f336de2b280`
+- `P3-WP002_INITIAL_REVIEW_HEAD`: `80a9f2dcafdb81e84f990e5593009091ab83bb4e`
+- `P3-WP002-R1_IMPLEMENTATION_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- `P3-WP002-R1_REVIEW_READY_HEAD`: `9b2a110dfe4f04302a4b6b60bdbc48dfde274009`
+- `CODE_BASELINE_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- `IMPLEMENTATION_CANDIDATE_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- `REVIEWED_IMPLEMENTATION_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- `REVIEW_RESULT`: `SOURCE_PASS / EVIDENCE_CORRECTIVE_REQUIRED`
+- `ACCEPTED_IMPLEMENTATION_HEAD`: `NONE`
 
-## Implemented MON-WP003 Alerts / Incident Visibility Summary
+Do not use the future R2 TEST-ONLY commit as an implementation HEAD.
 
-- **Task**: MON-WP003 (Dashboard V1)
-- **Status**: CLOSED / PASS
-- **Accepted Review HEAD**: `acb1185e1a5ff21c2c346d326669392cacdfa639`
-- **Accepted Review Result**: `PASS`
-- **Implementation Scope**: `index.html` ONLY (Dashboard-only incident visibility consuming `/api/ops/health` and `/api/ops/queue`).
-- **Prohibited Files**: `src/**`, `run/**`, Worker version (remains 28.16), Required Worker (28.16), Runtime Contract (2), LINE/Telegram send, DB mutation all untouched.
+## P3-WP002-R2 Authorized Scope
 
-## Implemented P2-WP002 / P2-WP002-R2 Authoritative Campaign Preview & Safe Template Reuse Summary
+R2 is test-only evidence closure.
 
-- **Task**: P2-WP002, P2-WP002-R1, P2-WP002-R2, P2-WP002-CLOSE
-- **Status**: CLOSED / PASS
-- **Accepted Final HEAD**: `b6103e9c322ff257dcfda475217186e740e4893a`
-- **Implemented Scope**: Authoritative backend campaign preview API (`POST /api/campaign/preview`), safe template reuse DTO and content-only copy, non-destructive stale preview discard, and OA template cache fencing.
-- **Validation Evidence**: 447 / 447 unit tests PASS (`npm test -- --runInBand`), `npm run build` PASS (0 errors), `git diff --check` PASS (0 errors). Zero Live LINE sends.
+It may modify only:
 
-## Exact Recommended Next Step
+- `src/app.controller.spec.ts`
 
-* **ACTIVE_WORK_PACKAGE**: `P3-WP002`
-* **STATUS**: `READY_FOR_CHATGPT_REVIEW`
-* **PHASE_0**: `CLOSED / PASS`
-* **PHASE_1**: `CLOSED / PASS`
-* **PHASE_2**: `CLOSED / PASS`
-* **PHASE-2-CLOSE**: `CLOSED_PASS`
-* **PHASE_3**: `IN PROGRESS` (`Audience & Customer Intelligence`)
-* **P3-WP001**: `CLOSED / PASS`
-* **P3-WP002-PRE1**: `COMPLETE / DEFINITION READY`
-* **P3-WP002**: `READY_FOR_CHATGPT_REVIEW`
-* **P3-WP003**: `FUTURE / NOT AUTHORIZED`
-* **IMPLEMENTATION_CANDIDATE_HEAD**: `956e576ffee2f194ce6e617531a58f336de2b280`
-* **NEXT_CANDIDATE**: `NONE`
-* **NEXT_CANDIDATE_STATUS**: `AWAITING_REVIEW`
-* **AUTHORIZE_EXECUTION**: `FALSE`
+and, at completion, the five control documents:
 
-Phase 3 — Audience & Customer Intelligence is IN PROGRESS. Work package P3-WP002 (Outbound Activity Intelligence) implementation is COMPLETE at candidate HEAD `956e576ffee2f194ce6e617531a58f336de2b280` and READY_FOR_CHATGPT_REVIEW. P3-WP003 remains FUTURE / NOT AUTHORIZED. Full automated unit tests: 549/549 PASS.
+- `project-docs/EXECUTION_GATE.md`
+- `project-docs/ACTIVE_TASK.md`
+- `project-docs/CHAT_HANDOFF.md`
+- `project-docs/CURRENT_STATE.md`
+- `project-docs/PROJECT_STATUS_ROADMAP.md`
+
+It must not modify production implementation, including:
+
+- `src/app.controller.ts`
+- `index.html`
+- `run/**`
+- `src/entities/**`
+- `src/customer.entity.ts`
+- `src/database-init.service.ts`
+- `src/runtime-version.ts`
+- `src/telegram.service.ts`
+- `package*.json`
+- DB/schema/migrations/indexes
+
+## Required R2 Evidence Summary
+
+R2 must close all missing evidence for:
+
+- malformed botId fail-fast query-zero behavior
+- absent/mismatched active OA fail-fast query-zero behavior
+- actual DB QueryBuilder aggregate SQL expressions and strict OA/grouping scope
+- exactly one QueryBuilder / one `getRawMany` for at least 3 customers, with no N+1
+- no `campaignJobRepository.find`
+- no CampaignSendPart reads for this endpoint
+- customer timestamps excluded from activity metrics/DTO
+- malicious `latestJobStatus` rendered as literal text only
+- deterministic 7-day and 30-day boundary/future/invalid clock cases
+- strict NEVER_SUCCESS semantics
+- preservation of blocked checkbox, selectedUsers checked behavior, and stale OA response discard
+
+Tests must exercise actual production code. No copied production helpers, `.only`, `.skip`, or weakened regression tests.
+
+Required validation in the next fresh run:
+
+```text
+npm test -- --runInBand
+npm run build
+git diff --check
+```
+
+All must PASS. Evidence classification is `LOCAL REPORTED`; GitHub CI/status is `NONE` unless real GitHub evidence exists.
+
+## Progress
+
+- Official accepted roadmap progress estimate: **~56%**
+- Practical implementation progress estimate: **~61%**
+
+These are planning estimates, not acceptance evidence.
+
+Current blocking item:
+**P3-WP002-R2 TEST-ONLY evidence closure**.
+
+## Exact Next Lifecycle
+
+```text
+THIS CONTROL UPDATE
+-> COMMIT/PUSH
+-> STOP
+-> FRESH NEW RUN/CHAT
+-> fresh-fetch main
+-> read AGENT_START_HERE.md
+-> read EXECUTION_GATE.md
+-> execute P3-WP002-R2 gate only
+-> run required validation
+-> update control docs to READY_FOR_CHATGPT_REVIEW only if evidence passes
+-> COMMIT/PUSH
+-> STOP
+-> ChatGPT independent review
+```
+
+Do not auto-start `P3-WP003`.
+
+## Historical Accepted Foundation
+
+Historical accepted safety and reliability material remains valid:
+
+- `REL-WP001`: single-worker / multi-tab locking — closed/pass.
+- `OA-WP001`: OA context isolation and strict identity fencing — closed/pass.
+- `SYNC-WP001`: LINE OA directory synchronization — closed/pass.
+- `SAFE-WP001`: account-protection/send-compliance guard — closed/pass.
+- `REL-WP002`: durable lease/heartbeat/stale-worker fencing — closed/pass.
+- `REL-WP003`: durable send-part ledger and ambiguity reconciliation — closed/pass.
+- `MON-WP001`, `MON-WP002`, `MON-WP003`: operational monitoring/incident visibility — closed/pass.
+- Phase 2 Campaign Builder v2 and its closure packages are closed/pass.
+- `P3-WP001` is closed/pass with accepted implementation HEAD `f9a097a7579c1a357506816656b10c01f68be6ac`.
+
+Permanent safety truth:
+
+- True exactly-once physical LINE delivery is **NOT GUARANTEED**.
+- Never automatically resend an ambiguous physical send.
+- No Worker/schema/LINE-send/Live-UAT/Telegram-test work is authorized by P3-WP002-R2.
