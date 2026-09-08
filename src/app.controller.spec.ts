@@ -6561,7 +6561,7 @@ describe('AppController', () => {
         }
       });
 
-        function createFrontendVmContext(options: { initialActiveBotId?: string | null } = {}) {
+        function createFrontendVmContext(options: { initialActiveBotId?: string | null; fixedNow?: number } = {}) {
           const indexHtml = fs.readFileSync('index.html', 'utf8');
           const scriptContent = indexHtml.split('<script>')[1].split('</script>')[0];
 
@@ -6573,6 +6573,23 @@ describe('AppController', () => {
           let confirmReturnVal: boolean = true;
 
           const createdElementsList: string[] = [];
+
+          let DateConstructor: any = global.Date;
+          if (options.fixedNow !== undefined) {
+            const fixedNowVal = options.fixedNow;
+            DateConstructor = class extends global.Date {
+              constructor(...args: any[]) {
+                if (args.length === 0) {
+                  super(fixedNowVal);
+                } else {
+                  super(...(args as [any]));
+                }
+              }
+              static override now() {
+                return fixedNowVal;
+              }
+            };
+          }
 
           const createMockElement = (id = '', tagName = 'div') => {
             const childrenList: any[] = [];
@@ -6670,7 +6687,7 @@ describe('AppController', () => {
             encodeURIComponent: global.encodeURIComponent,
             parseInt: global.parseInt,
             isNaN: global.isNaN,
-            Date: global.Date,
+            Date: DateConstructor,
             JSON: global.JSON,
             Array: global.Array,
             Set: global.Set,
@@ -8342,13 +8359,13 @@ describe('AppController', () => {
           });
 
           it('P3-WP002-R2-11. Fixed deterministic clock proof — 7 DAY (now: PASS, now-7d: PASS, future: FAIL, invalid: FAIL)', async () => {
-            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
-            const now = Date.now();
+            const fixedNow = 1700000000000;
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext({ fixedNow });
             const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-            const exactNow = new Date(now).toISOString();
-            const exact7dBoundary = new Date(now - SEVEN_DAYS_MS + 5000).toISOString();
-            const futureTime = new Date(now + 5000).toISOString();
+            const exactNow = new Date(fixedNow).toISOString();
+            const exact7dBoundary = new Date(fixedNow - SEVEN_DAYS_MS).toISOString();
+            const futureTime = new Date(fixedNow + 5000).toISOString();
             const invalidTime = 'INVALID_TIMESTAMP_STRING';
 
             // 1. Exactly Now -> PASS
@@ -8374,13 +8391,13 @@ describe('AppController', () => {
           });
 
           it('P3-WP002-R2-12. Fixed deterministic clock proof — 30 DAY (now: PASS, now-30d: PASS, future: FAIL, invalid: FAIL)', async () => {
-            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
-            const now = Date.now();
+            const fixedNow = 1700000000000;
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext({ fixedNow });
             const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-            const exactNow = new Date(now).toISOString();
-            const exact30dBoundary = new Date(now - THIRTY_DAYS_MS + 5000).toISOString();
-            const futureTime = new Date(now + 10000).toISOString();
+            const exactNow = new Date(fixedNow).toISOString();
+            const exact30dBoundary = new Date(fixedNow - THIRTY_DAYS_MS).toISOString();
+            const futureTime = new Date(fixedNow + 10000).toISOString();
             const invalidTime = 'NOT_A_VALID_DATE';
 
             // 1. Exactly Now -> PASS
