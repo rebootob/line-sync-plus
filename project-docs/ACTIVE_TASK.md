@@ -1,28 +1,29 @@
 # ACTIVE TASK
 
 ```yaml
-CONTROL_VERSION: 36
-ACTIVE_WORK_PACKAGE: P3-WP003-PRE1-R1
-TASK_ID: P3-WP003-PRE1-R1
-PARENT_TASK: P3-WP003-PRE1
-AUTHORIZATION_REVISION: P3-WP003-PRE1-R1-EVIDENCE-DEFINITION-COMPLETION
-TITLE: P3-WP003-PRE1-R1 — EVIDENCE-ONLY Definition & Gap Review Completion
-STATUS: READY_FOR_CHATGPT_REVIEW
+CONTROL_VERSION: 37
+ACTIVE_WORK_PACKAGE: P3-WP003-PRE1-R2
+TASK_ID: P3-WP003-PRE1-R2
+PARENT_TASK: P3-WP003-PRE1-R1
+AUTHORIZATION_REVISION: P3-WP003-PRE1-R2-CONTRACT-ACCURACY-DECISION-CLOSURE
+TITLE: P3-WP003-PRE1-R2 — EVIDENCE-ONLY Contract Accuracy & Decision Closure
+STATUS: CORRECTIVE_AUTHORIZED
 AUTHORIZED_BY: Project Owner
-AUTHORIZE_EXECUTION: FALSE
+AUTHORIZE_EXECUTION: TRUE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_R2_EVIDENCE
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: CLOSED / PASS
 PHASE_3: IN PROGRESS
 P3-WP001: CLOSED / PASS
 P3-WP002: CLOSED / PASS
-P3-WP003-PRE1: CORRECTIVE REQUIRED / SUPERSEDED_BY_R1
-P3-WP003-PRE1-R1: READY_FOR_CHATGPT_REVIEW
+P3-WP003-PRE1: CORRECTIVE REQUIRED / SUPERSEDED
+P3-WP003-PRE1-R1: CORRECTIVE REQUIRED / SUPERSEDED_BY_R2
+P3-WP003-PRE1-R2: CORRECTIVE_AUTHORIZED / EVIDENCE_ONLY
 P3-WP003: FUTURE / IMPLEMENTATION NOT AUTHORIZED
 CODE_BASELINE_HEAD: 6c555a54c114cdad0aa78a43f508a5b297df6546
-FAILED_PRE1_EVIDENCE_HEAD: a72ef6ac2668b8c0721c3dc153c9dddd6797afe6
+FAILED_R1_EVIDENCE_HEAD: 372c7fb35aea65d25e2eea6efffc18b7ef0d14e9
 P3-WP002_ACCEPTED_IMPLEMENTATION_HEAD: 03dd35a5d6b29c6394f93f16061bfaddb5f10174
 P3-WP002_ACCEPTED_EVIDENCE_HEAD: 135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6
 WORKER_VERSION: 28.16
@@ -32,68 +33,42 @@ RUNTIME_CONTRACT_VERSION: 2
 
 ## Current Control-Plane Decision
 
-Independent review of the first PRE1 evidence commit found scope control PASS but the required repository-grounded definition/gap review was missing. The Owner has authorized `P3-WP003-PRE1-R1` to complete that evidence only.
+R1 produced a real definition/gap review, but independent review found factual inaccuracies and unresolved contract ambiguity. The Owner authorized R2 to correct those issues only.
 
-This is NOT P3-WP003 implementation authorization.
+This is **not** P3-WP003 implementation authorization.
 
-## R1 Required Deliverable
+## R2 Focus
 
-R1 must inspect current repository truth and write actual findings into the five control docs. It must not merely restate PRE1 objectives or change lifecycle status fields.
+R2 must correct and lock:
+- actual `Customer` source truth (`isBlocked`, `statusMessage`, etc.; no invented `status` field)
+- actual current `GET /api/customers` backend behavior (botId + active-OA fencing; no invented current search/status params)
+- exact accepted WP002 field names
+- all previously ambiguous normative decisions
+- complete future API request/response/status/idempotency contracts
+- bounded WP1/WP2/WP3 file scope, exclusions and acceptance boundaries
+- missing mandatory tests
+- post-R2 consistency across all five control docs
 
-The final evidence must concretely resolve or explicitly flag all A-J areas from `EXECUTION_GATE.md`:
-- A current data model / exact persistent-tag gap
-- B tag domain semantics
-- C advanced segmentation semantics
-- D OA/security/safety contract
-- E API candidate contract
-- F UI candidate contract
-- G storage/migration/performance candidate
-- H backward compatibility
-- I bounded future implementation split
-- J exact test/acceptance contract
+## Scope
 
-## Mandatory Provenance
+Evidence-only inspection may read relevant source/tests/entities/database-init/UI/package/docs. During inspection, modify nothing.
 
-Completion must record:
-- exact materially inspected files
-- resolved decisions
-- unresolved decisions/gaps or `NONE`
-- whether later schema change is required and why
-- exact five changed control docs
-- `git diff --check` result
-- test/build run truth (`NOT RUN / NOT REQUIRED` is valid if accurate)
-- evidence classification
-- explicit `NO IMPLEMENTATION OCCURRED`
-
-A status-only change is invalid.
-
-## Authorized Scope
-
-Read/analyze relevant source/tests/entities/database-init/dashboard/package/docs only as needed.
-
-At successful completion modify ONLY:
+At completion modify only:
 - `project-docs/EXECUTION_GATE.md`
 - `project-docs/ACTIVE_TASK.md`
 - `project-docs/CHAT_HANDOFF.md`
 - `project-docs/CURRENT_STATE.md`
 - `project-docs/PROJECT_STATUS_ROADMAP.md`
 
-No `src/**`, tests, `index.html`, schema/migration/index implementation, package/dependency, Worker, LINE, Live UAT, Telegram or unrelated changes.
+No source, tests, `index.html`, schema/migration/index implementation, package/dependency, Worker, LINE, Live UAT, Telegram or unrelated change.
 
-## Completion State
+## Completion Rule
 
-Only after actual findings are written:
-- `STATUS: READY_FOR_CHATGPT_REVIEW`
-- `AUTHORIZE_EXECUTION: FALSE`
-- `P3-WP003-PRE1-R1: READY_FOR_CHATGPT_REVIEW`
-- `P3-WP003: FUTURE / IMPLEMENTATION NOT AUTHORIZED`
-- STOP after commit/push
+R2 may become `READY_FOR_CHATGPT_REVIEW` only when all required decisions are single-valued and repository-grounded, unresolved blockers are `NONE`, provenance is recorded, `git diff --check` passes, and `NO IMPLEMENTATION OCCURRED` is explicit.
 
 ## Progress
 
-- Official accepted roadmap progress estimate: **~61%**
-- Practical implementation progress estimate: **~61%**
-
-R1 evidence work does not itself increase accepted implementation progress.
+Official accepted: ~61%
+Practical implementation: ~61%
 
 Permanent safety truth remains unchanged: true exactly-once physical LINE delivery is not guaranteed, and ambiguous physical sends must never be automatically resent.

@@ -1,8 +1,6 @@
-# LineSync Plus — Project Status, Incident History & Development Roadmap
+# LineSync Plus — Project Status & Roadmap
 
-## 1. Executive Summary
-
-Current roadmap truth:
+## Executive Summary
 
 - Phase 0: `CLOSED / PASS`
 - Phase 1: `CLOSED / PASS`
@@ -12,152 +10,92 @@ Current roadmap truth:
 - Phase 5: `FUTURE`
 
 Current active work package:
-**P3-WP003-PRE1-R1 — EVIDENCE-ONLY Definition & Gap Review Completion**.
+`P3-WP003-PRE1-R2 — EVIDENCE-ONLY Contract Accuracy & Decision Closure`
 
-`P3-WP003` implementation remains `FUTURE / NOT AUTHORIZED`.
+P3-WP003 implementation remains `FUTURE / IMPLEMENTATION NOT AUTHORIZED`.
 
-## 2. Current Control Gate
+## Current Gate
 
 ```yaml
-CONTROL_VERSION: 36
-ACTIVE_WORK_PACKAGE: P3-WP003-PRE1-R1
-TASK_ID: P3-WP003-PRE1-R1
-PARENT_TASK: P3-WP003-PRE1
-AUTHORIZATION_REVISION: P3-WP003-PRE1-R1-EVIDENCE-DEFINITION-COMPLETION
-STATUS: READY_FOR_CHATGPT_REVIEW
-AUTHORIZE_EXECUTION: FALSE
+CONTROL_VERSION: 37
+ACTIVE_WORK_PACKAGE: P3-WP003-PRE1-R2
+TASK_ID: P3-WP003-PRE1-R2
+STATUS: CORRECTIVE_AUTHORIZED
+AUTHORIZE_EXECUTION: TRUE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_R2_EVIDENCE
 ```
 
-This gate authorizes repository inspection and evidence-definition completion only, not implementation.
-
-## 3. Accepted Phase 3 Foundation
+## Phase 3 Foundation
 
 ### P3-WP001 — Customer Intelligence Foundation
-Status: `CLOSED / PASS`
+`CLOSED / PASS`
 
 ### P3-WP002 — Outbound Activity Intelligence
-Status: `CLOSED / PASS`
+`CLOSED / PASS`
 
-Accepted production implementation:
+Accepted implementation:
 `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
 
-Accepted evidence HEAD:
+Accepted evidence:
 `135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6`
 
-Code baseline for PRE1/R1:
-`6c555a54c114cdad0aa78a43f508a5b297df6546`
+### P3-WP003-PRE1
+First PRE1 run: scope-safe but evidence incomplete.
 
-The closed behavior from P3-WP001/P3-WP002 must be preserved.
+### P3-WP003-PRE1-R1
+Produced real A-J findings, but independent review found factual source mismatches, WP002 naming drift, unresolved normative choices, incomplete API contract details, incomplete implementation-package boundaries and missing acceptance tests.
 
-## 4. P3-WP003-PRE1 Review History
+### P3-WP003-PRE1-R2
+`CORRECTIVE_AUTHORIZED / EVIDENCE_ONLY`
 
-### P3-WP003-PRE1 — Initial Definition / Gap Review
-Status: `CORRECTIVE REQUIRED / SUPERSEDED_BY_R1`
+R2 is a narrow correction to make the future WP003 contract accurate and single-valued before implementation.
 
-Evidence HEAD:
-`a72ef6ac2668b8c0721c3dc153c9dddd6797afe6`
+Required closure areas:
+- current Customer/source truth
+- current `/api/customers` truth
+- exact WP002 activity field names
+- single deterministic rules for bulk/cross-OA/duplicate/rename/delete/order/pagination/selectedUsers behavior
+- complete future API request/response/status/idempotency contract
+- bounded WP1/WP2/WP3 scopes, exclusions and acceptance boundaries
+- complete acceptance tests including ordering/pagination, `isBlocked`, selectedUsers and explicit AND/OR
+- five-control-doc completion consistency
 
-Independent review result:
-- EVIDENCE-ONLY scope: PASS
-- no implementation: PASS
-- actual A-J definition/gap review: MISSING
-- repository inspection provenance: MISSING
-- bounded implementation plan: MISSING
-- exact test/acceptance contract: MISSING
+## P3-WP003 — Persistent Tags & Advanced Segmentation
 
-The initial PRE1 run changed lifecycle state but did not record the required repository-grounded findings.
-
-### P3-WP003-PRE1-R1 — Evidence Definition Completion
-Status: `READY_FOR_CHATGPT_REVIEW`
-
-R1 must complete the missing evidence. It may inspect relevant source/tests/entities/database-init/dashboard/package/docs, but may not modify implementation files.
-
-A successful R1 completion must record actual findings, not objectives, for:
-1. current data model / exact persistent-tag gap
-2. tag ownership/cardinality/uniqueness/normalization and mutation semantics
-3. segmentation filters, AND/OR, ANY/ALL, empty-filter, ordering and pagination semantics
-4. OA/security/safety/fail-fast contract
-5. API candidate contract
-6. minimal UI candidate contract
-7. required vs deferred storage/migration/index/performance work and no-N+1 strategy
-8. backward compatibility
-9. smallest bounded future implementation split
-10. exact acceptance/regression/security/performance test contract
-
-Mandatory provenance at completion:
-- exact materially inspected files
-- resolved decision ledger
-- unresolved decisions/gaps or `NONE`
-- whether later schema change is required and why
-- exact five changed control docs
-- `git diff --check` result
-- test/build run truth
-- evidence classification
-- explicit `NO IMPLEMENTATION OCCURRED`
-
-A status-only completion is invalid.
-
-### P3-WP003 — Persistent Tags & Advanced Segmentation
 Status: `FUTURE / IMPLEMENTATION NOT AUTHORIZED`
 
-No source, schema, endpoint, UI, migration, index or dependency implementation is authorized by R1.
+Expected future capability remains persistent OA-scoped customer tags plus advanced segmentation using tags, blocked state, safe customer identity fields and accepted WP002 activity data. No implementation may begin from the R2 evidence gate.
 
-## 5. Expected Design Boundaries
-
-R1 should produce the repository-grounded contract required before implementation authorization, while preserving:
-- OA isolation
-- wrong-recipient fencing
-- blocked-user protection
-- selectedUsers behavior
-- stale OA response protection
-- safe DOM rendering
-- P3-WP001/P3-WP002 API and filter behavior where backward compatible
-- Phase 0-2 safety/runtime/campaign invariants
-
-Any future query design should avoid N+1 and use deterministic ordering/pagination.
-
-## 6. Runtime / Safety Contract
+## Safety Contract
 
 - Worker: `28.16`
 - Required Worker: `28.16`
 - Runtime Contract: `2`
+- true exactly-once physical LINE delivery: NOT GUARANTEED
+- ambiguous physical send: NEVER automatically resend
+- preserve OA isolation, wrong-recipient fencing, blocked-customer protection, selectedUsers behavior, stale OA protection and safe DOM rendering
 
-R1 does not authorize:
-- source/test modifications
-- `index.html` modifications
-- schema/migration/index implementation
-- package/dependency changes
-- Worker changes
-- LINE sends or Live UAT
-- Telegram changes/tests
+## Progress
 
-Permanent truth:
-- true exactly-once physical LINE delivery is not guaranteed
-- ambiguous physical sends must never be automatically resent
+- Official accepted roadmap progress: **~61%**
+- Practical implementation progress: **~61%**
 
-## 7. Progress Estimate
+R2 definition correction does not increase implementation progress by itself.
 
-- Official accepted roadmap progress estimate: **~61%**
-- Practical implementation progress estimate: **~61%**
-
-R1 definition evidence does not itself increase accepted implementation progress.
-
-## 8. Immediate Lifecycle
+## Immediate Lifecycle
 
 ```text
-P3-WP003-PRE1-R1 CONTROL UPDATE
--> COMMIT/PUSH
+R2 CONTROL UPDATE
 -> STOP
--> FRESH R1 EXECUTION
--> repository inspection + actual A-J findings
--> five-control-doc evidence sync
+-> FRESH R2 EVIDENCE RUN
+-> correct contract accuracy + close decisions only
+-> update five control docs
 -> READY_FOR_CHATGPT_REVIEW
 -> COMMIT/PUSH
 -> STOP
 -> ChatGPT independent review
--> explicit Owner authorization required before P3-WP003 implementation
+-> Owner authorization required before any implementation
 ```
 
 No later work package may auto-start.
