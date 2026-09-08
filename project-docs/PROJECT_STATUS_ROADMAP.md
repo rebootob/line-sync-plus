@@ -20,10 +20,10 @@ P3-WP003 implementation remains `FUTURE / IMPLEMENTATION NOT AUTHORIZED`.
 CONTROL_VERSION: 37
 ACTIVE_WORK_PACKAGE: P3-WP003-PRE1-R2
 TASK_ID: P3-WP003-PRE1-R2
-STATUS: CORRECTIVE_AUTHORIZED
-AUTHORIZE_EXECUTION: TRUE
+STATUS: READY_FOR_CHATGPT_REVIEW
+AUTHORIZE_EXECUTION: FALSE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_R2_EVIDENCE
+NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
 ```
 
 ## Phase 3 Foundation
@@ -34,20 +34,25 @@ NEXT_CANDIDATE_STATUS: AWAITING_R2_EVIDENCE
 ### P3-WP002 — Outbound Activity Intelligence
 `CLOSED / PASS`
 
-Accepted implementation:
+P3-WP002 accepted implementation:
 `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
 
-Accepted evidence:
+P3-WP002 accepted evidence HEAD:
 `135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6`
 
-### P3-WP003-PRE1
-First PRE1 run: scope-safe but evidence incomplete.
+Code baseline for PRE1/R1/R2:
+`6c555a54c114cdad0aa78a43f508a5b297df6546`
 
-### P3-WP003-PRE1-R1
-Produced real A-J findings, but independent review found factual source mismatches, WP002 naming drift, unresolved normative choices, incomplete API contract details, incomplete implementation-package boundaries and missing acceptance tests.
+## P3-WP003-PRE1 History
 
-### P3-WP003-PRE1-R2
-`CORRECTIVE_AUTHORIZED / EVIDENCE_ONLY`
+### P3-WP003-PRE1 — Initial Definition / Gap Review
+`CORRECTIVE REQUIRED / SUPERSEDED`
+
+### P3-WP003-PRE1-R1 — Definition & Gap Review Completion
+`CORRECTIVE REQUIRED / SUPERSEDED_BY_R2`
+
+### P3-WP003-PRE1-R2 — Evidence-Only Contract Accuracy & Decision Closure
+`READY_FOR_CHATGPT_REVIEW`
 
 R2 is a narrow correction to make the future WP003 contract accurate and single-valued before implementation.
 
