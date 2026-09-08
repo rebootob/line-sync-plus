@@ -1,30 +1,30 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 31
+CONTROL_VERSION: 32
 
 TASK_ID:
-P3-WP002-R2
+P3-WP002-R3
 
 PARENT_TASK:
-P3-WP002-R1
+P3-WP002-R2
 
 AUTHORIZATION_REVISION:
-P3-WP002-R2-EVIDENCE-CLOSURE
+P3-WP002-R3-FINAL-EVIDENCE-CORRECTIVE
 
 TITLE:
-P3-WP002-R2 — TEST-ONLY + CONTROL-DOC Evidence Closure
+P3-WP002-R3 — TEST-ONLY + CONTROL-DOC Final Evidence Corrective
 
 STATUS:
-READY_FOR_CHATGPT_REVIEW
+CORRECTIVE_AUTHORIZED
 
 AUTHORIZE_EXECUTION:
-FALSE
+TRUE
 
 AUTHORIZED_BY:
-Project Owner (P3-WP002-R2 Evidence Closure)
+Project Owner
 
 AUTHORIZATION_REF:
-Owner authorized P3-WP002-R2 TEST-ONLY + CONTROL-DOC Evidence Closure according to the bounded scope recorded in this gate.
+Owner authorized P3-WP002-R3 TEST-ONLY + CONTROL-DOC Final Evidence Corrective according to the bounded scope proposed by ChatGPT independent review.
 
 CONTROL_PLANE:
 ChatGPT
@@ -36,7 +36,7 @@ CANONICAL_BRANCH:
 main
 
 CONTROL_UPDATE_PARENT_HEAD:
-9b2a110dfe4f04302a4b6b60bdbc48dfde274009
+e9736490dde42d1b249e6fba3f9d63e929da909c
 
 P3-WP002_BASELINE_HEAD:
 7ca0a0dcde5896f18a8254f4a94a74a776d7a36e
@@ -53,8 +53,11 @@ P3-WP002-R1_IMPLEMENTATION_HEAD:
 P3-WP002-R1_REVIEW_READY_HEAD:
 9b2a110dfe4f04302a4b6b60bdbc48dfde274009
 
+P3-WP002-R2_EVIDENCE_HEAD:
+e9736490dde42d1b249e6fba3f9d63e929da909c
+
 CODE_BASELINE_HEAD:
-03dd35a5d6b29c6394f93f16061bfaddb5f10174
+e9736490dde42d1b249e6fba3f9d63e929da909c
 
 IMPLEMENTATION_CANDIDATE_HEAD:
 03dd35a5d6b29c6394f93f16061bfaddb5f10174
@@ -63,59 +66,66 @@ REVIEWED_IMPLEMENTATION_HEAD:
 03dd35a5d6b29c6394f93f16061bfaddb5f10174
 
 REVIEW_RESULT:
-SOURCE_PASS / EVIDENCE_CORRECTIVE_REQUIRED
+SOURCE_PASS / R2_EVIDENCE_CORRECTIVE_REQUIRED
 
 ACCEPTED_IMPLEMENTATION_HEAD:
 NONE
 
 IMPORTANT:
-The future P3-WP002-R2 TEST-ONLY commit MUST NOT be recorded as an implementation HEAD. The reviewed implementation remains 03dd35a5d6b29c6394f93f16061bfaddb5f10174 until independent acceptance says otherwise.
+R2 and R3 are TEST-EVIDENCE / CONTROL-DOC commits only. They MUST NOT become implementation HEADs. The reviewed production implementation remains 03dd35a5d6b29c6394f93f16061bfaddb5f10174 unless an independent acceptance decision explicitly changes that truth.
 
 PROJECT_STATE:
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: CLOSED / PASS
-PHASE-2-CLOSE: CLOSED_PASS
 PHASE_3: IN PROGRESS
 PHASE_3_TITLE: Audience & Customer Intelligence
-ACTIVE_WORK_PACKAGE: P3-WP002-R2
+ACTIVE_WORK_PACKAGE: P3-WP002-R3
 P3-WP001: CLOSED / PASS
-P3-WP001-R1: CORRECTED / SUPERSEDED_BY_C1
-P3-WP001-R1-C1: CLOSED_PASS
-P3-WP001-CLOSE: CLOSED_PASS
-P3-WP001-CLOSE-C1: CLOSED_PASS
 P3-WP002-PRE1: COMPLETE / DEFINITION READY
-P3-WP002: CORRECTIVE REQUIRED / AWAITING_R2_REVIEW
-P3-WP002-R1: CORRECTIVE REQUIRED / SUPERSEDED_BY_R2
-P3-WP002-R2: READY_FOR_CHATGPT_REVIEW
+P3-WP002: CORRECTIVE REQUIRED / R3 AUTHORIZED
+P3-WP002-R1: SOURCE CORRECTIVE COMPLETE / SUPERSEDED_BY_EVIDENCE_CORRECTIVES
+P3-WP002-R2: CORRECTIVE REQUIRED / SUPERSEDED_BY_R3
+P3-WP002-R3: CORRECTIVE_AUTHORIZED
 P3-WP003: FUTURE / NOT AUTHORIZED
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_EXECUTION
 
 --------------------------------------------------
-PURPOSE — P3-WP002-R2 TEST-ONLY + CONTROL-DOC EVIDENCE CLOSURE
+INDEPENDENT REVIEW TRUTH LEADING TO R3
 --------------------------------------------------
 
-Close the remaining P3-WP002 regression-evidence gap only.
+ChatGPT independent review at R2 evidence HEAD e9736490dde42d1b249e6fba3f9d63e929da909c established:
 
-ChatGPT independent review of P3-WP002-R1 established:
-- SOURCE / ARCHITECTURE: PASS
-- DB-SIDE AGGREGATION: PASS
-- TIME-WINDOW PRODUCTION LOGIC: PASS
-- SAFE DOM PRODUCTION LOGIC: PASS
-- PRODUCTION CODE CORRECTIVE STILL NEEDED: NO
+PASS:
+- production source / architecture
+- DB-side aggregation
+- strict OA query scope
+- no N+1 evidence
+- no campaignJobRepository.find evidence
+- no CampaignSendPart read/query evidence
+- customer timestamp isolation evidence
+- malicious latestJobStatus safe-DOM evidence
+- NEVER_SUCCESS semantics
+- R2 scope control
 
-The only remaining blocking item is TEST EVIDENCE + CONTROL DOCUMENT TRUTH.
+REMAINING CORRECTIVE ONLY:
+1. The 7-day boundary test used now - 7d + 5000ms instead of EXACTLY now - 7d.
+2. The 30-day boundary test used now - 30d + 5000ms instead of EXACTLY now - 30d.
+3. The clock was not fixed/frozen deterministically while production handleFilters() calls Date.now().
+4. Completion control docs did not record exact npm test result/count, build result, git diff --check result, exact changed files, and final evidence truth; stale pre-execution wording remained.
+
+NO PRODUCTION CODE CORRECTIVE IS AUTHORIZED OR REQUIRED BY R3.
 
 --------------------------------------------------
-AUTHORIZED FILES — NEXT FRESH R2 EXECUTION RUN
+AUTHORIZED FILES — NEXT FRESH R3 EXECUTION RUN
 --------------------------------------------------
 
-R2 may modify ONLY:
+During test corrective, R3 may modify ONLY:
 
 - src/app.controller.spec.ts
 
-and, at completion, these same five control documents:
+At successful completion R3 may additionally update ONLY:
 
 - project-docs/EXECUTION_GATE.md
 - project-docs/ACTIVE_TASK.md
@@ -135,64 +145,70 @@ ABSOLUTELY PROHIBITED:
 - src/telegram.service.ts
 - package*.json
 - DB/schema/migrations/indexes
+- dependency changes
 - any unrelated file
 
-If any prohibited production file appears necessary, STOP and return to the Control Plane. Do not expand scope.
+If production code appears necessary, STOP and return to the Control Plane. Do not expand scope.
 
 --------------------------------------------------
-REQUIRED R2 REGRESSION EVIDENCE
+REQUIRED R3 FINAL EVIDENCE
 --------------------------------------------------
 
-1. malformed botId -> HTTP 400; customer query ZERO; activity createQueryBuilder ZERO.
-2. no active OA -> HTTP 409; customer query ZERO; activity query ZERO.
-3. mismatched OA -> HTTP 409; customer query ZERO; activity query ZERO.
-4. Assert ACTUAL QueryBuilder SQL expressions for:
-   - COUNT success
-   - MAX successful sentAt
-   - COUNT failed
-   - COUNT reconcile_required
-   - deterministic latest ordered by createdAt DESC, id DESC
-5. Strict SQL scope:
-   - WHERE job.botId = :cleanBotId
-   - GROUP BY job.lineUserId
-6. With at least 3 customers:
-   - createQueryBuilder exactly once
-   - getRawMany exactly once
-   - no N+1
-7. campaignJobRepository.find MUST NOT be used for this customer-activity endpoint.
-8. CampaignSendPart read/query MUST NOT be used for this customer-activity endpoint.
-9. Customer.createdAt/updatedAt cannot influence activity metrics and are not exposed in DTO.
-10. malicious latestJobStatus renders as literal text only with zero IMG/SCRIPT/SVG payload nodes.
-11. Fixed/deterministic clock proof for 7-day:
-    - exactly now PASS
-    - exactly now-7d PASS
-    - future FAIL
-    - invalid FAIL
-12. Fixed/deterministic clock proof for 30-day:
-    - exactly now PASS
-    - exactly now-30d PASS
-    - future FAIL
-    - invalid FAIL
-13. NEVER_SUCCESS:
-    - successfulJobCount == 0 -> MATCH
-    - successfulJobCount > 0 + null lastSuccessfulSendAt -> NOT MATCH
+A. FIXED / DETERMINISTIC CLOCK
+- Use one fixed timestamp for the relevant frontend time-window proof.
+- Ensure production handleFilters() sees that same fixed Date.now() value.
+- The test must execute ACTUAL production frontend code loaded from index.html through the existing VM harness.
+- Do not copy or reimplement production filtering logic inside the test.
 
-Preserve existing regression evidence:
+B. EXACT 7-DAY BOUNDARY
+Prove with the fixed clock:
+- exactly FIXED_NOW -> PASS
+- exactly FIXED_NOW - 7 days -> PASS
+- future > FIXED_NOW -> FAIL
+- invalid timestamp -> FAIL
+
+The lower boundary MUST be mathematically exact. Do not add +1ms, +1000ms, +5000ms, or any inward offset.
+
+C. EXACT 30-DAY BOUNDARY
+Prove with the same deterministic principle:
+- exactly FIXED_NOW -> PASS
+- exactly FIXED_NOW - 30 days -> PASS
+- future > FIXED_NOW -> FAIL
+- invalid timestamp -> FAIL
+
+The lower boundary MUST be mathematically exact. Do not add any inward offset.
+
+D. PRESERVE ACCEPTED R2 EVIDENCE
+Do not weaken or remove the existing R2 evidence for items 1-10 and 13, including:
+- malformed botId fail-fast query-zero
+- no active OA fail-fast query-zero
+- mismatched OA fail-fast query-zero
+- actual aggregate QueryBuilder SQL expressions
+- WHERE job.botId = :cleanBotId
+- GROUP BY job.lineUserId
+- one QueryBuilder / one getRawMany for at least 3 customers
+- no campaignJobRepository.find
+- no CampaignSendPart read/query
+- Customer.createdAt/updatedAt excluded from activity metrics/DTO
+- malicious latestJobStatus literal text / zero IMG SCRIPT SVG payload nodes
+- strict NEVER_SUCCESS semantics
 - blocked customer checkbox disabled
 - selectedUsers checked behavior
 - stale OA response discard
 
 TEST INTEGRITY:
-- Tests must execute ACTUAL production code.
-- No copied production functions.
-- No .only / .skip.
-- Do not weaken existing tests.
+- actual production code only
+- no copied production helper/filter logic
+- no .only
+- no .skip
+- no weakened assertions
+- no production modification
 
 --------------------------------------------------
-R2 VALIDATION CONTRACT — NEXT FRESH RUN ONLY
+R3 VALIDATION CONTRACT — NEXT FRESH RUN ONLY
 --------------------------------------------------
 
-Required commands:
+Run exactly:
 
 npm test -- --runInBand
 npm run build
@@ -200,13 +216,20 @@ git diff --check
 
 Require all PASS.
 
-Evidence classification:
-LOCAL REPORTED
+At completion, control docs MUST record:
+- exact npm test PASS result
+- exact test suite count
+- exact test count
+- exact pass/fail/skipped counts where reported
+- npm run build PASS
+- git diff --check PASS
+- exact changed files
+- evidence classification: LOCAL REPORTED
+- GitHub CI/status truth: NONE unless actual GitHub evidence exists
+- FINAL_R3_SHA after commit/push
+- parent SHA
 
-GitHub CI/status:
-NONE unless actual GitHub evidence exists.
-
-This control-update run MUST NOT execute those R2 tests and MUST NOT modify src/app.controller.spec.ts.
+This CONTROL UPDATE run MUST NOT execute R3 tests and MUST NOT modify src/app.controller.spec.ts.
 
 --------------------------------------------------
 VERSION / SAFETY CONTRACT
@@ -221,6 +244,7 @@ No schema change.
 No LINE send.
 No Live UAT.
 No Telegram test.
+No dependency change.
 
 True exactly-once physical LINE delivery: NOT GUARANTEED.
 Never automatically resend an ambiguous physical send.
@@ -232,18 +256,21 @@ PROGRESS / LIFECYCLE
 Official accepted roadmap progress estimate: ~56%
 Practical implementation progress estimate: ~61%
 
-These percentages are planning estimates, NOT acceptance evidence.
+These are planning estimates, NOT acceptance evidence.
 
 Current blocking item:
-P3-WP002-R2 TEST-ONLY evidence closure.
+P3-WP002-R3 final TEST-ONLY evidence corrective.
 
 Exact lifecycle:
 CONTROL UPDATE
 -> COMMIT/PUSH
 -> STOP
 -> FRESH NEW RUN/CHAT
--> execute P3-WP002-R2 gate only
+-> execute P3-WP002-R3 gate only
+-> run full validation
+-> update completion evidence truth
 -> READY_FOR_CHATGPT_REVIEW
+-> COMMIT/PUSH
 -> STOP
 -> ChatGPT independent review
 

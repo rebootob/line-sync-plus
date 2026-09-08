@@ -4,8 +4,8 @@
 
 - Repository: `rebootob/line-sync-plus`
 - Canonical Branch: `main`
-- Control Update Parent HEAD: `9b2a110dfe4f04302a4b6b60bdbc48dfde274009`
-- Current control version: `31`
+- Current control version: `32`
+- Control-update parent HEAD: `e9736490dde42d1b249e6fba3f9d63e929da909c`
 - Worker Version: `28.16`
 - Required Worker Version: `28.16`
 - Runtime Contract Version: `2`
@@ -19,69 +19,51 @@
 
 ## Current Project State
 
-- **PHASE_0**: `CLOSED / PASS`
-- **PHASE_1**: `CLOSED / PASS`
-- **PHASE_2**: `CLOSED / PASS`
-- **PHASE_3**: `IN PROGRESS` — Audience & Customer Intelligence
-- **P3-WP001**: `CLOSED / PASS`
-- **P3-WP002-PRE1**: `COMPLETE / DEFINITION READY`
-- **P3-WP002**: `CORRECTIVE REQUIRED / AWAITING_R2_REVIEW`
-- **P3-WP002-R1**: `CORRECTIVE REQUIRED / SUPERSEDED_BY_R2`
-- **P3-WP002-R2**: `READY_FOR_CHATGPT_REVIEW`
-- **P3-WP003**: `FUTURE / NOT AUTHORIZED`
-- **ACTIVE_WORK_PACKAGE**: `P3-WP002-R2`
-- **AUTHORIZE_EXECUTION**: `FALSE`
-- **NEXT_CANDIDATE**: `NONE`
-- **NEXT_CANDIDATE_STATUS**: `AWAITING_REVIEW`
-
-## Latest Accepted Control-Plane Truth
-
-P3-WP002 original implementation:
-`956e576ffee2f194ce6e617531a58f336de2b280`
-
-P3-WP002 initial review result:
-`CORRECTIVE REQUIRED`
-
-P3-WP002-R1 source corrective implementation:
-`03dd35a5d6b29c6394f93f16061bfaddb5f10174`
-
-P3-WP002-R1 independent review result:
-
-- SOURCE / ARCHITECTURE: `PASS`
-- DB-SIDE AGGREGATION: `PASS`
-- TIME-WINDOW PRODUCTION LOGIC: `PASS`
-- SAFE DOM PRODUCTION LOGIC: `PASS`
-- PRODUCTION CODE CORRECTIVE STILL NEEDED: `NO`
-
-Remaining issue:
-`TEST EVIDENCE + CONTROL DOCUMENT TRUTH ONLY`
-
-P3-WP002 is therefore not yet accepted/closed.
+- PHASE_0: `CLOSED / PASS`
+- PHASE_1: `CLOSED / PASS`
+- PHASE_2: `CLOSED / PASS`
+- PHASE_3: `IN PROGRESS`
+- P3-WP001: `CLOSED / PASS`
+- P3-WP002-PRE1: `COMPLETE / DEFINITION READY`
+- P3-WP002: `CORRECTIVE REQUIRED / R3 AUTHORIZED`
+- P3-WP002-R1: `SOURCE CORRECTIVE COMPLETE / SUPERSEDED_BY_EVIDENCE_CORRECTIVES`
+- P3-WP002-R2: `CORRECTIVE REQUIRED / SUPERSEDED_BY_R3`
+- P3-WP002-R3: `CORRECTIVE_AUTHORIZED`
+- ACTIVE_WORK_PACKAGE: `P3-WP002-R3`
+- AUTHORIZE_EXECUTION: `TRUE`
+- NEXT_CANDIDATE: `NONE`
+- NEXT_CANDIDATE_STATUS: `AWAITING_EXECUTION`
+- P3-WP003: `FUTURE / NOT AUTHORIZED`
 
 ## Head / Review Truth
 
-- `P3-WP002_BASELINE_HEAD`: `7ca0a0dcde5896f18a8254f4a94a74a776d7a36e`
-- `P3-WP002_ORIGINAL_IMPLEMENTATION_HEAD`: `956e576ffee2f194ce6e617531a58f336de2b280`
-- `P3-WP002_INITIAL_REVIEW_HEAD`: `80a9f2dcafdb81e84f990e5593009091ab83bb4e`
-- `P3-WP002-R1_IMPLEMENTATION_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
-- `P3-WP002-R1_REVIEW_READY_HEAD`: `9b2a110dfe4f04302a4b6b60bdbc48dfde274009`
-- `CODE_BASELINE_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
-- `IMPLEMENTATION_CANDIDATE_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
-- `REVIEWED_IMPLEMENTATION_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
-- `REVIEW_RESULT`: `SOURCE_PASS / EVIDENCE_CORRECTIVE_REQUIRED`
-- `ACCEPTED_IMPLEMENTATION_HEAD`: `NONE`
+- P3-WP002 original implementation: `956e576ffee2f194ce6e617531a58f336de2b280`
+- P3-WP002-R1 reviewed production implementation: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- P3-WP002-R2 evidence HEAD: `e9736490dde42d1b249e6fba3f9d63e929da909c`
+- CODE_BASELINE_HEAD for R3: `e9736490dde42d1b249e6fba3f9d63e929da909c`
+- IMPLEMENTATION_CANDIDATE_HEAD: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- REVIEWED_IMPLEMENTATION_HEAD: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+- REVIEW_RESULT: `SOURCE_PASS / R2_EVIDENCE_CORRECTIVE_REQUIRED`
+- ACCEPTED_IMPLEMENTATION_HEAD: `NONE`
 
-Do not use the future R2 TEST-ONLY commit as an implementation HEAD.
+R2/R3 test-evidence commits must never be treated as production implementation HEADs.
 
-## P3-WP002-R2 Authorized Scope
+## Why R3 Exists
 
-R2 is test-only evidence closure.
+Independent review of R2 accepted source/architecture, DB aggregation, query-scope, no-N+1, repository-usage, DTO isolation, malicious-status safe DOM, NEVER_SUCCESS semantics, and scope control.
 
-It may modify only:
+R2 still failed evidence closure because:
 
-- `src/app.controller.spec.ts`
+1. 7-day boundary used `now - 7d + 5000ms`, not exact `now - 7d`.
+2. 30-day boundary used `now - 30d + 5000ms`, not exact `now - 30d`.
+3. Clock was not fixed/frozen while production `handleFilters()` calls `Date.now()`.
+4. Completion docs did not record exact test/build/diff-check results and retained stale pre-execution wording.
 
-and, at completion, the five control documents:
+No production corrective is required or authorized.
+
+## R3 Authorized Scope
+
+May modify only `src/app.controller.spec.ts` during test correction, then the five control docs at successful completion:
 
 - `project-docs/EXECUTION_GATE.md`
 - `project-docs/ACTIVE_TASK.md`
@@ -89,38 +71,21 @@ and, at completion, the five control documents:
 - `project-docs/CURRENT_STATE.md`
 - `project-docs/PROJECT_STATUS_ROADMAP.md`
 
-It must not modify production implementation, including:
+Do not modify `src/app.controller.ts`, `index.html`, `run/**`, entities, customer entity, runtime-version, Telegram, package files, schema/migrations/indexes, dependencies, or unrelated files.
 
-- `src/app.controller.ts`
-- `index.html`
-- `run/**`
-- `src/entities/**`
-- `src/customer.entity.ts`
-- `src/database-init.service.ts`
-- `src/runtime-version.ts`
-- `src/telegram.service.ts`
-- `package*.json`
-- DB/schema/migrations/indexes
+## R3 Required Evidence
 
-## Required R2 Evidence Summary
+- fixed deterministic clock seen by actual production frontend code
+- exactly fixed-now PASS
+- exactly fixed-now minus 7 days PASS
+- future FAIL
+- invalid FAIL
+- exactly fixed-now minus 30 days PASS
+- no inward boundary offset of any size
+- preserve all accepted R2 evidence and blocked-checkbox / selectedUsers / stale-OA-response regressions
+- actual production code only; no copied filter logic, `.only`, `.skip`, or weakened assertions
 
-R2 must close all missing evidence for:
-
-- malformed botId fail-fast query-zero behavior
-- absent/mismatched active OA fail-fast query-zero behavior
-- actual DB QueryBuilder aggregate SQL expressions and strict OA/grouping scope
-- exactly one QueryBuilder / one `getRawMany` for at least 3 customers, with no N+1
-- no `campaignJobRepository.find`
-- no CampaignSendPart reads for this endpoint
-- customer timestamps excluded from activity metrics/DTO
-- malicious `latestJobStatus` rendered as literal text only
-- deterministic 7-day and 30-day boundary/future/invalid clock cases
-- strict NEVER_SUCCESS semantics
-- preservation of blocked checkbox, selectedUsers checked behavior, and stale OA response discard
-
-Tests must exercise actual production code. No copied production helpers, `.only`, `.skip`, or weakened regression tests.
-
-Required validation in the next fresh run:
+Required validation:
 
 ```text
 npm test -- --runInBand
@@ -128,19 +93,16 @@ npm run build
 git diff --check
 ```
 
-All must PASS. Evidence classification is `LOCAL REPORTED`; GitHub CI/status is `NONE` unless real GitHub evidence exists.
+At completion record exact test suite/test counts and pass/fail/skipped counts when reported, build PASS, diff-check PASS, exact changed files, evidence classification `LOCAL REPORTED`, actual GitHub CI truth, final R3 SHA and parent SHA.
 
 ## Progress
 
 - Official accepted roadmap progress estimate: **~56%**
 - Practical implementation progress estimate: **~61%**
 
-These are planning estimates, not acceptance evidence.
+Current blocker: `P3-WP002-R3 final TEST-ONLY evidence corrective`.
 
-Current blocking item:
-**P3-WP002-R2 TEST-ONLY evidence closure**.
-
-## Exact Next Lifecycle
+## Next Lifecycle
 
 ```text
 THIS CONTROL UPDATE
@@ -150,32 +112,15 @@ THIS CONTROL UPDATE
 -> fresh-fetch main
 -> read AGENT_START_HERE.md
 -> read EXECUTION_GATE.md
--> execute P3-WP002-R2 gate only
--> run required validation
--> update control docs to READY_FOR_CHATGPT_REVIEW only if evidence passes
+-> execute P3-WP002-R3 only
+-> full validation
+-> completion evidence sync
+-> READY_FOR_CHATGPT_REVIEW
 -> COMMIT/PUSH
 -> STOP
 -> ChatGPT independent review
 ```
 
-Do not auto-start `P3-WP003`.
+Do not auto-start P3-WP003.
 
-## Historical Accepted Foundation
-
-Historical accepted safety and reliability material remains valid:
-
-- `REL-WP001`: single-worker / multi-tab locking — closed/pass.
-- `OA-WP001`: OA context isolation and strict identity fencing — closed/pass.
-- `SYNC-WP001`: LINE OA directory synchronization — closed/pass.
-- `SAFE-WP001`: account-protection/send-compliance guard — closed/pass.
-- `REL-WP002`: durable lease/heartbeat/stale-worker fencing — closed/pass.
-- `REL-WP003`: durable send-part ledger and ambiguity reconciliation — closed/pass.
-- `MON-WP001`, `MON-WP002`, `MON-WP003`: operational monitoring/incident visibility — closed/pass.
-- Phase 2 Campaign Builder v2 and its closure packages are closed/pass.
-- `P3-WP001` is closed/pass with accepted implementation HEAD `f9a097a7579c1a357506816656b10c01f68be6ac`.
-
-Permanent safety truth:
-
-- True exactly-once physical LINE delivery is **NOT GUARANTEED**.
-- Never automatically resend an ambiguous physical send.
-- No Worker/schema/LINE-send/Live-UAT/Telegram-test work is authorized by P3-WP002-R2.
+Permanent safety truth remains unchanged: physical exactly-once LINE delivery is not guaranteed and ambiguous physical sends must never be automatically resent.
