@@ -24,10 +24,10 @@ ACTIVE_WORK_PACKAGE: P3-WP003-PRE1
 TASK_ID: P3-WP003-PRE1
 PARENT_TASK: P3-WP002-CLOSE
 AUTHORIZATION_REVISION: P3-WP003-PRE1-DEFINITION-GAP-REVIEW
-STATUS: AUTHORIZED_FOR_EXECUTION
-AUTHORIZE_EXECUTION: TRUE
+STATUS: READY_FOR_CHATGPT_REVIEW
+AUTHORIZE_EXECUTION: FALSE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_PRE1_EVIDENCE
+NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
 ```
 
 This gate authorizes evidence inspection/definition only, not implementation.
@@ -55,7 +55,7 @@ The closed behavior from P3-WP001/P3-WP002 must be preserved.
 ## 4. P3-WP003-PRE1 Decision
 
 ### P3-WP003-PRE1 — Persistent Tags & Advanced Segmentation Definition / Gap Review
-Status: `AUTHORIZED_FOR_EXECUTION / EVIDENCE_ONLY`
+Status: `READY_FOR_CHATGPT_REVIEW`
 
 PRE1 must establish a repository-grounded definition for:
 - current persistent-data/tagging gap
