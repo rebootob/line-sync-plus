@@ -1,18 +1,18 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 32
+CONTROL_VERSION: 33
 
 TASK_ID:
-P3-WP002-R3
+P3-WP002-R3-C1
 
 PARENT_TASK:
-P3-WP002-R2
+P3-WP002-R3
 
 AUTHORIZATION_REVISION:
-P3-WP002-R3-FINAL-EVIDENCE-CORRECTIVE
+P3-WP002-R3-C1-FINAL-PROVENANCE-SYNC
 
 TITLE:
-P3-WP002-R3 — TEST-ONLY + CONTROL-DOC Final Evidence Corrective
+P3-WP002-R3-C1 — DOCS-ONLY Final Evidence & Provenance Sync
 
 STATUS:
 READY_FOR_CHATGPT_REVIEW
@@ -24,19 +24,19 @@ AUTHORIZED_BY:
 Project Owner
 
 AUTHORIZATION_REF:
-Owner authorized P3-WP002-R3 TEST-ONLY + CONTROL-DOC Final Evidence Corrective according to the bounded scope proposed by ChatGPT independent review.
+Owner authorized P3-WP002-R3-C1 DOCS-ONLY Final Evidence & Provenance Sync according to the bounded scope proposed by ChatGPT independent review.
 
 CONTROL_PLANE:
 ChatGPT
 
 EXECUTION_PLANE:
-Antigravity
+Antigravity (STOP; no implementation authorized)
 
 CANONICAL_BRANCH:
 main
 
-CONTROL_UPDATE_PARENT_HEAD:
-e9736490dde42d1b249e6fba3f9d63e929da909c
+CONTROL_SYNC_PARENT_HEAD:
+135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6
 
 P3-WP002_BASELINE_HEAD:
 7ca0a0dcde5896f18a8254f4a94a74a776d7a36e
@@ -44,20 +44,17 @@ P3-WP002_BASELINE_HEAD:
 P3-WP002_ORIGINAL_IMPLEMENTATION_HEAD:
 956e576ffee2f194ce6e617531a58f336de2b280
 
-P3-WP002_INITIAL_REVIEW_HEAD:
-80a9f2dcafdb81e84f990e5593009091ab83bb4e
-
 P3-WP002-R1_IMPLEMENTATION_HEAD:
 03dd35a5d6b29c6394f93f16061bfaddb5f10174
-
-P3-WP002-R1_REVIEW_READY_HEAD:
-9b2a110dfe4f04302a4b6b60bdbc48dfde274009
 
 P3-WP002-R2_EVIDENCE_HEAD:
 e9736490dde42d1b249e6fba3f9d63e929da909c
 
-CODE_BASELINE_HEAD:
-e9736490dde42d1b249e6fba3f9d63e929da909c
+P3-WP002-R3_EXECUTION_PARENT_HEAD:
+495f800bf186c4f8d184561e9b1dfc0dd6217585
+
+P3-WP002-R3_EVIDENCE_HEAD:
+135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6
 
 IMPLEMENTATION_CANDIDATE_HEAD:
 03dd35a5d6b29c6394f93f16061bfaddb5f10174
@@ -65,176 +62,103 @@ IMPLEMENTATION_CANDIDATE_HEAD:
 REVIEWED_IMPLEMENTATION_HEAD:
 03dd35a5d6b29c6394f93f16061bfaddb5f10174
 
-REVIEW_RESULT:
-SOURCE_PASS / R2_EVIDENCE_CORRECTIVE_REQUIRED
-
 ACCEPTED_IMPLEMENTATION_HEAD:
 NONE
 
+P3-WP002-R3_REVIEW_RESULT:
+TECHNICAL_EVIDENCE_PASS / CONTROL_DOC_CORRECTIVE_REQUIRED
+
+CURRENT_C1_RESULT:
+DOCS_SYNC_APPLIED / READY_FOR_CHATGPT_REVIEW
+
 IMPORTANT:
-R2 and R3 are TEST-EVIDENCE / CONTROL-DOC commits only. They MUST NOT become implementation HEADs. The reviewed production implementation remains 03dd35a5d6b29c6394f93f16061bfaddb5f10174 unless an independent acceptance decision explicitly changes that truth.
+R2, R3, and R3-C1 are evidence/control-document work only and MUST NOT become production implementation HEADs. The reviewed production implementation remains 03dd35a5d6b29c6394f93f16061bfaddb5f10174 until explicit independent acceptance/closure.
 
 PROJECT_STATE:
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: CLOSED / PASS
 PHASE_3: IN PROGRESS
-PHASE_3_TITLE: Audience & Customer Intelligence
-ACTIVE_WORK_PACKAGE: P3-WP002-R3
+ACTIVE_WORK_PACKAGE: P3-WP002-R3-C1
 P3-WP001: CLOSED / PASS
 P3-WP002-PRE1: COMPLETE / DEFINITION READY
-P3-WP002: CORRECTIVE REQUIRED / AWAITING_R3_REVIEW
-P3-WP002-R1: SOURCE CORRECTIVE COMPLETE / SUPERSEDED_BY_EVIDENCE_CORRECTIVES
+P3-WP002: CORRECTIVE REQUIRED / AWAITING_R3_C1_REVIEW
+P3-WP002-R1: SOURCE CORRECTIVE COMPLETE
 P3-WP002-R2: CORRECTIVE REQUIRED / SUPERSEDED_BY_R3
-P3-WP002-R3: READY_FOR_CHATGPT_REVIEW
+P3-WP002-R3: TECHNICAL_EVIDENCE_PASS / SUPERSEDED_BY_C1_DOC_SYNC
+P3-WP002-R3-C1: READY_FOR_CHATGPT_REVIEW
 P3-WP003: FUTURE / NOT AUTHORIZED
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
 
 --------------------------------------------------
-INDEPENDENT REVIEW TRUTH LEADING TO R3
+INDEPENDENT R3 REVIEW TRUTH
 --------------------------------------------------
 
-ChatGPT independent review at R2 evidence HEAD e9736490dde42d1b249e6fba3f9d63e929da909c established:
+ChatGPT independent review of R3 at 135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6 established:
 
 PASS:
-- production source / architecture
-- DB-side aggregation
-- strict OA query scope
-- no N+1 evidence
-- no campaignJobRepository.find evidence
-- no CampaignSendPart read/query evidence
-- customer timestamp isolation evidence
-- malicious latestJobStatus safe-DOM evidence
-- NEVER_SUCCESS semantics
-- R2 scope control
+- production source remained unchanged
+- R3 scope control
+- fixed/frozen frontend clock in the existing VM harness
+- ACTUAL production frontend code from index.html executed in the VM
+- exact FIXED_NOW boundary PASS
+- exact FIXED_NOW - 7 days boundary PASS
+- exact FIXED_NOW - 30 days boundary PASS
+- future timestamp FAIL
+- invalid timestamp FAIL
+- accepted R2 evidence preserved
+- no production code corrective required
 
-REMAINING CORRECTIVE ONLY:
-1. The 7-day boundary test used now - 7d + 5000ms instead of EXACTLY now - 7d.
-2. The 30-day boundary test used now - 30d + 5000ms instead of EXACTLY now - 30d.
-3. The clock was not fixed/frozen deterministically while production handleFilters() calls Date.now().
-4. Completion control docs did not record exact npm test result/count, build result, git diff --check result, exact changed files, and final evidence truth; stale pre-execution wording remained.
+R3 local validation evidence recorded at the R3 evidence HEAD:
+- npm test -- --runInBand: PASS
+- test suites: 1 passed
+- tests: 585 passed
+- failed: 0
+- skipped: 0
+- npm run build: PASS (exit code 0)
+- git diff --check: PASS (exit code 0)
+- evidence classification: LOCAL REPORTED
 
-NO PRODUCTION CODE CORRECTIVE IS AUTHORIZED OR REQUIRED BY R3.
+GitHub evidence independently checked by ChatGPT at the R3 evidence HEAD:
+- combined status checks: NONE
+- workflow runs: NONE
+- GITHUB_CI: NONE
 
---------------------------------------------------
-AUTHORIZED FILES — NEXT FRESH R3 EXECUTION RUN
---------------------------------------------------
-
-During test corrective, R3 may modify ONLY:
-
+Exact R3 changed files (authorization HEAD 495f800... -> R3 evidence HEAD 135f915...):
 - src/app.controller.spec.ts
-
-At successful completion R3 may additionally update ONLY:
-
 - project-docs/EXECUTION_GATE.md
 - project-docs/ACTIVE_TASK.md
 - project-docs/CHAT_HANDOFF.md
 - project-docs/CURRENT_STATE.md
 - project-docs/PROJECT_STATUS_ROADMAP.md
 
-ABSOLUTELY PROHIBITED:
+The only defect found in R3 independent review was stale/incomplete supporting control-document provenance. No test or production corrective remained.
 
-- src/app.controller.ts
+--------------------------------------------------
+P3-WP002-R3-C1 SCOPE / COMPLETION TRUTH
+--------------------------------------------------
+
+R3-C1 is DOCS-ONLY.
+
+Authorized and changed documents only:
+- project-docs/EXECUTION_GATE.md
+- project-docs/ACTIVE_TASK.md
+- project-docs/CHAT_HANDOFF.md
+- project-docs/CURRENT_STATE.md
+- project-docs/PROJECT_STATUS_ROADMAP.md
+
+R3-C1 MUST NOT modify:
+- src/**
 - index.html
 - run/**
-- src/entities/**
-- src/customer.entity.ts
-- src/database-init.service.ts
-- src/runtime-version.ts
-- src/telegram.service.ts
 - package*.json
-- DB/schema/migrations/indexes
-- dependency changes
+- database/schema/migrations/indexes
+- Worker/runtime implementation
+- Telegram implementation
 - any unrelated file
 
-If production code appears necessary, STOP and return to the Control Plane. Do not expand scope.
-
---------------------------------------------------
-REQUIRED R3 FINAL EVIDENCE
---------------------------------------------------
-
-A. FIXED / DETERMINISTIC CLOCK
-- Use one fixed timestamp for the relevant frontend time-window proof.
-- Ensure production handleFilters() sees that same fixed Date.now() value.
-- The test must execute ACTUAL production frontend code loaded from index.html through the existing VM harness.
-- Do not copy or reimplement production filtering logic inside the test.
-
-B. EXACT 7-DAY BOUNDARY
-Prove with the fixed clock:
-- exactly FIXED_NOW -> PASS
-- exactly FIXED_NOW - 7 days -> PASS
-- future > FIXED_NOW -> FAIL
-- invalid timestamp -> FAIL
-
-The lower boundary MUST be mathematically exact. Do not add +1ms, +1000ms, +5000ms, or any inward offset.
-
-C. EXACT 30-DAY BOUNDARY
-Prove with the same deterministic principle:
-- exactly FIXED_NOW -> PASS
-- exactly FIXED_NOW - 30 days -> PASS
-- future > FIXED_NOW -> FAIL
-- invalid timestamp -> FAIL
-
-The lower boundary MUST be mathematically exact. Do not add any inward offset.
-
-D. PRESERVE ACCEPTED R2 EVIDENCE
-Do not weaken or remove the existing R2 evidence for items 1-10 and 13, including:
-- malformed botId fail-fast query-zero
-- no active OA fail-fast query-zero
-- mismatched OA fail-fast query-zero
-- actual aggregate QueryBuilder SQL expressions
-- WHERE job.botId = :cleanBotId
-- GROUP BY job.lineUserId
-- one QueryBuilder / one getRawMany for at least 3 customers
-- no campaignJobRepository.find
-- no CampaignSendPart read/query
-- Customer.createdAt/updatedAt excluded from activity metrics/DTO
-- malicious latestJobStatus literal text / zero IMG SCRIPT SVG payload nodes
-- strict NEVER_SUCCESS semantics
-- blocked customer checkbox disabled
-- selectedUsers checked behavior
-- stale OA response discard
-
-TEST INTEGRITY:
-- actual production code only
-- no copied production helper/filter logic
-- no .only
-- no .skip
-- no weakened assertions
-- no production modification
-
---------------------------------------------------
-R3 VALIDATION CONTRACT — NEXT FRESH RUN ONLY
---------------------------------------------------
-
-Run exactly:
-
-npm test -- --runInBand
-npm run build
-git diff --check
-
-Require all PASS.
-
-At completion, control docs MUST record:
-- exact npm test PASS result
-- exact test suite count
-- exact test count
-- exact pass/fail/skipped counts where reported
-- npm run build PASS
-- git diff --check PASS
-- exact changed files
-- evidence classification: LOCAL REPORTED
-- GitHub CI/status truth: NONE unless actual GitHub evidence exists
-- FINAL_R3_SHA after commit/push
-- parent SHA
-
-Execution results:
-- npm test -- --runInBand: PASS (1 suite passed, 585 tests passed, 0 skipped, 0 failed)
-- npm run build: PASS (exit code 0)
-- git diff --check: PASS (exit code 0)
-- Evidence classification: LOCAL REPORTED
-- GitHub CI: NONE
+No tests/build were re-run as part of this DOCS-ONLY provenance sync. R3-C1 records and preserves the accepted LOCAL REPORTED R3 validation evidence; it does not manufacture new execution evidence.
 
 --------------------------------------------------
 VERSION / SAFETY CONTRACT
@@ -255,28 +179,23 @@ True exactly-once physical LINE delivery: NOT GUARANTEED.
 Never automatically resend an ambiguous physical send.
 
 --------------------------------------------------
-PROGRESS / LIFECYCLE
+PROGRESS / NEXT LIFECYCLE
 --------------------------------------------------
 
 Official accepted roadmap progress estimate: ~56%
 Practical implementation progress estimate: ~61%
 
-These are planning estimates, NOT acceptance evidence.
+These remain planning estimates, not acceptance evidence.
 
-Current blocking item:
-P3-WP002-R3 final TEST-ONLY evidence corrective.
+Current decision gate:
+P3-WP002-R3-C1 DOCS-ONLY provenance sync is READY_FOR_CHATGPT_REVIEW.
 
-Exact lifecycle:
-CONTROL UPDATE
--> COMMIT/PUSH
--> STOP
--> FRESH NEW RUN/CHAT
--> execute P3-WP002-R3 gate only
--> run full validation
--> update completion evidence truth
--> READY_FOR_CHATGPT_REVIEW
+Next lifecycle:
+R3-C1 DOCS SYNC
 -> COMMIT/PUSH
 -> STOP
 -> ChatGPT independent review
+-> if PASS, request explicit Owner authorization for P3-WP002 closure/control-document sync
 
+P3-WP002 is NOT CLOSED by this C1 commit.
 P3-WP003 MUST NOT start automatically.
