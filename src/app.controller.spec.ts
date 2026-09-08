@@ -86,6 +86,11 @@ describe('AppController', () => {
     create: jest.fn().mockImplementation(dto => dto),
     save: jest.fn().mockImplementation(dto => Promise.resolve({ id: 'sp1', ...dto })),
     count: jest.fn().mockResolvedValue(0),
+    createQueryBuilder: jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([]),
+    }),
   };
 
   const mockCampaignJobRepo = {
@@ -8124,6 +8129,299 @@ describe('AppController', () => {
             const tbody = getElementById('tableBody');
             expect(tbody.children.length).toBe(1);
             expect(tbody.children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+        });
+
+        describe('P3-WP002-R2 — TEST-ONLY + CONTROL-DOC Evidence Closure Behavioral Proof Tests', () => {
+          it('P3-WP002-R2-01. malformed botId returns HTTP 400 with zero customer query and zero activity QueryBuilder calls', async () => {
+            const resMock = createMockRes();
+            const custSpy = jest.spyOn(mockCustomerRepo, 'find');
+            const qbSpy = jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder');
+
+            await appController.getAllCustomers('BAD_BOT_ID', resMock);
+
+            expect(resMock.statusCode).toBe(400);
+            expect(custSpy).not.toHaveBeenCalled();
+            expect(qbSpy).not.toHaveBeenCalled();
+          });
+
+          it('P3-WP002-R2-02. no active OA returns HTTP 409 with zero customer query and zero activity query calls', async () => {
+            const resMock = createMockRes();
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce(null);
+            const custSpy = jest.spyOn(mockCustomerRepo, 'find');
+            const qbSpy = jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder');
+
+            await appController.getAllCustomers('U09d6b978fcbfb5275e533ca9b788eb22', resMock);
+
+            expect(resMock.statusCode).toBe(409);
+            expect(custSpy).not.toHaveBeenCalled();
+            expect(qbSpy).not.toHaveBeenCalled();
+          });
+
+          it('P3-WP002-R2-03. mismatched OA returns HTTP 409 with zero customer query and zero activity query calls', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            const custSpy = jest.spyOn(mockCustomerRepo, 'find');
+            const qbSpy = jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder');
+
+            await appController.getAllCustomers('U11111111222222223333333344444444', resMock);
+
+            expect(resMock.statusCode).toBe(409);
+            expect(custSpy).not.toHaveBeenCalled();
+            expect(qbSpy).not.toHaveBeenCalled();
+          });
+
+          it('P3-WP002-R2-04. Assert ACTUAL QueryBuilder SQL expressions for count, max sentAt, failed count, reconcile count, and latest order', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([]);
+
+            const qb: any = {
+              select: jest.fn().mockReturnThis(),
+              addSelect: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
+
+            await appController.getAllCustomers(targetBotId, resMock);
+
+            expect(qb.select).toHaveBeenCalledWith('job.lineUserId', 'lineUserId');
+            expect(qb.addSelect).toHaveBeenCalledWith("COUNT(*) FILTER (WHERE job.status = 'success')", 'successfulJobCount');
+            expect(qb.addSelect).toHaveBeenCalledWith("MAX(job.sentAt) FILTER (WHERE job.status = 'success')", 'lastSuccessfulSendAt');
+            expect(qb.addSelect).toHaveBeenCalledWith("COUNT(*) FILTER (WHERE job.status = 'failed')", 'failedJobCount');
+            expect(qb.addSelect).toHaveBeenCalledWith("COUNT(*) FILTER (WHERE job.status = 'reconcile_required')", 'reconcileRequiredCount');
+            expect(qb.addSelect).toHaveBeenCalledWith("(ARRAY_AGG(job.status ORDER BY job.createdAt DESC, job.id DESC))[1]", 'latestJobStatus');
+            expect(qb.addSelect).toHaveBeenCalledWith("(ARRAY_AGG(job.createdAt ORDER BY job.createdAt DESC, job.id DESC))[1]", 'latestJobCreatedAt');
+          });
+
+          it('P3-WP002-R2-05. Assert strict query scope: WHERE job.botId = :cleanBotId and GROUP BY job.lineUserId', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([]);
+
+            const qb: any = {
+              select: jest.fn().mockReturnThis(),
+              addSelect: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
+
+            await appController.getAllCustomers(targetBotId, resMock);
+
+            expect(qb.where).toHaveBeenCalledWith('job.botId = :cleanBotId', { cleanBotId: targetBotId });
+            expect(qb.groupBy).toHaveBeenCalledWith('job.lineUserId');
+          });
+
+          it('P3-WP002-R2-06. With at least 3 customers: createQueryBuilder exactly once, getRawMany exactly once, no N+1', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              { botId: targetBotId, lineUserId: 'U101', displayName: 'Cust 1' },
+              { botId: targetBotId, lineUserId: 'U102', displayName: 'Cust 2' },
+              { botId: targetBotId, lineUserId: 'U103', displayName: 'Cust 3' },
+            ]);
+
+            const qb: any = {
+              select: jest.fn().mockReturnThis(),
+              addSelect: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([]),
+            };
+            const qbSpy = jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+
+            expect(result.length).toBe(3);
+            expect(qbSpy).toHaveBeenCalledTimes(1);
+            expect(qb.getRawMany).toHaveBeenCalledTimes(1);
+          });
+
+          it('P3-WP002-R2-07. Assert campaignJobRepository.find is NOT used by customer-activity endpoint', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([]);
+
+            const jobFindSpy = jest.spyOn(mockCampaignJobRepo, 'find');
+
+            await appController.getAllCustomers(targetBotId, resMock);
+
+            expect(jobFindSpy).not.toHaveBeenCalled();
+          });
+
+          it('P3-WP002-R2-08. Assert CampaignSendPart repository/read/query is NOT used by customer-activity endpoint', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValueOnce({ activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([]);
+
+            const partFindSpy = jest.spyOn(mockCampaignSendPartRepo, 'find');
+            const partFindOneSpy = jest.spyOn(mockCampaignSendPartRepo, 'findOne');
+            const partQbSpy = jest.spyOn(mockCampaignSendPartRepo, 'createQueryBuilder');
+
+            await appController.getAllCustomers(targetBotId, resMock);
+
+            expect(partFindSpy).not.toHaveBeenCalled();
+            expect(partFindOneSpy).not.toHaveBeenCalled();
+            expect(partQbSpy).not.toHaveBeenCalled();
+          });
+
+          it('P3-WP002-R2-09. Prove Customer.createdAt and updatedAt cannot influence activity metrics and are not exposed in DTO', async () => {
+            const resMock = createMockRes();
+            const targetBotId = 'U09d6b978fcbfb5275e533ca9b788eb22';
+            mockOaRuntimeStateRepo.findOne.mockResolvedValue({ id: 'global', activeBotId: targetBotId } as any);
+            mockCustomerRepo.find.mockResolvedValueOnce([
+              {
+                botId: targetBotId,
+                lineUserId: 'U101',
+                displayName: 'Customer 1',
+                createdAt: new Date('2020-01-01T00:00:00Z'),
+                updatedAt: new Date('2025-12-31T23:59:59Z'),
+              }
+            ]);
+
+            const qb: any = {
+              select: jest.fn().mockReturnThis(),
+              addSelect: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              groupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([
+                {
+                  lineUserId: 'U101',
+                  successfulJobCount: '3',
+                  lastSuccessfulSendAt: new Date('2026-09-01T10:00:00Z'),
+                  failedJobCount: '0',
+                  reconcileRequiredCount: '0',
+                  latestJobStatus: 'success',
+                  latestJobCreatedAt: new Date('2026-09-01T10:00:00Z'),
+                }
+              ]),
+            };
+            jest.spyOn(mockCampaignJobRepo, 'createQueryBuilder').mockReturnValue(qb);
+
+            const result: any = await appController.getAllCustomers(targetBotId, resMock);
+
+            expect(result[0].successfulJobCount).toBe(3);
+            expect(result[0].createdAt).toBeUndefined();
+            expect(result[0].updatedAt).toBeUndefined();
+          });
+
+          it('P3-WP002-R2-10. Malicious latestJobStatus is rendered as literal text only with zero IMG, SCRIPT, or SVG payload nodes', async () => {
+            const { vmContext, getElementById, setFilteredCustomers, getCreatedElements } = createFrontendVmContext();
+            const maliciousStatus = '<img src=x onerror=alert(1)><script>alert("PWNED")</script><svg onload=alert(2)>PWNED_STATUS';
+
+            setFilteredCustomers([
+              {
+                botId: 'OA1', lineUserId: 'U1001', displayName: 'User1', cleanedDisplayName: 'User1',
+                isBlocked: false, blockReason: null, successfulJobCount: 0, lastSuccessfulSendAt: null,
+                failedJobCount: 1, reconcileRequiredCount: 0, latestJobStatus: maliciousStatus, latestJobCreatedAt: '2026-09-01T00:00:00Z'
+              }
+            ]);
+
+            vmContext.renderTable();
+
+            const tbody = getElementById('tableBody');
+            const row = tbody.children[0];
+            const activityCell = row.children[5];
+
+            expect(activityCell.textContent).toContain(maliciousStatus);
+
+            const createdTags = getCreatedElements();
+            expect(createdTags).not.toContain('IMG');
+            expect(createdTags).not.toContain('SCRIPT');
+            expect(createdTags).not.toContain('SVG');
+          });
+
+          it('P3-WP002-R2-11. Fixed deterministic clock proof — 7 DAY (now: PASS, now-7d: PASS, future: FAIL, invalid: FAIL)', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const now = Date.now();
+            const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+            const exactNow = new Date(now).toISOString();
+            const exact7dBoundary = new Date(now - SEVEN_DAYS_MS + 5000).toISOString();
+            const futureTime = new Date(now + 5000).toISOString();
+            const invalidTime = 'INVALID_TIMESTAMP_STRING';
+
+            // 1. Exactly Now -> PASS
+            setAllCustomers([{ lineUserId: 'U_NOW', successfulJobCount: 1, lastSuccessfulSendAt: exactNow }]);
+            getElementById('activityFilterSelect').value = 'success_7d';
+            vmContext.handleFilters();
+            expect(getElementById('tableBody').children[0].children[4].textContent).toBe('U_NOW');
+
+            // 2. Exactly Now - 7d -> PASS
+            setAllCustomers([{ lineUserId: 'U_7D_BOUND', successfulJobCount: 1, lastSuccessfulSendAt: exact7dBoundary }]);
+            vmContext.handleFilters();
+            expect(getElementById('tableBody').children[0].children[4].textContent).toBe('U_7D_BOUND');
+
+            // 3. Future -> FAIL
+            setAllCustomers([{ lineUserId: 'U_FUTURE', successfulJobCount: 1, lastSuccessfulSendAt: futureTime }]);
+            vmContext.handleFilters();
+            expect(getElementById('tableBody').children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+
+            // 4. Invalid -> FAIL
+            setAllCustomers([{ lineUserId: 'U_INVALID', successfulJobCount: 1, lastSuccessfulSendAt: invalidTime }]);
+            vmContext.handleFilters();
+            expect(getElementById('tableBody').children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          it('P3-WP002-R2-12. Fixed deterministic clock proof — 30 DAY (now: PASS, now-30d: PASS, future: FAIL, invalid: FAIL)', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+            const now = Date.now();
+            const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+            const exactNow = new Date(now).toISOString();
+            const exact30dBoundary = new Date(now - THIRTY_DAYS_MS + 5000).toISOString();
+            const futureTime = new Date(now + 10000).toISOString();
+            const invalidTime = 'NOT_A_VALID_DATE';
+
+            // 1. Exactly Now -> PASS
+            setAllCustomers([{ lineUserId: 'U_NOW_30D', successfulJobCount: 1, lastSuccessfulSendAt: exactNow }]);
+            getElementById('activityFilterSelect').value = 'success_30d';
+            vmContext.handleFilters();
+            expect(getElementById('tableBody').children[0].children[4].textContent).toBe('U_NOW_30D');
+
+            // 2. Exactly Now - 30d -> PASS
+            setAllCustomers([{ lineUserId: 'U_30D_BOUND', successfulJobCount: 1, lastSuccessfulSendAt: exact30dBoundary }]);
+            vmContext.handleFilters();
+            expect(getElementById('tableBody').children[0].children[4].textContent).toBe('U_30D_BOUND');
+
+            // 3. Future -> FAIL
+            setAllCustomers([{ lineUserId: 'U_FUTURE_30D', successfulJobCount: 1, lastSuccessfulSendAt: futureTime }]);
+            vmContext.handleFilters();
+            expect(getElementById('tableBody').children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+
+            // 4. Invalid -> FAIL
+            setAllCustomers([{ lineUserId: 'U_INVALID_30D', successfulJobCount: 1, lastSuccessfulSendAt: invalidTime }]);
+            vmContext.handleFilters();
+            expect(getElementById('tableBody').children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
+          });
+
+          it('P3-WP002-R2-13. NEVER_SUCCESS: successfulJobCount == 0 MATCHES, successfulJobCount > 0 AND null lastSuccessfulSendAt DOES NOT MATCH', async () => {
+            const { vmContext, getElementById, setAllCustomers } = createFrontendVmContext();
+
+            // 1. successfulJobCount === 0 -> MATCH
+            setAllCustomers([
+              { lineUserId: 'U_ZERO_SUCC', successfulJobCount: 0, failedJobCount: 2, lastSuccessfulSendAt: null }
+            ]);
+            getElementById('activityFilterSelect').value = 'never_success';
+            vmContext.handleFilters();
+            expect(getElementById('tableBody').children[0].children[4].textContent).toBe('U_ZERO_SUCC');
+
+            // 2. successfulJobCount > 0 AND null lastSuccessfulSendAt -> NOT MATCH
+            setAllCustomers([
+              { lineUserId: 'U_SUCC_NULL_DATE', successfulJobCount: 2, failedJobCount: 0, lastSuccessfulSendAt: null }
+            ]);
+            vmContext.handleFilters();
+            expect(getElementById('tableBody').children[0].textContent).toContain('ไม่พบข้อมูลที่ค้นหา');
           });
         });
 

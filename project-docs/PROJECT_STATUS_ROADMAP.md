@@ -28,10 +28,10 @@ ACTIVE_WORK_PACKAGE: P3-WP002-R2
 TASK_ID: P3-WP002-R2
 PARENT_TASK: P3-WP002-R1
 AUTHORIZATION_REVISION: P3-WP002-R2-EVIDENCE-CLOSURE
-STATUS: CORRECTIVE_AUTHORIZED
-AUTHORIZE_EXECUTION: TRUE
+STATUS: READY_FOR_CHATGPT_REVIEW
+AUTHORIZE_EXECUTION: FALSE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_EXECUTION
+NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
 ```
 
 P3-WP002-R1 production source has passed independent source/architecture review, but P3-WP002 is not accepted/closed because required regression evidence remains incomplete.
@@ -80,7 +80,7 @@ Status: **COMPLETE / DEFINITION READY**
 
 ### P3-WP002 — Outbound Activity Intelligence
 
-Status: **CORRECTIVE REQUIRED / R2 AUTHORIZED**
+Status: **CORRECTIVE REQUIRED / AWAITING_R2_REVIEW**
 
 Historical implementation/review chain:
 
@@ -95,11 +95,11 @@ Historical implementation/review chain:
    - safe DOM production logic PASS
    - no further production corrective required
 6. Remaining gap: regression evidence + current control-document truth
-7. R2: **CORRECTIVE_AUTHORIZED** for test-only evidence closure
+7. R2: **READY_FOR_CHATGPT_REVIEW** for test-only evidence closure
 
 ### P3-WP002-R2 — TEST-ONLY + CONTROL-DOC Evidence Closure
 
-Status: **CORRECTIVE_AUTHORIZED**
+Status: **READY_FOR_CHATGPT_REVIEW**
 
 Authorized next-run production impact: **NONE**.
 
