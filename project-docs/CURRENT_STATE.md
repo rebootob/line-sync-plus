@@ -1,33 +1,37 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-08 — P3-WP003-PRE1 evidence-only authorization
+**Last Updated**: 2026-09-08 — P3-WP003-PRE1-R1 corrective authorization
 
 ## Current Control State
 
 ```yaml
-CONTROL_VERSION: 35
-ACTIVE_WORK_PACKAGE: P3-WP003-PRE1
-TASK_ID: P3-WP003-PRE1
-PARENT_TASK: P3-WP002-CLOSE
-AUTHORIZATION_REVISION: P3-WP003-PRE1-DEFINITION-GAP-REVIEW
-STATUS: READY_FOR_CHATGPT_REVIEW
-AUTHORIZE_EXECUTION: FALSE
+CONTROL_VERSION: 36
+ACTIVE_WORK_PACKAGE: P3-WP003-PRE1-R1
+TASK_ID: P3-WP003-PRE1-R1
+PARENT_TASK: P3-WP003-PRE1
+AUTHORIZATION_REVISION: P3-WP003-PRE1-R1-EVIDENCE-DEFINITION-COMPLETION
+STATUS: CORRECTIVE_AUTHORIZED
+AUTHORIZE_EXECUTION: TRUE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_R1_EVIDENCE
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: CLOSED / PASS
 PHASE_3: IN PROGRESS
 P3-WP001: CLOSED / PASS
 P3-WP002: CLOSED / PASS
-P3-WP003-PRE1: READY_FOR_CHATGPT_REVIEW
+P3-WP003-PRE1: CORRECTIVE REQUIRED / SUPERSEDED_BY_R1
+P3-WP003-PRE1-R1: CORRECTIVE_AUTHORIZED / EVIDENCE_ONLY
 P3-WP003: FUTURE / IMPLEMENTATION NOT AUTHORIZED
 ```
 
 ## Accepted Baseline
 
-PRE1 starting/code baseline:
+Code baseline:
 `6c555a54c114cdad0aa78a43f508a5b297df6546`
+
+Failed PRE1 evidence HEAD:
+`a72ef6ac2668b8c0721c3dc153c9dddd6797afe6`
 
 P3-WP002 accepted production implementation:
 `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
@@ -37,65 +41,82 @@ P3-WP002 accepted evidence HEAD:
 
 P3-WP001 and P3-WP002 remain closed/pass.
 
+## Independent PRE1 Review Result
+
+`CORRECTIVE REQUIRED`.
+
+Accepted:
+- EVIDENCE-ONLY scope control
+- no source/test/schema/UI/package implementation
+- P3-WP003 remained unauthorized
+
+Missing:
+- actual repository-grounded findings for A-J
+- materially inspected-file provenance
+- resolved/unresolved decision ledger
+- bounded future implementation split
+- exact acceptance/test contract
+- `git diff --check` completion evidence
+
+The first PRE1 status transition is not accepted as a completed definition/gap review.
+
 ## Current Decision
 
-The Owner authorized `P3-WP003-PRE1 — Persistent Tags & Advanced Segmentation Definition / Gap Review` as **EVIDENCE-ONLY**.
+The Owner authorized `P3-WP003-PRE1-R1 — EVIDENCE-ONLY Definition & Gap Review Completion`.
 
-PRE1 is allowed to inspect current repository truth and define the future implementation contract, but it may not implement any tag persistence, segmentation query, endpoint, UI, schema, migration, index, dependency or Worker change.
+R1 must read current repository truth and write the actual findings into the five control docs. It may not implement persistent tags, segmentation, API, UI, schema, migration, indexes, dependencies or Worker changes.
 
-## Required PRE1 Definition Areas
+## Required R1 Findings
 
-The review must resolve or explicitly flag:
-- existing Customer/OA persistence and current tagging gap
-- OA-scoped vs global tag ownership
-- customer-tag cardinality
-- tag uniqueness and normalization
-- rename/delete/cascade behavior
-- idempotent assignment/unassignment and bulk operations
-- candidate filter inventory using tag + blocked + WP002 activity signals
-- AND/OR and multi-tag ANY/ALL semantics
-- deterministic ordering/pagination
-- OA isolation and fail-fast validation
-- candidate API request/response/status behavior
+R1 must resolve or explicitly flag all areas defined in the execution gate:
+- actual current Customer/OA/data-model/tagging gap
+- OA-scoped/global tag ownership decision
+- customer-tag cardinality, uniqueness and normalization
+- create/rename/delete/cascade/idempotent/bulk semantics
+- segmentation filter inventory and AND/OR + ANY/ALL behavior
+- deterministic ordering/pagination and stable results
+- OA isolation/fail-fast/security/safety rules
+- API candidate contracts
 - minimal UI contract and safe DOM behavior
-- likely schema/join/index/migration needs
-- no-N+1 query strategy
-- backward compatibility with existing customer intelligence/activity filters/campaign safety
+- required vs deferred schema/join/index/migration/performance work
+- no-N+1 strategy
+- backward compatibility
 - bounded future implementation sequence
-- exact test/acceptance contract
+- exact acceptance test contract
 
-## Authorized Inspection / Modification
+A status-only change is invalid.
 
-Read/analyze relevant source/tests/entities/database-init/dashboard/package/docs as needed.
+## Completion Provenance Required
 
-During inspection, modify nothing.
+Before `READY_FOR_CHATGPT_REVIEW`, repository docs must record:
+- exact materially inspected files
+- resolved decisions
+- unresolved decisions/gaps or `NONE`
+- later schema-change requirement with rationale
+- exact changed files
+- `git diff --check` PASS
+- npm test/build run truth
+- evidence classification
+- explicit `NO IMPLEMENTATION OCCURRED`
 
-At successful PRE1 completion, only these five control docs may be updated:
-- `project-docs/EXECUTION_GATE.md`
-- `project-docs/ACTIVE_TASK.md`
-- `project-docs/CHAT_HANDOFF.md`
-- `project-docs/CURRENT_STATE.md`
-- `project-docs/PROJECT_STATUS_ROADMAP.md`
-
-No source/test/schema/package/index/dashboard/Worker/LINE/Telegram implementation is authorized.
-
-## Safety State
+## Runtime & Safety State
 
 - Worker Version: `28.16`
 - Required Worker Version: `28.16`
 - Runtime Contract Version: `2`
 - Worker change: NONE
-- Schema change: NONE in PRE1
+- Schema change: NONE in R1
 - LINE send: NONE
 - Live UAT: NONE
 - Telegram test: NONE
 - Dependency change: NONE
 
 Permanent safety invariants remain unchanged:
-- preserve OA isolation and wrong-recipient fencing
-- preserve blocked-user and selectedUsers behavior
-- preserve stale OA response protection
-- preserve safe DOM rendering for user-controlled text
+- OA isolation and wrong-recipient fencing
+- blocked-user protection
+- selectedUsers behavior
+- stale OA response protection
+- safe DOM rendering for user-controlled text
 - true exactly-once physical LINE delivery is NOT GUARANTEED
 - never automatically resend an ambiguous physical send
 
@@ -105,15 +126,15 @@ Permanent safety invariants remain unchanged:
 - Practical implementation progress estimate: **~61%**
 
 ```text
-CONTROL UPDATE
+R1 CONTROL UPDATE
 -> STOP
--> FRESH P3-WP003-PRE1 RUN
--> evidence-only repository inspection
--> definition/gap review control-doc sync
+-> FRESH R1 EVIDENCE RUN
+-> actual repository inspection / findings A-J
+-> five-control-doc evidence sync
 -> READY_FOR_CHATGPT_REVIEW
 -> COMMIT/PUSH
 -> STOP
 -> ChatGPT independent review
 ```
 
-P3-WP003 implementation remains FUTURE / NOT AUTHORIZED until a later explicit Owner gate.
+P3-WP003 implementation remains FUTURE / NOT AUTHORIZED.

@@ -1,30 +1,30 @@
 # EXECUTION GATE
 
-CONTROL_VERSION: 35
+CONTROL_VERSION: 36
 
 TASK_ID:
-P3-WP003-PRE1
+P3-WP003-PRE1-R1
 
 PARENT_TASK:
-P3-WP002-CLOSE
+P3-WP003-PRE1
 
 AUTHORIZATION_REVISION:
-P3-WP003-PRE1-DEFINITION-GAP-REVIEW
+P3-WP003-PRE1-R1-EVIDENCE-DEFINITION-COMPLETION
 
 TITLE:
-P3-WP003-PRE1 — Persistent Tags & Advanced Segmentation Definition / Gap Review
+P3-WP003-PRE1-R1 — EVIDENCE-ONLY Definition & Gap Review Completion
 
 STATUS:
-READY_FOR_CHATGPT_REVIEW
+CORRECTIVE_AUTHORIZED
 
 AUTHORIZE_EXECUTION:
-FALSE
+TRUE
 
 AUTHORIZED_BY:
 Project Owner
 
 AUTHORIZATION_REF:
-Owner authorized P3-WP003-PRE1 Persistent Tags & Advanced Segmentation Definition / Gap Review as EVIDENCE-ONLY.
+Owner authorized P3-WP003-PRE1-R1 EVIDENCE-ONLY Definition & Gap Review Completion according to the bounded scope proposed by ChatGPT independent review.
 
 CONTROL_PLANE:
 ChatGPT
@@ -36,13 +36,13 @@ CANONICAL_BRANCH:
 main
 
 CONTROL_UPDATE_PARENT_HEAD:
-6c555a54c114cdad0aa78a43f508a5b297df6546
+a72ef6ac2668b8c0721c3dc153c9dddd6797afe6
 
 CODE_BASELINE_HEAD:
 6c555a54c114cdad0aa78a43f508a5b297df6546
 
-PHASE_3_BASELINE_ACCEPTED_PROGRESS:
-~61%
+FAILED_PRE1_EVIDENCE_HEAD:
+a72ef6ac2668b8c0721c3dc153c9dddd6797afe6
 
 P3-WP002_ACCEPTED_IMPLEMENTATION_HEAD:
 03dd35a5d6b29c6394f93f16061bfaddb5f10174
@@ -55,45 +55,40 @@ PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: CLOSED / PASS
 PHASE_3: IN PROGRESS
-ACTIVE_WORK_PACKAGE: P3-WP003-PRE1
+ACTIVE_WORK_PACKAGE: P3-WP003-PRE1-R1
 P3-WP001: CLOSED / PASS
 P3-WP002: CLOSED / PASS
-P3-WP003-PRE1: READY_FOR_CHATGPT_REVIEW
+P3-WP003-PRE1: CORRECTIVE REQUIRED / SUPERSEDED_BY_R1
+P3-WP003-PRE1-R1: CORRECTIVE_AUTHORIZED / EVIDENCE_ONLY
 P3-WP003: FUTURE / IMPLEMENTATION NOT AUTHORIZED
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_R1_EVIDENCE
 
 --------------------------------------------------
-PRE1 PURPOSE
+WHY R1 EXISTS
 --------------------------------------------------
 
-Define the bounded implementation contract for:
-P3-WP003 — Persistent Tags & Advanced Segmentation.
+Independent review of PRE1 at a72ef6ac2668b8c0721c3dc153c9dddd6797afe6 found scope control PASS but the required repository-grounded definition/gap review was not actually recorded. The commit changed lifecycle status only and did not provide the A-J findings, inspected-file provenance, decisions/gaps, bounded implementation split, or validation provenance required by the PRE1 contract.
 
-PRE1 is EVIDENCE-ONLY.
-It MUST inspect current repository truth and produce a definition/gap review.
-It MUST NOT implement tags, segmentation, schema, API, or UI changes.
+R1 MUST complete the missing evidence. A status-only completion is explicitly prohibited.
 
 --------------------------------------------------
 MANDATORY STARTUP
 --------------------------------------------------
 
-Before any PRE1 inspection:
-
-1. git status --short
-   - must be clean; otherwise STOP
-2. git fetch origin
-3. checkout/use main
-4. require local HEAD == origin/main
-5. require origin/main == 6c555a54c114cdad0aa78a43f508a5b297df6546
-   - otherwise STOP with HEAD_DRIFT
-6. read in exact order:
+1. git status --short must be clean; otherwise STOP.
+2. git fetch origin.
+3. use canonical branch main.
+4. require local HEAD == origin/main.
+5. read in exact order:
    - project-docs/AGENT_START_HERE.md
    - project-docs/EXECUTION_GATE.md
    - project-docs/ACTIVE_TASK.md
    - project-docs/CHAT_HANDOFF.md
-7. verify CODE_BASELINE_HEAD drift guard
-   - any non-project-docs drift after baseline => STOP with CODE_BASELINE_DRIFT
+6. verify CODE_BASELINE_HEAD drift guard:
+   - compare 6c555a54c114cdad0aa78a43f508a5b297df6546 to current HEAD
+   - only project-docs/** changes are allowed after that baseline
+   - if any non-project-docs file changed, STOP with CODE_BASELINE_DRIFT
 
 No merge, rebase, force-push, reset-around-drift, or scope expansion.
 
@@ -101,8 +96,7 @@ No merge, rebase, force-push, reset-around-drift, or scope expansion.
 AUTHORIZED EVIDENCE INSPECTION
 --------------------------------------------------
 
-READ / ANALYZE ONLY as needed:
-
+READ / ANALYZE ONLY as materially needed:
 - src/app.controller.ts
 - src/app.controller.spec.ts
 - src/customer.entity.ts
@@ -112,139 +106,142 @@ READ / ANALYZE ONLY as needed:
 - package.json / package-lock.json
 - directly relevant project-docs/**
 
-May inspect repository structure/search for tag, segment, customer, OA/botId, filter, campaign recipient, blocked state, outbound activity, migration/index patterns.
+Search may be used for tag, segment, botId/OA, customer, blocked, selectedUsers, outbound activity, migration/index and query patterns.
 
-Do NOT make source/test/schema/package changes.
+During inspection NO FILE MODIFICATION is authorized.
 
 --------------------------------------------------
-REQUIRED PRE1 EVIDENCE / DECISIONS
+R1 REQUIRED OUTPUT — MUST RECORD ACTUAL FINDINGS
 --------------------------------------------------
 
-The final PRE1 report/control-doc sync MUST establish repository-grounded truth for all of the following:
+The completion docs MUST contain a section named exactly:
+
+R1 REPOSITORY-GROUNDED FINDINGS
+
+That section must record concrete repository-backed decisions/findings for A-J below. Do not merely restate what must be investigated.
 
 A. CURRENT DATA MODEL / GAP
-- current Customer persistence shape
-- OA/botId ownership/scope truth
-- whether any tag/tagging persistence already exists
-- current DB initialization/schema/index conventions
+- actual Customer persistence shape relevant to segmentation
+- actual OA/botId ownership/scope pattern
+- whether tag/tagging persistence exists now
+- actual DB initialization/schema/index convention observed
 - exact gap to persistent tags
+- evidence source files for these findings
 
 B. TAG DOMAIN CONTRACT
-- whether tags are OA-scoped or global; recommend one and justify from current architecture/safety
+Decide and record:
+- OA-scoped vs global tag ownership, with repository-based justification
 - Customer <-> Tag cardinality
-- uniqueness rule for tag names/keys
-- canonical normalization/case/whitespace semantics
-- create / rename / delete behavior
-- behavior when deleting a tag assigned to customers
-- duplicate assignment behavior and idempotency
-- bulk add/remove semantics
-- whether reserved/system tags are needed now or explicitly deferred
+- uniqueness key/rule
+- case/whitespace/canonical normalization
+- create/rename/delete semantics
+- delete behavior when assignments exist
+- duplicate assignment/idempotency
+- bulk add/remove semantics including partial-invalid behavior
+- reserved/system tags: REQUIRED now or DEFERRED
 
 C. ADVANCED SEGMENTATION CONTRACT
-Define candidate filters and evidence whether they can be supported from current accepted data:
+Define concrete semantics for:
 - persistent tags
 - blocked state
-- customer identity/display fields only where safe/useful
-- WP002 outbound activity metrics, including successful count, failed count, reconcile-required count, latest status, last successful send timestamp
+- safe customer identity/display filters, if any
+- accepted WP002 metrics: success count, failed count, reconcile-required count, latest status, last successful send
 - NEVER_SUCCESS
-- recent success windows
-
-Define:
-- AND / OR semantics within and across filter groups
-- empty filter behavior
-- multi-tag matching semantics (ANY / ALL)
+- recent-success windows
+- AND/OR rules within and across filter groups
+- multi-tag ANY/ALL behavior
+- empty-filter behavior
 - deterministic ordering
-- pagination expectations
-- stable result semantics
+- pagination and stable-result expectations
 
 D. OA / SECURITY / SAFETY CONTRACT
-- all reads/writes must preserve OA isolation and wrong-recipient fencing
-- define how botId/OA context is validated for tag operations and segment queries
-- no cross-OA tag leakage
-- no secrets/PII/message body expansion
-- segmentation must not weaken blocked-user protection or send safety
-- true exactly-once physical LINE delivery remains NOT GUARANTEED
-- ambiguous physical sends must never automatically resend
+Record exact future rules for:
+- botId/OA validation before tag reads/writes and segment queries
+- no cross-OA tag or assignment leakage
+- wrong-recipient fencing and blocked-customer protection preservation
+- no expansion of secrets/PII/message-body exposure
+- safe DOM handling of tag names and user-controlled text
+- exactly-once limitation and ambiguous-send no-auto-resend invariant
 
 E. API CONTRACT CANDIDATE
-Define candidate endpoints/payloads/status behavior for:
+For each candidate operation define method/path shape or equivalent contract, OA scope, request fields, response fields, validation/fail-fast behavior, status behavior, and idempotency:
 - list/create/rename/delete tags
 - assign/unassign one customer
 - bulk assign/unassign
 - list customer tags
 - segmentation/search query
 
-For each, specify:
-- OA/botId scoping
-- key request fields
-- key response fields
-- validation/fail-fast expectations
-- idempotency expectations where applicable
-
-Do NOT implement endpoints in PRE1.
-
 F. UI CONTRACT CANDIDATE
-Define minimal UI additions only:
-- tag display/edit affordance on customer intelligence UI
-- bulk tag operation entry point
-- segmentation filter controls
+Define minimal future UI behavior for:
+- tag display/edit affordance
+- bulk tag operations
+- segmentation controls
 - selectedUsers compatibility
 - blocked checkbox behavior preservation
 - stale OA response protection preservation
-- safe DOM rendering requirement for tag names/status text
-
-Do NOT modify index.html in PRE1.
+- safe DOM rendering
 
 G. STORAGE / MIGRATION / PERFORMANCE CANDIDATE
-- propose minimum schema shape required by accepted domain contract
-- identify likely entities/tables/join table/indexes
-- identify migration/init-service impact
-- identify expected query strategy avoiding N+1
-- identify likely indexes for OA-scoped tag lookup and customer segmentation
-- explicitly distinguish REQUIRED vs OPTIONAL/DEFERRED schema work
-
-No schema change is authorized in PRE1.
+Record:
+- minimum REQUIRED schema shape
+- likely Tag entity/table and customer-tag join shape
+- required uniqueness/FK/index constraints
+- OA-scoped lookup indexes
+- migration/database-init impact
+- query strategy avoiding N+1
+- REQUIRED vs OPTIONAL/DEFERRED schema/performance work
 
 H. BACKWARD COMPATIBILITY
-- preserve P3-WP001 customer intelligence behavior
-- preserve P3-WP002 activity metrics/filter semantics
-- preserve Phase 0-2 safety/operations/campaign behavior
-- define whether existing API/DTOs can remain backward-compatible
+Record how future implementation preserves:
+- P3-WP001 customer intelligence
+- P3-WP002 activity metrics/filter semantics
+- Phase 0-2 campaign/runtime/safety behavior
+- existing API/DTO compatibility, and any intentionally additive fields
 
 I. IMPLEMENTATION SPLIT / BOUNDED PLAN
-Propose the smallest safe implementation sequence after PRE1, for example:
-- persistence/domain foundation
-- API/service/query layer
-- UI + segmentation controls
-- regression/evidence closure
-
-Do not authorize any of those packages yourself.
+Propose the smallest safe future implementation sequence. Each proposed package must have purpose, allowed file families, explicit exclusions and acceptance boundary. Do not authorize any package.
 
 J. TEST / ACCEPTANCE CONTRACT
-Define exact tests required before P3-WP003 can close, including at minimum:
-- OA isolation
+Define exact future tests including at least:
+- OA isolation/no cross-OA leakage
 - duplicate/idempotent assignment
 - rename/delete semantics
-- bulk assignment correctness
-- ANY/ALL tag filtering
-- AND/OR filter semantics
-- WP002 activity + tag combined filtering
-- no N+1 for multi-customer result sets
+- bulk correctness and invalid-item behavior
+- ANY/ALL tags
+- AND/OR composition
+- tag + WP002 activity combined filtering
+- no N+1 for multi-customer results
 - deterministic ordering/pagination
-- blocked-user behavior preserved
-- selectedUsers behavior preserved
+- blocked behavior preserved
+- selectedUsers preserved
 - stale OA response discard preserved
 - malicious tag name safe-DOM rendering
-- no cross-OA leakage
 
 --------------------------------------------------
-PRE1 MODIFICATION SCOPE
+MANDATORY PROVENANCE AT COMPLETION
 --------------------------------------------------
 
-During evidence inspection:
-NO FILE MODIFICATION is authorized.
+Completion docs MUST also record:
+- exact materially inspected files
+- exact searches/areas inspected if materially relevant
+- resolved decisions
+- unresolved decisions/gaps, or explicitly NONE
+- whether schema change will be required later: YES/NO with evidence-based rationale
+- proposed future implementation split
+- exact changed files in R1
+- git diff --check result
+- whether npm test/build were run; if not, say NOT RUN / NOT REQUIRED FOR EVIDENCE-ONLY
+- evidence classification: REPOSITORY INSPECTION and LOCAL REPORTED where applicable
+- GitHub CI/status truth only if actually checked
+- explicit statement: NO IMPLEMENTATION OCCURRED
 
-At successful PRE1 completion, may update ONLY these five control documents:
+A completion that only changes STATUS/AUTHORIZE_EXECUTION/NEXT_CANDIDATE fields is INVALID and MUST NOT be marked READY_FOR_CHATGPT_REVIEW.
+
+--------------------------------------------------
+MODIFICATION SCOPE
+--------------------------------------------------
+
+At successful R1 completion may update ONLY:
 - project-docs/EXECUTION_GATE.md
 - project-docs/ACTIVE_TASK.md
 - project-docs/CHAT_HANDOFF.md
@@ -258,65 +255,43 @@ Absolutely prohibited modifications:
 - package*.json
 - database/schema/migration implementation
 - dependencies
+- Worker/runtime implementation
+- Telegram implementation
 - any unrelated file
 
-If a new non-control document appears necessary, STOP and request Control Plane approval. Do not create it automatically.
+If a new non-control document seems useful, STOP and request Control Plane approval. Do not create it.
 
 --------------------------------------------------
-PRE1 VALIDATION / EVIDENCE CLASSIFICATION
+VALIDATION / COMPLETION STATE
 --------------------------------------------------
 
-Because PRE1 is EVIDENCE-ONLY and source/test/schema are unchanged:
-- npm test is NOT required unless needed to resolve a factual ambiguity
-- npm run build is NOT required unless needed to resolve a factual ambiguity
-- git diff --check IS required before completion commit
-- exact changed files must be inspected
+Because R1 is EVIDENCE-ONLY:
+- npm test: NOT REQUIRED unless needed to resolve factual ambiguity
+- npm run build: NOT REQUIRED unless needed to resolve factual ambiguity
+- git diff --check: REQUIRED
+- git diff --name-only must match only the five control docs
 
-Evidence classification:
-- REPOSITORY INSPECTION / LOCAL REPORTED for local commands
-- GitHub CI/status: report actual truth only; do not invent CI evidence
-
-No LINE send.
-No Live UAT.
-No Telegram test.
-
---------------------------------------------------
-SUCCESSFUL PRE1 COMPLETION STATE
---------------------------------------------------
-
-Only if the evidence/definition is complete and internally consistent:
+Successful completion only after the actual R1 findings/provenance are written:
 
 STATUS: READY_FOR_CHATGPT_REVIEW
 AUTHORIZE_EXECUTION: FALSE
-P3-WP003-PRE1: READY_FOR_CHATGPT_REVIEW
+P3-WP003-PRE1-R1: READY_FOR_CHATGPT_REVIEW
 P3-WP003: FUTURE / IMPLEMENTATION NOT AUTHORIZED
 NEXT_CANDIDATE: NONE
 NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
 
-Record:
-- exact PRE1 inspection scope
-- exact files inspected materially
-- exact five changed control docs
-- unresolved gaps/decisions, if any
-- proposed bounded implementation split
-- whether schema change will likely be required later (evidence only)
-- no implementation occurred
+Before push:
+- inspect git status --short
+- inspect exact changed files
+- git diff --check must PASS
+- git fetch origin
+- if origin/main moved, STOP
 
-Commit/push completion contract:
-- git diff --check PASS
-- git status --short inspected
-- git diff --name-only matches only the five control docs
-- git fetch origin immediately before push
-- if origin/main moved from PRE1 starting HEAD, STOP
-- commit and push main
-- fetch origin
-- prove HEAD == origin/main
-- prove working tree clean
-- STOP
+Then commit/push, fetch again, prove HEAD == origin/main, prove clean tree, and STOP.
 
 Do not self-approve.
-Do not mark P3-WP003 implementation started.
-Do not begin implementation in the same run.
+Do not mark PRE1 COMPLETE/PASS yourself.
+Do not start P3-WP003 implementation.
 
 --------------------------------------------------
 VERSION / SAFETY CONTRACT
@@ -343,4 +318,4 @@ PROGRESS
 Official accepted roadmap progress estimate: ~61%
 Practical implementation progress estimate: ~61%
 
-PRE1 definition work does not by itself increase accepted implementation progress.
+R1 definition evidence does not itself increase accepted implementation progress.

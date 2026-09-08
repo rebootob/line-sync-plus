@@ -1,26 +1,28 @@
 # ACTIVE TASK
 
 ```yaml
-CONTROL_VERSION: 35
-ACTIVE_WORK_PACKAGE: P3-WP003-PRE1
-TASK_ID: P3-WP003-PRE1
-PARENT_TASK: P3-WP002-CLOSE
-AUTHORIZATION_REVISION: P3-WP003-PRE1-DEFINITION-GAP-REVIEW
-TITLE: P3-WP003-PRE1 — Persistent Tags & Advanced Segmentation Definition / Gap Review
-STATUS: READY_FOR_CHATGPT_REVIEW
+CONTROL_VERSION: 36
+ACTIVE_WORK_PACKAGE: P3-WP003-PRE1-R1
+TASK_ID: P3-WP003-PRE1-R1
+PARENT_TASK: P3-WP003-PRE1
+AUTHORIZATION_REVISION: P3-WP003-PRE1-R1-EVIDENCE-DEFINITION-COMPLETION
+TITLE: P3-WP003-PRE1-R1 — EVIDENCE-ONLY Definition & Gap Review Completion
+STATUS: CORRECTIVE_AUTHORIZED
 AUTHORIZED_BY: Project Owner
-AUTHORIZE_EXECUTION: FALSE
+AUTHORIZE_EXECUTION: TRUE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_R1_EVIDENCE
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: CLOSED / PASS
 PHASE_3: IN PROGRESS
 P3-WP001: CLOSED / PASS
 P3-WP002: CLOSED / PASS
-P3-WP003-PRE1: READY_FOR_CHATGPT_REVIEW
+P3-WP003-PRE1: CORRECTIVE REQUIRED / SUPERSEDED_BY_R1
+P3-WP003-PRE1-R1: CORRECTIVE_AUTHORIZED / EVIDENCE_ONLY
 P3-WP003: FUTURE / IMPLEMENTATION NOT AUTHORIZED
 CODE_BASELINE_HEAD: 6c555a54c114cdad0aa78a43f508a5b297df6546
+FAILED_PRE1_EVIDENCE_HEAD: a72ef6ac2668b8c0721c3dc153c9dddd6797afe6
 P3-WP002_ACCEPTED_IMPLEMENTATION_HEAD: 03dd35a5d6b29c6394f93f16061bfaddb5f10174
 P3-WP002_ACCEPTED_EVIDENCE_HEAD: 135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6
 WORKER_VERSION: 28.16
@@ -30,70 +32,68 @@ RUNTIME_CONTRACT_VERSION: 2
 
 ## Current Control-Plane Decision
 
-The Owner authorized `P3-WP003-PRE1` as an **EVIDENCE-ONLY Definition / Gap Review** for Persistent Tags & Advanced Segmentation.
+Independent review of the first PRE1 evidence commit found scope control PASS but the required repository-grounded definition/gap review was missing. The Owner has authorized `P3-WP003-PRE1-R1` to complete that evidence only.
 
-This is not P3-WP003 implementation authorization.
+This is NOT P3-WP003 implementation authorization.
 
-## PRE1 Objectives
+## R1 Required Deliverable
 
-Repository-grounded review must define:
-- current Customer/OA/tagging/segmentation gaps
-- tag scope, cardinality, uniqueness, normalization, rename/delete, idempotent assign/unassign and bulk semantics
-- advanced segmentation filter model including tags, blocked state, WP002 activity, NEVER_SUCCESS and recent-success windows
-- AND/OR and ANY/ALL semantics
-- OA isolation/security/fail-fast contract
-- candidate API contract
-- candidate UI contract
-- likely storage/join/index/migration needs
-- N+1 avoidance and performance expectations
-- backward compatibility with P3-WP001/P3-WP002 and prior phases
-- bounded implementation split
-- exact test/acceptance contract
+R1 must inspect current repository truth and write actual findings into the five control docs. It must not merely restate PRE1 objectives or change lifecycle status fields.
 
-## Authorized Inspection
+The final evidence must concretely resolve or explicitly flag all A-J areas from `EXECUTION_GATE.md`:
+- A current data model / exact persistent-tag gap
+- B tag domain semantics
+- C advanced segmentation semantics
+- D OA/security/safety contract
+- E API candidate contract
+- F UI candidate contract
+- G storage/migration/performance candidate
+- H backward compatibility
+- I bounded future implementation split
+- J exact test/acceptance contract
 
-Read/analyze only as needed:
-- `src/app.controller.ts`
-- `src/app.controller.spec.ts`
-- `src/customer.entity.ts`
-- `src/entities/**`
-- `src/database-init.service.ts`
-- `index.html`
-- `package.json` / `package-lock.json`
-- directly relevant `project-docs/**`
+## Mandatory Provenance
 
-During inspection no file modification is authorized.
+Completion must record:
+- exact materially inspected files
+- resolved decisions
+- unresolved decisions/gaps or `NONE`
+- whether later schema change is required and why
+- exact five changed control docs
+- `git diff --check` result
+- test/build run truth (`NOT RUN / NOT REQUIRED` is valid if accurate)
+- evidence classification
+- explicit `NO IMPLEMENTATION OCCURRED`
 
-At successful PRE1 completion only these five control docs may be updated:
+A status-only change is invalid.
+
+## Authorized Scope
+
+Read/analyze relevant source/tests/entities/database-init/dashboard/package/docs only as needed.
+
+At successful completion modify ONLY:
 - `project-docs/EXECUTION_GATE.md`
 - `project-docs/ACTIVE_TASK.md`
 - `project-docs/CHAT_HANDOFF.md`
 - `project-docs/CURRENT_STATE.md`
 - `project-docs/PROJECT_STATUS_ROADMAP.md`
 
-No `src/**`, test, `index.html`, schema/migration, package/dependency, Worker, LINE, Live-UAT, Telegram or unrelated change.
+No `src/**`, tests, `index.html`, schema/migration/index implementation, package/dependency, Worker, LINE, Live UAT, Telegram or unrelated changes.
 
-## Validation / Completion
+## Completion State
 
-Because PRE1 is evidence-only:
-- full tests/build are not mandatory unless needed to resolve factual ambiguity
-- `git diff --check` is required before the completion commit
-- exact changed files must be the five control docs only
-- evidence must be clearly classified as repository inspection / local reported where applicable
-
-Successful completion state:
-- `P3-WP003-PRE1: READY_FOR_CHATGPT_REVIEW`
+Only after actual findings are written:
+- `STATUS: READY_FOR_CHATGPT_REVIEW`
 - `AUTHORIZE_EXECUTION: FALSE`
+- `P3-WP003-PRE1-R1: READY_FOR_CHATGPT_REVIEW`
 - `P3-WP003: FUTURE / IMPLEMENTATION NOT AUTHORIZED`
-- `NEXT_CANDIDATE: NONE`
-- `NEXT_CANDIDATE_STATUS: AWAITING_REVIEW`
-- STOP after commit/push; no implementation may begin in the same run
+- STOP after commit/push
 
 ## Progress
 
 - Official accepted roadmap progress estimate: **~61%**
 - Practical implementation progress estimate: **~61%**
 
-PRE1 definition work does not itself increase accepted implementation progress.
+R1 evidence work does not itself increase accepted implementation progress.
 
 Permanent safety truth remains unchanged: true exactly-once physical LINE delivery is not guaranteed, and ambiguous physical sends must never be automatically resent.

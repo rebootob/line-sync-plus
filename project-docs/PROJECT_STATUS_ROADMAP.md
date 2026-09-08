@@ -12,31 +12,30 @@ Current roadmap truth:
 - Phase 5: `FUTURE`
 
 Current active work package:
-**P3-WP003-PRE1 — Persistent Tags & Advanced Segmentation Definition / Gap Review (EVIDENCE-ONLY)**.
+**P3-WP003-PRE1-R1 — EVIDENCE-ONLY Definition & Gap Review Completion**.
 
-P3-WP003 implementation remains `FUTURE / NOT AUTHORIZED`.
+`P3-WP003` implementation remains `FUTURE / NOT AUTHORIZED`.
 
 ## 2. Current Control Gate
 
 ```yaml
-CONTROL_VERSION: 35
-ACTIVE_WORK_PACKAGE: P3-WP003-PRE1
-TASK_ID: P3-WP003-PRE1
-PARENT_TASK: P3-WP002-CLOSE
-AUTHORIZATION_REVISION: P3-WP003-PRE1-DEFINITION-GAP-REVIEW
-STATUS: READY_FOR_CHATGPT_REVIEW
-AUTHORIZE_EXECUTION: FALSE
+CONTROL_VERSION: 36
+ACTIVE_WORK_PACKAGE: P3-WP003-PRE1-R1
+TASK_ID: P3-WP003-PRE1-R1
+PARENT_TASK: P3-WP003-PRE1
+AUTHORIZATION_REVISION: P3-WP003-PRE1-R1-EVIDENCE-DEFINITION-COMPLETION
+STATUS: CORRECTIVE_AUTHORIZED
+AUTHORIZE_EXECUTION: TRUE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: AWAITING_REVIEW
+NEXT_CANDIDATE_STATUS: AWAITING_R1_EVIDENCE
 ```
 
-This gate authorizes evidence inspection/definition only, not implementation.
+This gate authorizes repository inspection and evidence-definition completion only, not implementation.
 
 ## 3. Accepted Phase 3 Foundation
 
 ### P3-WP001 — Customer Intelligence Foundation
 Status: `CLOSED / PASS`
-Accepted implementation HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`
 
 ### P3-WP002 — Outbound Activity Intelligence
 Status: `CLOSED / PASS`
@@ -47,57 +46,77 @@ Accepted production implementation:
 Accepted evidence HEAD:
 `135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6`
 
-PRE1 code baseline:
+Code baseline for PRE1/R1:
 `6c555a54c114cdad0aa78a43f508a5b297df6546`
 
 The closed behavior from P3-WP001/P3-WP002 must be preserved.
 
-## 4. P3-WP003-PRE1 Decision
+## 4. P3-WP003-PRE1 Review History
 
-### P3-WP003-PRE1 — Persistent Tags & Advanced Segmentation Definition / Gap Review
-Status: `READY_FOR_CHATGPT_REVIEW`
+### P3-WP003-PRE1 — Initial Definition / Gap Review
+Status: `CORRECTIVE REQUIRED / SUPERSEDED_BY_R1`
 
-PRE1 must establish a repository-grounded definition for:
-- current persistent-data/tagging gap
-- OA/global tag scope
-- customer/tag cardinality and uniqueness
-- normalization and rename/delete semantics
-- assignment/unassignment/bulk/idempotency rules
-- advanced segmentation filters
-- AND/OR and tag ANY/ALL semantics
-- deterministic result ordering/pagination
-- OA security/isolation and fail-fast validation
-- candidate API contract
-- minimal UI contract
-- likely schema/join/index/migration impact
-- N+1 avoidance/performance approach
-- backward compatibility
-- future bounded implementation split
-- complete test/acceptance contract
+Evidence HEAD:
+`a72ef6ac2668b8c0721c3dc153c9dddd6797afe6`
 
-PRE1 may inspect relevant source/tests/entities/database-init/dashboard/package/docs, but no implementation file may be modified.
+Independent review result:
+- EVIDENCE-ONLY scope: PASS
+- no implementation: PASS
+- actual A-J definition/gap review: MISSING
+- repository inspection provenance: MISSING
+- bounded implementation plan: MISSING
+- exact test/acceptance contract: MISSING
 
-At successful completion only the five control docs may change and PRE1 must move to `READY_FOR_CHATGPT_REVIEW`.
+The initial PRE1 run changed lifecycle state but did not record the required repository-grounded findings.
+
+### P3-WP003-PRE1-R1 — Evidence Definition Completion
+Status: `CORRECTIVE_AUTHORIZED / EVIDENCE_ONLY`
+
+R1 must complete the missing evidence. It may inspect relevant source/tests/entities/database-init/dashboard/package/docs, but may not modify implementation files.
+
+A successful R1 completion must record actual findings, not objectives, for:
+1. current data model / exact persistent-tag gap
+2. tag ownership/cardinality/uniqueness/normalization and mutation semantics
+3. segmentation filters, AND/OR, ANY/ALL, empty-filter, ordering and pagination semantics
+4. OA/security/safety/fail-fast contract
+5. API candidate contract
+6. minimal UI candidate contract
+7. required vs deferred storage/migration/index/performance work and no-N+1 strategy
+8. backward compatibility
+9. smallest bounded future implementation split
+10. exact acceptance/regression/security/performance test contract
+
+Mandatory provenance at completion:
+- exact materially inspected files
+- resolved decision ledger
+- unresolved decisions/gaps or `NONE`
+- whether later schema change is required and why
+- exact five changed control docs
+- `git diff --check` result
+- test/build run truth
+- evidence classification
+- explicit `NO IMPLEMENTATION OCCURRED`
+
+A status-only completion is invalid.
 
 ### P3-WP003 — Persistent Tags & Advanced Segmentation
 Status: `FUTURE / IMPLEMENTATION NOT AUTHORIZED`
 
-No implementation, schema, endpoint, UI, migration or dependency work is authorized by PRE1.
+No source, schema, endpoint, UI, migration, index or dependency implementation is authorized by R1.
 
-## 5. Expected PRE1 Design Boundaries
+## 5. Expected Design Boundaries
 
-The review should explicitly decide or flag:
+R1 should produce the repository-grounded contract required before implementation authorization, while preserving:
+- OA isolation
+- wrong-recipient fencing
+- blocked-user protection
+- selectedUsers behavior
+- stale OA response protection
+- safe DOM rendering
+- P3-WP001/P3-WP002 API and filter behavior where backward compatible
+- Phase 0-2 safety/runtime/campaign invariants
 
-1. **Tag ownership** — OA-scoped versus global, with architecture/safety justification.
-2. **Persistence** — minimum tag + customer-tag data shape and required indexes, without implementing them.
-3. **Semantics** — uniqueness, case/whitespace normalization, rename/delete, duplicate assignment and bulk behavior.
-4. **Segmentation** — tags + blocked state + accepted WP002 activity signals such as success/failure/reconcile/latest status/recent-success/NEVER_SUCCESS.
-5. **Composition** — AND/OR rules and multi-tag ANY/ALL behavior.
-6. **Safety** — no cross-OA leakage, blocked-user protection, wrong-recipient fencing and safe DOM rendering.
-7. **Performance** — DB-side filtering/aggregation where appropriate, deterministic ordering and no N+1.
-8. **Compatibility** — preserve P3-WP001, P3-WP002, selectedUsers, stale OA discard and prior campaign/runtime contracts.
-9. **Implementation split** — smallest safe future WPs, not automatically authorized.
-10. **Acceptance evidence** — exact regression/security/performance tests required for eventual closure.
+Any future query design should avoid N+1 and use deterministic ordering/pagination.
 
 ## 6. Runtime / Safety Contract
 
@@ -105,12 +124,7 @@ The review should explicitly decide or flag:
 - Required Worker: `28.16`
 - Runtime Contract: `2`
 
-PRE1 authorizes:
-- repository inspection
-- definition/gap analysis
-- final control-doc evidence sync only
-
-PRE1 does not authorize:
+R1 does not authorize:
 - source/test modifications
 - `index.html` modifications
 - schema/migration/index implementation
@@ -128,16 +142,16 @@ Permanent truth:
 - Official accepted roadmap progress estimate: **~61%**
 - Practical implementation progress estimate: **~61%**
 
-PRE1 definition evidence does not itself increase accepted implementation progress.
+R1 definition evidence does not itself increase accepted implementation progress.
 
 ## 8. Immediate Lifecycle
 
 ```text
-P3-WP003-PRE1 CONTROL UPDATE
+P3-WP003-PRE1-R1 CONTROL UPDATE
 -> COMMIT/PUSH
 -> STOP
--> FRESH PRE1 EXECUTION
--> evidence-only repository inspection + definition/gap review
+-> FRESH R1 EXECUTION
+-> repository inspection + actual A-J findings
 -> five-control-doc evidence sync
 -> READY_FOR_CHATGPT_REVIEW
 -> COMMIT/PUSH
