@@ -1,39 +1,28 @@
 # ACTIVE TASK
 
 ```yaml
-CONTROL_VERSION: 34
-ACTIVE_WORK_PACKAGE: NONE
-TASK_ID: P3-WP002-CLOSE
-PARENT_TASK: P3-WP002-R3-C1
-AUTHORIZATION_REVISION: P3-WP002-FINAL-CLOSURE
-TITLE: P3-WP002-CLOSE — Final Closure / Control-Document Sync
-STATUS: CLOSED_PASS
+CONTROL_VERSION: 35
+ACTIVE_WORK_PACKAGE: P3-WP003-PRE1
+TASK_ID: P3-WP003-PRE1
+PARENT_TASK: P3-WP002-CLOSE
+AUTHORIZATION_REVISION: P3-WP003-PRE1-DEFINITION-GAP-REVIEW
+TITLE: P3-WP003-PRE1 — Persistent Tags & Advanced Segmentation Definition / Gap Review
+STATUS: AUTHORIZED_FOR_EXECUTION
 AUTHORIZED_BY: Project Owner
-AUTHORIZE_EXECUTION: FALSE
+AUTHORIZE_EXECUTION: TRUE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: STANDBY
+NEXT_CANDIDATE_STATUS: AWAITING_PRE1_EVIDENCE
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: CLOSED / PASS
 PHASE_3: IN PROGRESS
 P3-WP001: CLOSED / PASS
-P3-WP002-PRE1: COMPLETE / DEFINITION READY
 P3-WP002: CLOSED / PASS
-P3-WP002-R1: SOURCE CORRECTIVE COMPLETE / ACCEPTED
-P3-WP002-R2: SUPERSEDED_BY_R3
-P3-WP002-R3: TECHNICAL_EVIDENCE_PASS / ACCEPTED
-P3-WP002-R3-C1: CLOSED_PASS / ACCEPTED
-P3-WP002-CLOSE: CLOSED_PASS
-P3-WP003: FUTURE / NOT AUTHORIZED
-P3-WP002-R1_IMPLEMENTATION_HEAD: 03dd35a5d6b29c6394f93f16061bfaddb5f10174
-P3-WP002-R2_EVIDENCE_HEAD: e9736490dde42d1b249e6fba3f9d63e929da909c
-P3-WP002-R3_EXECUTION_PARENT_HEAD: 495f800bf186c4f8d184561e9b1dfc0dd6217585
-P3-WP002-R3_EVIDENCE_HEAD: 135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6
-P3-WP002-R3-C1_SYNC_HEAD: bd9abd0768d4084d073025f2dd634d0a295d0b66
-IMPLEMENTATION_CANDIDATE_HEAD: 03dd35a5d6b29c6394f93f16061bfaddb5f10174
-REVIEWED_IMPLEMENTATION_HEAD: 03dd35a5d6b29c6394f93f16061bfaddb5f10174
-ACCEPTED_IMPLEMENTATION_HEAD: 03dd35a5d6b29c6394f93f16061bfaddb5f10174
-ACCEPTED_EVIDENCE_HEAD: 135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6
+P3-WP003-PRE1: AUTHORIZED_FOR_EXECUTION / EVIDENCE_ONLY
+P3-WP003: FUTURE / IMPLEMENTATION NOT AUTHORIZED
+CODE_BASELINE_HEAD: 6c555a54c114cdad0aa78a43f508a5b297df6546
+P3-WP002_ACCEPTED_IMPLEMENTATION_HEAD: 03dd35a5d6b29c6394f93f16061bfaddb5f10174
+P3-WP002_ACCEPTED_EVIDENCE_HEAD: 135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6
 WORKER_VERSION: 28.16
 REQUIRED_WORKER_VERSION: 28.16
 RUNTIME_CONTRACT_VERSION: 2
@@ -41,65 +30,70 @@ RUNTIME_CONTRACT_VERSION: 2
 
 ## Current Control-Plane Decision
 
-`P3-WP002 — Outbound Activity Intelligence` is now **CLOSED / PASS** after independent PASS of `P3-WP002-R3-C1` and explicit Owner authorization for final closure.
+The Owner authorized `P3-WP003-PRE1` as an **EVIDENCE-ONLY Definition / Gap Review** for Persistent Tags & Advanced Segmentation.
 
-There is no active implementation task.
+This is not P3-WP003 implementation authorization.
 
-## Accepted Production / Evidence Truth
+## PRE1 Objectives
 
-Accepted production implementation:
-`03dd35a5d6b29c6394f93f16061bfaddb5f10174`
+Repository-grounded review must define:
+- current Customer/OA/tagging/segmentation gaps
+- tag scope, cardinality, uniqueness, normalization, rename/delete, idempotent assign/unassign and bulk semantics
+- advanced segmentation filter model including tags, blocked state, WP002 activity, NEVER_SUCCESS and recent-success windows
+- AND/OR and ANY/ALL semantics
+- OA isolation/security/fail-fast contract
+- candidate API contract
+- candidate UI contract
+- likely storage/join/index/migration needs
+- N+1 avoidance and performance expectations
+- backward compatibility with P3-WP001/P3-WP002 and prior phases
+- bounded implementation split
+- exact test/acceptance contract
 
-Accepted evidence HEAD:
-`135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6`
+## Authorized Inspection
 
-Evidence/control commits remain separate from implementation truth.
+Read/analyze only as needed:
+- `src/app.controller.ts`
+- `src/app.controller.spec.ts`
+- `src/customer.entity.ts`
+- `src/entities/**`
+- `src/database-init.service.ts`
+- `index.html`
+- `package.json` / `package-lock.json`
+- directly relevant `project-docs/**`
 
-Accepted independent review evidence includes:
-- source/architecture PASS
-- DB-side aggregate query PASS
-- OA scope/grouping PASS
-- no N+1 PASS
-- prohibited repository reads absent PASS
-- DTO/timestamp isolation PASS
-- safe malicious-status DOM rendering PASS
-- NEVER_SUCCESS PASS
-- fixed deterministic clock PASS
-- exact 7-day and 30-day inclusive boundaries PASS
-- future/invalid rejection PASS
-- R3-C1 provenance sync PASS
+During inspection no file modification is authorized.
 
-R3 local validation evidence (`LOCAL REPORTED`):
+At successful PRE1 completion only these five control docs may be updated:
+- `project-docs/EXECUTION_GATE.md`
+- `project-docs/ACTIVE_TASK.md`
+- `project-docs/CHAT_HANDOFF.md`
+- `project-docs/CURRENT_STATE.md`
+- `project-docs/PROJECT_STATUS_ROADMAP.md`
 
-```text
-npm test -- --runInBand: PASS
-Test Suites: 1 passed
-Tests: 585 passed
-Failed: 0
-Skipped: 0
-npm run build: PASS (exit code 0)
-git diff --check: PASS (exit code 0)
-GitHub CI/status: NONE
-GitHub workflow runs: NONE
-```
+No `src/**`, test, `index.html`, schema/migration, package/dependency, Worker, LINE, Live-UAT, Telegram or unrelated change.
 
-## Closure Scope
+## Validation / Completion
 
-This final closure sync is documentation-only and changes only the five project control documents. No source/test/Worker/schema/index/package/dependency/LINE/Live-UAT/Telegram change is performed.
+Because PRE1 is evidence-only:
+- full tests/build are not mandatory unless needed to resolve factual ambiguity
+- `git diff --check` is required before the completion commit
+- exact changed files must be the five control docs only
+- evidence must be clearly classified as repository inspection / local reported where applicable
 
-No test/build rerun is claimed for the closure commit.
+Successful completion state:
+- `P3-WP003-PRE1: READY_FOR_CHATGPT_REVIEW`
+- `AUTHORIZE_EXECUTION: FALSE`
+- `P3-WP003: FUTURE / IMPLEMENTATION NOT AUTHORIZED`
+- `NEXT_CANDIDATE: NONE`
+- `NEXT_CANDIDATE_STATUS: AWAITING_REVIEW`
+- STOP after commit/push; no implementation may begin in the same run
 
 ## Progress
 
 - Official accepted roadmap progress estimate: **~61%**
 - Practical implementation progress estimate: **~61%**
 
-These are planning estimates only.
-
-## Next State
-
-`ACTIVE_WORK_PACKAGE` is `NONE`.
-
-`P3-WP003` remains **FUTURE / NOT AUTHORIZED**. It must not start automatically. A new explicit Owner authorization and control gate are required before any execution.
+PRE1 definition work does not itself increase accepted implementation progress.
 
 Permanent safety truth remains unchanged: true exactly-once physical LINE delivery is not guaranteed, and ambiguous physical sends must never be automatically resent.

@@ -11,50 +11,32 @@ Current roadmap truth:
 - Phase 4: `FUTURE`
 - Phase 5: `FUTURE`
 
-Current active work package: `NONE`.
+Current active work package:
+**P3-WP003-PRE1 — Persistent Tags & Advanced Segmentation Definition / Gap Review (EVIDENCE-ONLY)**.
 
-`P3-WP002 — Outbound Activity Intelligence` is now `CLOSED / PASS`.
-
-`P3-WP003` remains `FUTURE / NOT AUTHORIZED`.
+P3-WP003 implementation remains `FUTURE / NOT AUTHORIZED`.
 
 ## 2. Current Control Gate
 
 ```yaml
-CONTROL_VERSION: 34
-ACTIVE_WORK_PACKAGE: NONE
-TASK_ID: P3-WP002-CLOSE
-PARENT_TASK: P3-WP002-R3-C1
-AUTHORIZATION_REVISION: P3-WP002-FINAL-CLOSURE
-STATUS: CLOSED_PASS
-AUTHORIZE_EXECUTION: FALSE
+CONTROL_VERSION: 35
+ACTIVE_WORK_PACKAGE: P3-WP003-PRE1
+TASK_ID: P3-WP003-PRE1
+PARENT_TASK: P3-WP002-CLOSE
+AUTHORIZATION_REVISION: P3-WP003-PRE1-DEFINITION-GAP-REVIEW
+STATUS: AUTHORIZED_FOR_EXECUTION
+AUTHORIZE_EXECUTION: TRUE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: STANDBY
+NEXT_CANDIDATE_STATUS: AWAITING_PRE1_EVIDENCE
 ```
 
-No execution is authorized by this closed gate.
+This gate authorizes evidence inspection/definition only, not implementation.
 
-## 3. P3-WP002 Accepted Head / Evidence Ledger
-
-- `P3-WP002_BASELINE_HEAD`: `7ca0a0dcde5896f18a8254f4a94a74a776d7a36e`
-- `P3-WP002_ORIGINAL_IMPLEMENTATION_HEAD`: `956e576ffee2f194ce6e617531a58f336de2b280`
-- `P3-WP002-R1_IMPLEMENTATION_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
-- `P3-WP002-R2_EVIDENCE_HEAD`: `e9736490dde42d1b249e6fba3f9d63e929da909c`
-- `P3-WP002-R3_EXECUTION_PARENT_HEAD`: `495f800bf186c4f8d184561e9b1dfc0dd6217585`
-- `P3-WP002-R3_EVIDENCE_HEAD`: `135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6`
-- `P3-WP002-R3-C1_SYNC_HEAD`: `bd9abd0768d4084d073025f2dd634d0a295d0b66`
-- `ACCEPTED_IMPLEMENTATION_HEAD`: `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
-- `ACCEPTED_EVIDENCE_HEAD`: `135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6`
-
-Evidence/control commits do not replace the accepted production implementation HEAD.
-
-## 4. Current Phase 3 Decision
+## 3. Accepted Phase 3 Foundation
 
 ### P3-WP001 — Customer Intelligence Foundation
 Status: `CLOSED / PASS`
 Accepted implementation HEAD: `f9a097a7579c1a357506816656b10c01f68be6ac`
-
-### P3-WP002-PRE1 — Activity Intelligence Definition
-Status: `COMPLETE / DEFINITION READY`
 
 ### P3-WP002 — Outbound Activity Intelligence
 Status: `CLOSED / PASS`
@@ -65,77 +47,57 @@ Accepted production implementation:
 Accepted evidence HEAD:
 `135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6`
 
-Independent acceptance covers:
-- source / architecture
-- DB-side aggregation
-- strict OA-scoped query behavior
-- no N+1
-- prohibited repository reads absent
-- customer timestamp / DTO isolation
-- malicious latest-status safe DOM behavior
-- NEVER_SUCCESS semantics
-- fixed deterministic frontend clock
-- exact inclusive 7-day and 30-day lower boundaries
-- future/invalid rejection
-- R3 scope control
-- final provenance/control-document consistency
+PRE1 code baseline:
+`6c555a54c114cdad0aa78a43f508a5b297df6546`
 
-R3 validation evidence (`LOCAL REPORTED`):
+The closed behavior from P3-WP001/P3-WP002 must be preserved.
 
-```text
-npm test -- --runInBand: PASS
-Test Suites: 1 passed
-Tests: 585 passed
-Failed: 0
-Skipped: 0
-npm run build: PASS (exit code 0)
-git diff --check: PASS (exit code 0)
-```
+## 4. P3-WP003-PRE1 Decision
 
-GitHub truth at the accepted R3 evidence HEAD:
-- combined status checks: NONE
-- workflow runs: NONE
-- GitHub CI: NONE
+### P3-WP003-PRE1 — Persistent Tags & Advanced Segmentation Definition / Gap Review
+Status: `AUTHORIZED_FOR_EXECUTION / EVIDENCE_ONLY`
 
-Historical corrective chain:
-- P3-WP002-R1: source corrective accepted
-- P3-WP002-R2: superseded by R3
-- P3-WP002-R3: technical evidence accepted
-- P3-WP002-R3-C1: provenance sync accepted
-- P3-WP002-CLOSE: closed/pass
+PRE1 must establish a repository-grounded definition for:
+- current persistent-data/tagging gap
+- OA/global tag scope
+- customer/tag cardinality and uniqueness
+- normalization and rename/delete semantics
+- assignment/unassignment/bulk/idempotency rules
+- advanced segmentation filters
+- AND/OR and tag ANY/ALL semantics
+- deterministic result ordering/pagination
+- OA security/isolation and fail-fast validation
+- candidate API contract
+- minimal UI contract
+- likely schema/join/index/migration impact
+- N+1 avoidance/performance approach
+- backward compatibility
+- future bounded implementation split
+- complete test/acceptance contract
+
+PRE1 may inspect relevant source/tests/entities/database-init/dashboard/package/docs, but no implementation file may be modified.
+
+At successful completion only the five control docs may change and PRE1 must move to `READY_FOR_CHATGPT_REVIEW`.
 
 ### P3-WP003 — Persistent Tags & Advanced Segmentation
-Status: `FUTURE / NOT AUTHORIZED`
+Status: `FUTURE / IMPLEMENTATION NOT AUTHORIZED`
 
-No automatic start is permitted.
+No implementation, schema, endpoint, UI, migration or dependency work is authorized by PRE1.
 
-## 5. Continuous Phase 0–5 Roadmap
+## 5. Expected PRE1 Design Boundaries
 
-### Phase 0 — Security & Reliability Foundation — CLOSED / PASS
-Accepted safety/reliability foundation remains unchanged, including OA isolation, worker fencing, durable lease/heartbeat, send-part ledger, account protection, and ambiguity reconciliation.
+The review should explicitly decide or flag:
 
-Permanent truth: true exactly-once physical LINE delivery cannot be guaranteed across the LINE Web UI boundary; ambiguous physical sends must never be automatically resent.
-
-### Phase 1 — Operations & Monitoring — CLOSED / PASS
-MON-WP001/R1, MON-WP002, and MON-WP003 remain closed/pass.
-
-### Phase 2 — Campaign Builder v2 — CLOSED / PASS
-P2 campaign authoring, preview/template reuse, scheduled queue controls, corrections, and Phase 2 closure remain closed/pass.
-
-### Phase 3 — Audience & Customer Intelligence — IN PROGRESS
-Current sequence:
-- P3-WP001: closed/pass
-- P3-WP002-PRE1: definition ready
-- P3-WP002: closed/pass
-- P3-WP003: future / not authorized
-
-Phase 3 remains in progress because later roadmap work has not been authorized or completed.
-
-### Phase 4 — Multi-OA, Governance & Admin — FUTURE
-No Phase 4 implementation authorized.
-
-### Phase 5 — Analytics & Optimization — FUTURE
-No Phase 5 implementation authorized.
+1. **Tag ownership** — OA-scoped versus global, with architecture/safety justification.
+2. **Persistence** — minimum tag + customer-tag data shape and required indexes, without implementing them.
+3. **Semantics** — uniqueness, case/whitespace normalization, rename/delete, duplicate assignment and bulk behavior.
+4. **Segmentation** — tags + blocked state + accepted WP002 activity signals such as success/failure/reconcile/latest status/recent-success/NEVER_SUCCESS.
+5. **Composition** — AND/OR rules and multi-tag ANY/ALL behavior.
+6. **Safety** — no cross-OA leakage, blocked-user protection, wrong-recipient fencing and safe DOM rendering.
+7. **Performance** — DB-side filtering/aggregation where appropriate, deterministic ordering and no N+1.
+8. **Compatibility** — preserve P3-WP001, P3-WP002, selectedUsers, stale OA discard and prior campaign/runtime contracts.
+9. **Implementation split** — smallest safe future WPs, not automatically authorized.
+10. **Acceptance evidence** — exact regression/security/performance tests required for eventual closure.
 
 ## 6. Runtime / Safety Contract
 
@@ -143,21 +105,45 @@ No Phase 5 implementation authorized.
 - Required Worker: `28.16`
 - Runtime Contract: `2`
 
-The P3-WP002 closure is documentation-only and does not change Worker, schema, production controller, dashboard, packages/dependencies, LINE send behavior, Live UAT, or Telegram behavior.
+PRE1 authorizes:
+- repository inspection
+- definition/gap analysis
+- final control-doc evidence sync only
+
+PRE1 does not authorize:
+- source/test modifications
+- `index.html` modifications
+- schema/migration/index implementation
+- package/dependency changes
+- Worker changes
+- LINE sends or Live UAT
+- Telegram changes/tests
+
+Permanent truth:
+- true exactly-once physical LINE delivery is not guaranteed
+- ambiguous physical sends must never be automatically resent
 
 ## 7. Progress Estimate
 
 - Official accepted roadmap progress estimate: **~61%**
 - Practical implementation progress estimate: **~61%**
 
-These percentages are planning estimates, not acceptance evidence.
+PRE1 definition evidence does not itself increase accepted implementation progress.
 
-The previous gap between accepted and practical progress is closed because P3-WP002 technical work and provenance are now accepted.
+## 8. Immediate Lifecycle
 
-## 8. Immediate Decision Gate
+```text
+P3-WP003-PRE1 CONTROL UPDATE
+-> COMMIT/PUSH
+-> STOP
+-> FRESH PRE1 EXECUTION
+-> evidence-only repository inspection + definition/gap review
+-> five-control-doc evidence sync
+-> READY_FOR_CHATGPT_REVIEW
+-> COMMIT/PUSH
+-> STOP
+-> ChatGPT independent review
+-> explicit Owner authorization required before P3-WP003 implementation
+```
 
-There is currently no active work package and no executable authorization.
-
-`P3-WP003` remains `FUTURE / NOT AUTHORIZED`.
-
-A new explicit Owner authorization and control gate are required before any P3-WP003 work begins.
+No later work package may auto-start.

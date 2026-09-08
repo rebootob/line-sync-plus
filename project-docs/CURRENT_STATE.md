@@ -1,122 +1,119 @@
 # CURRENT STATE — LineSync Plus
 
-**Last Updated**: 2026-09-08 — P3-WP002 final closure
+**Last Updated**: 2026-09-08 — P3-WP003-PRE1 evidence-only authorization
 
 ## Current Control State
 
 ```yaml
-CONTROL_VERSION: 34
-ACTIVE_WORK_PACKAGE: NONE
-TASK_ID: P3-WP002-CLOSE
-PARENT_TASK: P3-WP002-R3-C1
-AUTHORIZATION_REVISION: P3-WP002-FINAL-CLOSURE
-STATUS: CLOSED_PASS
-AUTHORIZE_EXECUTION: FALSE
+CONTROL_VERSION: 35
+ACTIVE_WORK_PACKAGE: P3-WP003-PRE1
+TASK_ID: P3-WP003-PRE1
+PARENT_TASK: P3-WP002-CLOSE
+AUTHORIZATION_REVISION: P3-WP003-PRE1-DEFINITION-GAP-REVIEW
+STATUS: AUTHORIZED_FOR_EXECUTION
+AUTHORIZE_EXECUTION: TRUE
 NEXT_CANDIDATE: NONE
-NEXT_CANDIDATE_STATUS: STANDBY
+NEXT_CANDIDATE_STATUS: AWAITING_PRE1_EVIDENCE
 PHASE_0: CLOSED / PASS
 PHASE_1: CLOSED / PASS
 PHASE_2: CLOSED / PASS
 PHASE_3: IN PROGRESS
 P3-WP001: CLOSED / PASS
-P3-WP002-PRE1: COMPLETE / DEFINITION READY
 P3-WP002: CLOSED / PASS
-P3-WP002-R1: SOURCE CORRECTIVE COMPLETE / ACCEPTED
-P3-WP002-R2: SUPERSEDED_BY_R3
-P3-WP002-R3: TECHNICAL_EVIDENCE_PASS / ACCEPTED
-P3-WP002-R3-C1: CLOSED_PASS / ACCEPTED
-P3-WP002-CLOSE: CLOSED_PASS
-P3-WP003: FUTURE / NOT AUTHORIZED
+P3-WP003-PRE1: AUTHORIZED_FOR_EXECUTION / EVIDENCE_ONLY
+P3-WP003: FUTURE / IMPLEMENTATION NOT AUTHORIZED
 ```
 
-There is no active implementation package.
+## Accepted Baseline
 
-## P3-WP002 Closure Result
+PRE1 starting/code baseline:
+`6c555a54c114cdad0aa78a43f508a5b297df6546`
 
-`P3-WP002 — Outbound Activity Intelligence` is **CLOSED / PASS**.
-
-Accepted production implementation:
+P3-WP002 accepted production implementation:
 `03dd35a5d6b29c6394f93f16061bfaddb5f10174`
 
-Accepted evidence HEAD:
+P3-WP002 accepted evidence HEAD:
 `135f915726f2ab8d20d58b8b3dccd0aa38b1a1f6`
 
-Closure/provenance parent:
-`bd9abd0768d4084d073025f2dd634d0a295d0b66`
+P3-WP001 and P3-WP002 remain closed/pass.
 
-Evidence/control commits are not implementation HEADs.
+## Current Decision
 
-## Accepted Technical Truth
+The Owner authorized `P3-WP003-PRE1 — Persistent Tags & Advanced Segmentation Definition / Gap Review` as **EVIDENCE-ONLY**.
 
-Independent review accepted:
-- source / architecture PASS
-- DB-side aggregation PASS
-- strict OA scope and grouping PASS
-- no N+1 PASS
-- prohibited repository reads absent PASS
-- customer timestamp / DTO isolation PASS
-- malicious latestJobStatus safe DOM PASS
-- NEVER_SUCCESS semantics PASS
-- fixed deterministic clock PASS
-- exact inclusive 7-day boundary PASS
-- exact inclusive 30-day boundary PASS
-- future/invalid rejection PASS
-- test integrity PASS
-- R3 scope PASS
-- R3-C1 provenance sync PASS
-- no remaining corrective
+PRE1 is allowed to inspect current repository truth and define the future implementation contract, but it may not implement any tag persistence, segmentation query, endpoint, UI, schema, migration, index, dependency or Worker change.
 
-## Validation Evidence
+## Required PRE1 Definition Areas
 
-R3 evidence classification: `LOCAL REPORTED`.
+The review must resolve or explicitly flag:
+- existing Customer/OA persistence and current tagging gap
+- OA-scoped vs global tag ownership
+- customer-tag cardinality
+- tag uniqueness and normalization
+- rename/delete/cascade behavior
+- idempotent assignment/unassignment and bulk operations
+- candidate filter inventory using tag + blocked + WP002 activity signals
+- AND/OR and multi-tag ANY/ALL semantics
+- deterministic ordering/pagination
+- OA isolation and fail-fast validation
+- candidate API request/response/status behavior
+- minimal UI contract and safe DOM behavior
+- likely schema/join/index/migration needs
+- no-N+1 query strategy
+- backward compatibility with existing customer intelligence/activity filters/campaign safety
+- bounded future implementation sequence
+- exact test/acceptance contract
 
-```text
-npm test -- --runInBand: PASS
-Test Suites: 1 passed
-Tests: 585 passed
-Failed: 0
-Skipped: 0
-npm run build: PASS (exit code 0)
-git diff --check: PASS (exit code 0)
-```
+## Authorized Inspection / Modification
 
-GitHub evidence truth at R3 evidence HEAD:
-- combined status checks: NONE
-- workflow runs: NONE
-- GitHub CI: NONE
+Read/analyze relevant source/tests/entities/database-init/dashboard/package/docs as needed.
 
-The final closure sync is DOCS-ONLY and does not claim new test/build evidence.
+During inspection, modify nothing.
 
-## Runtime & Safety State
+At successful PRE1 completion, only these five control docs may be updated:
+- `project-docs/EXECUTION_GATE.md`
+- `project-docs/ACTIVE_TASK.md`
+- `project-docs/CHAT_HANDOFF.md`
+- `project-docs/CURRENT_STATE.md`
+- `project-docs/PROJECT_STATUS_ROADMAP.md`
+
+No source/test/schema/package/index/dashboard/Worker/LINE/Telegram implementation is authorized.
+
+## Safety State
 
 - Worker Version: `28.16`
 - Required Worker Version: `28.16`
 - Runtime Contract Version: `2`
 - Worker change: NONE
-- Schema change: NONE
+- Schema change: NONE in PRE1
 - LINE send: NONE
 - Live UAT: NONE
 - Telegram test: NONE
 - Dependency change: NONE
 
 Permanent safety invariants remain unchanged:
-- True exactly-once physical LINE delivery is **NOT GUARANTEED**.
-- Never automatically resend an ambiguous physical send.
-- Preserve wrong-recipient fencing, OA isolation, account protection, durable lease fencing, and ambiguity reconciliation.
+- preserve OA isolation and wrong-recipient fencing
+- preserve blocked-user and selectedUsers behavior
+- preserve stale OA response protection
+- preserve safe DOM rendering for user-controlled text
+- true exactly-once physical LINE delivery is NOT GUARANTEED
+- never automatically resend an ambiguous physical send
 
-## Progress
+## Progress / Lifecycle
 
 - Official accepted roadmap progress estimate: **~61%**
 - Practical implementation progress estimate: **~61%**
 
-These are planning estimates only.
+```text
+CONTROL UPDATE
+-> STOP
+-> FRESH P3-WP003-PRE1 RUN
+-> evidence-only repository inspection
+-> definition/gap review control-doc sync
+-> READY_FOR_CHATGPT_REVIEW
+-> COMMIT/PUSH
+-> STOP
+-> ChatGPT independent review
+```
 
-## Next State
-
-Phase 3 remains `IN PROGRESS` because later work remains future roadmap work.
-
-`P3-WP003` is `FUTURE / NOT AUTHORIZED` and must not start automatically. A new explicit Owner authorization/control gate is required before any P3-WP003 execution.
-
-## Historical Foundation
-
-Phase 0 security/reliability, Phase 1 operations/monitoring, Phase 2 Campaign Builder v2, P3-WP001 Customer Intelligence Foundation, and now P3-WP002 Outbound Activity Intelligence are closed/pass.
+P3-WP003 implementation remains FUTURE / NOT AUTHORIZED until a later explicit Owner gate.
